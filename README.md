@@ -6,6 +6,8 @@
 
 **A visual, quantitative map of how LLM inference is laid across a GPU and the system around it.**
 
+**Live demo:** <https://plainsight-systems.github.io/seymour/>
+
 Seymour puts a transformer forward pass on the hardware that runs it. Select an actual algorithm operation, follow its data across the system, then inspect the kernel and SIMD/SIMT work that implements it. Every byte and FLOP comes from the same deterministic first-order model.
 
 The name is for Seymour Cray, by way of the idea that a GPU is a hungry plant: the tensor cores are the mouth and the memory hierarchy has to keep bringing food.
@@ -90,7 +92,7 @@ The important seam is `SeymourScene`: controls and the authored walkthrough both
 
 ## Deploy to GitHub Pages
 
-The included workflow builds and publishes on pushes to `main`. In the repository settings, choose **GitHub Actions** as the Pages source. No server, API key, or runtime configuration is required.
+The included workflow builds and publishes on pushes to `main` to <https://plainsight-systems.github.io/seymour/>. In the repository settings, choose **GitHub Actions** as the Pages source. No server, API key, or runtime configuration is required.
 
 ## Licensing
 
