@@ -79,6 +79,9 @@ export const DEFAULT_SETTINGS = {
   hardwareId: 'h100-sxm',
   batch: 1,
   sequenceLength: 4096,
+  weightBits: 16,
+  kvBits: 16,
+  attentionKernel: 'fused',
   overlap: true,
   view: 'hardware',
 } as const;

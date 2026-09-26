@@ -23,6 +23,8 @@ export function buildAlgorithmSteps(
   const qBytes = b * h * tq * dh * activationBytes;
   const newKvBytes = b * hkv * tq * dh * activationBytes;
   const oneCachedTensorBytes = b * tk * dkv * activationBytes;
+  const scoreBytes = b * h * tq * tk * activationBytes;
+  const materializeAttention = settings.attentionKernel === 'separate';
 
   return [
     {
@@ -76,8 +78,9 @@ export function buildAlgorithmSteps(
       description: 'Each query head dot-products against every legal key position. The causal mask makes future positions unreachable during prefill.',
       inputShape: `Q ${qShape} · K ${kvShape}`, outputShape: `scores [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}]`,
       flops: 2 * b * h * tq * tk * dh,
-      parameterBytes: 0, activationBytes: b * h * tq * tk * activationBytes,
-      boundaryBytes: qBytes + oneCachedTensorBytes, writeBytes: 0, spillableKvBytes: oneCachedTensorBytes,
+      parameterBytes: 0, activationBytes: scoreBytes,
+      boundaryBytes: qBytes + oneCachedTensorBytes + (materializeAttention ? scoreBytes : 0),
+      writeBytes: materializeAttention ? scoreBytes : 0, spillableKvBytes: oneCachedTensorBytes,
       hardwareStage: 'compute', repetition: `per layer × ${model.layers}`,
     },
     {
@@ -87,7 +90,9 @@ export function buildAlgorithmSteps(
       description: 'Subtracting the row maximum keeps the exponentials numerically stable. Each query row sums to one.',
       inputShape: `scores [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}]`, outputShape: 'same shape',
       flops: 5 * b * h * tq * tk,
-      parameterBytes: 0, activationBytes: b * h * tq * tk * activationBytes, boundaryBytes: 0, writeBytes: 0,
+      parameterBytes: 0, activationBytes: scoreBytes,
+      boundaryBytes: materializeAttention ? 2 * scoreBytes : 0,
+      writeBytes: materializeAttention ? scoreBytes : 0,
       hardwareStage: 'shared', repetition: `per layer × ${model.layers}`,
     },
     {
@@ -98,7 +103,8 @@ export function buildAlgorithmSteps(
       inputShape: `P [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}] · V ${kvShape}`, outputShape: qShape,
       flops: 2 * b * h * tq * tk * dh,
       parameterBytes: 0, activationBytes: xBytes,
-      boundaryBytes: oneCachedTensorBytes + xBytes, writeBytes: xBytes, spillableKvBytes: oneCachedTensorBytes,
+      boundaryBytes: oneCachedTensorBytes + xBytes + (materializeAttention ? scoreBytes : 0),
+      writeBytes: xBytes, spillableKvBytes: oneCachedTensorBytes,
       hardwareStage: 'compute', repetition: `per layer × ${model.layers}`,
     },
     {

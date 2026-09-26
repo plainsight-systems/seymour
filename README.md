@@ -14,21 +14,28 @@ The name is for Seymour Cray, by way of the idea that a GPU is a hungry plant: t
 
 ## What is here
 
-The first complete scenario contrasts prefill and decode on one GPU:
+The first complete scenario follows autoregressive decode on one GPU:
 
 - One canonical nested map explains the machine before it traces the data: host computer → accelerator package → HBM + GPU die → shared L2 → repeated SM/CU workers → local memory, registers, and matrix/vector units.
 - The selected transformer equation, tensor shapes, kernel name, and modeled boundary traffic sit beside that map, so the algorithm and the hardware route stay connected.
+- A desktop **experiment bench** keeps the controls and machine map in the same viewport. The compact control rail stays pinned beside the map and is split into **Workload** (active sequences and context), **Software strategy** (weight/KV storage, attention schedule, and compute-memory overlap), and **Deployment target** (a fixed accelerator profile to compare against).
+- The accelerator selector is not presented as a hardware throttle. It swaps the published SM/CU count, HBM capacity and bandwidth, architecture, and compute ceiling; software can choose that target but cannot alter its silicon.
+- Software strategy controls change the deterministic model. Lower-bit storage reduces bytes and capacity pressure, while separate QK → softmax → PV kernels materialize the score/probability matrix through HBM instead of keeping it on chip.
+- The SM/CU array shows estimated first-wave unit coverage for the selected kernel: active units are filled, idle units remain empty, and wider kernel grids visibly activate more hardware. This is a declared scheduling model, not profiler telemetry.
+- The current limiting boundary is marked in red—HBM, arithmetic hardware, or the host link. Capacity overflow also raises a red system-memory warning beside the workload controls.
 - CPU launch commands and tensor traffic are drawn as separate paths. System-memory traffic appears only when the selected workload exceeds accelerator memory.
 - A real-time Three.js hardware cutaway is available as an optional spatial inspector. It shows the same parts without competing with the canonical lesson map or advancing automatically.
 - NVIDIA H100 SXM and AMD MI300X profiles use published capacity, bandwidth, and dense FP16 peak specifications.
-- A Llama 3.1 8B FP16 profile computes weight traffic, KV growth, operation counts, timing bounds, arithmetic intensity, and roofline position.
+- A Llama 3.1 8B profile computes weight traffic, KV growth, operation counts, timing bounds, arithmetic intensity, and roofline position across selectable weight and KV storage formats.
 - Batch and context controls show when decode crosses from HBM-bound to compute-bound.
 - The optional Plant analogy and Hardware cutaway share one state: the first keeps the feeding metaphor, while the second exposes the package, HBM stacks, cache, CU/SM array, shared memory/LDS, registers, matrix units, host DRAM, and PCIe fallback path.
-- A manual 12-operation lesson is grouped into three readable chapters—attention, feed-forward network, and choosing the next token—and spells out RMSNorm, Q/K/V projections, RoPE, KV append/read, QKᵀ, masking, numerically stable softmax, PV, output projection, residuals, SwiGLU, logits, top-k/top-p, and sampling with equations, live shapes, FLOPs, and bytes.
+- A 12-operation token player spells out RMSNorm, Q/K/V projections, RoPE, KV append/read, QKᵀ, masking, numerically stable softmax, PV, output projection, residuals, SwiGLU, logits, top-k/top-p, and sampling with equations, live shapes, FLOPs, and bytes.
+- **Play** walks the full token path, **Pause** freezes the current operation, and **Step** moves exactly one operation in either direction. The same rail also allows direct jumps; playback never changes the chosen workload or software strategy.
 - Each operation explains what makes it expensive, defines the relevant performance-computing terms, and locates concrete model, runtime, kernel, and system optimization levers—with their tradeoffs.
 - An execution microscope maps each selected operation to a named reference kernel, grid/workgroup shape, fused sub-operations, an overlapping runtime/memory/execution schedule, and a lane-level WGMMA or MFMA view.
+- Seymour uses **kernel**, the standard ML/HPC term for the GPU program being dispatched. Readers coming from graphics can think of it as a compute-shader-like program specialized for tensor and vector work.
 - The hardware scene draws the host, PCIe, accelerator package, HBM, GPU die, memory controllers, shared L2, SM/CU array, local memory, registers, and matrix lanes as distinct boundaries. Command traffic is separate from tensor traffic; host tensor traffic appears only for the selected kernel when its data spills.
-- A four-step guided lesson drives the same canonical map and calculation state used by free exploration. Nothing advances by itself.
+- Playback drives the same canonical map and calculation state used by direct exploration. It starts only when the reader presses Play, pauses whenever a knob changes, and respects reduced-motion preferences.
 - Every state is encoded in the URL. The WebGL view can export a still.
 
 This is an analytical model, not a benchmark or cycle-accurate simulator. Assumptions and omissions stay visible in the interface.
@@ -59,9 +66,11 @@ memory floor  = bytes / (published HBM byte/s × memory efficiency)
 modeled time  = max(compute floor, memory floor)   # with overlap on
 ```
 
-The default efficiency factors are 55% for compute and 72% for HBM. They are assumptions, not measured results. Decode counts one weight stream per step plus the KV read for every active sequence. Fused prefill counts one weight stream for the prompt and the completed KV write. When the model plus KV cache exceeds HBM capacity, Seymour places the overflow in host memory and prices its traffic over PCIe separately.
+The default efficiency factors are 55% for compute and 72% for HBM. They are assumptions, not measured results. Decode counts one weight stream per step plus the KV read for every active sequence. When the model plus KV cache exceeds HBM capacity, Seymour places the overflow in host memory and prices its traffic over PCIe separately.
 
-The per-operation microscope is also analytical. It uses a visible 5 µs launch assumption and two resident workgroups per SM/CU for first-wave coverage. Each algorithm step declares its logical tensor footprint separately from the read/write bytes that cross the modeled HBM boundary, so a fused attention score matrix can remain on chip. HBM and compute phases use the same efficiency factors as the roofline. On-chip staging and barrier ordering are shown but not assigned invented bandwidth or latency. User-triggered highlights are explanatory; the schedule position and displayed durations carry the quantitative claim.
+Weight and KV format controls change storage and traffic bytes only. Seymour deliberately keeps the published dense FP16 compute ceiling instead of inventing format-specific kernel speedups. The fused attention schedule keeps the score/probability intermediate on chip; the separate schedule counts four HBM crossings per layer: score write, softmax read, probability write, and probability read by PV. That choice updates both the whole-model roofline and the selected-operation kernel microscope.
+
+The per-operation microscope is also analytical. It uses a visible 5 µs launch assumption and two resident workgroups per SM/CU. Unit coverage answers how many SMs/CUs receive at least one workgroup in the first scheduling wave; resident-slot occupancy answers how full those two assumed slots are. Each algorithm step declares its logical tensor footprint separately from the read/write bytes that cross the modeled HBM boundary, so a fused attention score matrix can remain on chip while a separate schedule exposes the additional traffic. HBM and compute phases use the same efficiency factors as the roofline. On-chip staging and barrier ordering are shown but not assigned invented bandwidth or latency. User-triggered highlights are explanatory; the schedule position and displayed durations carry the quantitative claim.
 
 The instruction names are architecture-specific reference atoms, not a claim that a particular framework or compiler will emit that exact opcode for every workload:
 
@@ -88,7 +97,7 @@ src/ui/              accessible supporting visualizations
 public/assets/       original project artwork
 ```
 
-The important seam is `SeymourScene`: controls and the authored walkthrough both update the same settings object, model result, and camera API. Narrative never owns a parallel visualization.
+The important seam is `SeymourScene`: controls and the token-path player both update the same settings object, model result, and camera API. Playback never owns a parallel visualization or calculation.
 
 ## Deploy to GitHub Pages
 

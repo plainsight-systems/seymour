@@ -21,6 +21,9 @@ describe('buildTeachingGuide', () => {
     hardwareId: 'h100-sxm',
     batch: 8,
     sequenceLength: 32768,
+    weightBits: 16,
+    kvBits: 16,
+    attentionKernel: 'fused',
     overlap: false,
     view: 'hardware',
   };

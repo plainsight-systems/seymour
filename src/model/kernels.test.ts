@@ -8,6 +8,7 @@ import { buildKernelPlan } from './kernels';
 function scenario(hardwareId: string, overrides: Partial<SimulationSettings> = {}) {
   const settings: SimulationSettings = {
     phase: 'decode', hardwareId, batch: 128, sequenceLength: 4096,
+    weightBits: 16, kvBits: 16, attentionKernel: 'fused',
     overlap: true, view: 'hardware', ...overrides,
   };
   const hardware = getHardware(hardwareId);
@@ -21,10 +22,24 @@ describe('buildKernelPlan', () => {
     for (const step of steps) {
       const plan = buildKernelPlan(step, settings, hardware, DEFAULT_MODEL, result);
       expect(plan.groups).toBeGreaterThan(0);
+      expect(plan.estimatedActiveUnitFraction).toBeGreaterThan(0);
+      expect(plan.estimatedActiveUnitFraction).toBeLessThanOrEqual(1);
       expect(plan.totalMs).toBeGreaterThanOrEqual(0.005);
       expect(plan.phases.every((phase) => phase.startMs + phase.durationMs <= plan.totalMs + 1e-12)).toBe(true);
       expect(plan.assumptions.length).toBeGreaterThan(0);
     }
+  });
+
+  it('shows wider batches activating more compute units for skinny decode GEMMs', () => {
+    const small = scenario('h100-sxm', { batch: 1 });
+    const wide = scenario('h100-sxm', { batch: 256 });
+    const smallStep = small.steps.find((step) => step.id === 'qkv')!;
+    const wideStep = wide.steps.find((step) => step.id === 'qkv')!;
+    const smallPlan = buildKernelPlan(smallStep, small.settings, small.hardware, DEFAULT_MODEL, small.result);
+    const widePlan = buildKernelPlan(wideStep, wide.settings, wide.hardware, DEFAULT_MODEL, wide.result);
+
+    expect(widePlan.groups).toBeGreaterThan(smallPlan.groups);
+    expect(widePlan.estimatedActiveUnitFraction).toBeGreaterThan(smallPlan.estimatedActiveUnitFraction);
   });
 
   it('uses vendor-specific cooperative lane groups and instructions', () => {
@@ -62,5 +77,14 @@ describe('buildKernelPlan', () => {
     expect(softmax.activationBytes).toBeGreaterThan(0);
     expect(softmax.boundaryBytes).toBe(0);
     expect(plan.hbmBytes).toBe(0);
+  });
+
+  it('shows separate attention as distinct kernels with materialized HBM traffic', () => {
+    const separate = scenario('h100-sxm', { attentionKernel: 'separate' });
+    const softmax = separate.steps.find((step) => step.id === 'softmax')!;
+    const plan = buildKernelPlan(softmax, separate.settings, separate.hardware, DEFAULT_MODEL, separate.result);
+    expect(plan.kernelId).toBe('softmax');
+    expect(plan.qualifier).toContain('separate attention stage');
+    expect(plan.hbmBytes).toBeGreaterThan(0);
   });
 });

@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from './data/profiles';
-import type { Phase, SimulationSettings, ViewMode } from './types';
+import type { AttentionKernel, KvBits, Phase, SimulationSettings, ViewMode, WeightBits } from './types';
 
-const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
 const SEQUENCES = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
 
 export function readSettings(): SimulationSettings {
@@ -13,9 +13,16 @@ export function readSettings(): SimulationSettings {
     Number(params.get('tokens')) || DEFAULT_SETTINGS.sequenceLength,
     SEQUENCES,
   );
+  const weightBits = ([4, 8, 16] as const).includes(Number(params.get('weights')) as WeightBits)
+    ? Number(params.get('weights')) as WeightBits
+    : DEFAULT_SETTINGS.weightBits;
+  const kvBits = ([8, 16] as const).includes(Number(params.get('kv')) as KvBits)
+    ? Number(params.get('kv')) as KvBits
+    : DEFAULT_SETTINGS.kvBits;
+  const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
   const overlap = params.get('overlap') !== 'off';
   const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
-  return { phase, hardwareId, batch, sequenceLength, overlap, view };
+  return { phase, hardwareId, batch, sequenceLength, weightBits, kvBits, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string): void {
@@ -24,6 +31,9 @@ export function writeSettings(settings: SimulationSettings, operationId?: string
     gpu: settings.hardwareId,
     batch: String(settings.batch),
     tokens: String(settings.sequenceLength),
+    weights: String(settings.weightBits),
+    kv: String(settings.kvBits),
+    attention: settings.attentionKernel,
     view: settings.view,
   });
   if (!settings.overlap) params.set('overlap', 'off');

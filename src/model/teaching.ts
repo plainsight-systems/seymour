@@ -200,6 +200,6 @@ export function buildTeachingGuide(
     pathTitle: `${step.label} · ${plan.kernelName}`,
     pathSummary: `${formatBytes(plan.hbmBytes)} at the modeled HBM boundary · ${formatDuration(plan.totalMs)} reference launch · ${limiting} is the longest priced stage.`,
     dataKinds,
-    performanceCopy: `${guide.performanceCopy} Here, ${plan.groups.toLocaleString()} workgroups cover ${formatNumber(plan.estimatedFirstWaveOccupancy * 100)}% of the first ${hardware.unitName} scheduling wave on ${hardware.name}; ${settings.phase} batch is ${settings.batch}.`,
+    performanceCopy: `${guide.performanceCopy} Here, ${plan.groups.toLocaleString()} workgroups can initially reach ${formatNumber(plan.estimatedActiveUnitFraction * 100)}% of the ${hardware.unitCount} ${hardware.unitName}s on ${hardware.name}. The remaining units are idle in that first scheduling wave; batch is ${settings.batch}.`,
   };
 }

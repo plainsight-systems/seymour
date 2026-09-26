@@ -34,6 +34,12 @@ const descriptors: Record<string, KernelDescriptor> = {
   sample: { id: 'sample', name: 'topk_topp_sampling', fused: ['temperature', 'top-k select', 'top-p scan', 'categorical draw'], kind: 'sampling', tile: '256 logits / workgroup' },
 };
 
+const separateAttentionDescriptors: Record<string, KernelDescriptor> = {
+  qk: { id: 'qk_matmul', name: 'qk_score_gemm', fused: ['QKᵀ', 'scale + causal mask', 'score store'], kind: 'attention', tile: '64 queries × 128 keys' },
+  softmax: { id: 'softmax', name: 'row_softmax_fwd', fused: ['score load', 'max + exp reduction', 'probability store'], kind: 'vector', tile: 'one score row / workgroup' },
+  pv: { id: 'pv_matmul', name: 'probability_value_gemm', fused: ['probability load', 'P·V', 'attention output store'], kind: 'attention', tile: '64 queries × 128 keys' },
+};
+
 function ceilDiv(value: number, divisor: number): number {
   return Math.max(1, Math.ceil(value / divisor));
 }
@@ -87,17 +93,20 @@ export function buildKernelPlan(
   model: ModelProfile,
   result: SimulationResult,
 ): KernelPlan {
-  const descriptor = descriptors[step.id] ?? descriptors.qkv!;
+  const descriptor = settings.attentionKernel === 'separate' && separateAttentionDescriptors[step.id]
+    ? separateAttentionDescriptors[step.id]!
+    : descriptors[step.id] ?? descriptors.qkv!;
   const grid = groupCount(descriptor, step, settings, model);
   const groups = grid[0] * grid[1] * grid[2];
   const matrix = descriptor.kind === 'matrix' || descriptor.kind === 'attention';
   const workgroupSize = matrix ? 256 : 256;
   const wavesPerGroup = workgroupSize / hardware.waveSize;
   const cooperativeLanes = matrix ? hardware.matrixGroupSize : hardware.waveSize;
+  const estimatedActiveUnitFraction = Math.min(1, groups / hardware.unitCount);
   const estimatedFirstWaveOccupancy = Math.min(1, groups / (hardware.unitCount * RESIDENT_GROUP_ASSUMPTION));
 
   // This is a declared reference schedule, not an extracted profiler trace. The
-  // The algorithm ledger separates logical tensors from bytes that cross the
+  // algorithm ledger separates logical tensors from bytes that cross the
   // modeled HBM boundary. Parameter bytes are reads; writeBytes is declared per
   // operation so a fused score matrix can remain entirely on chip.
   const stepBytes = step.parameterBytes + step.boundaryBytes;
@@ -146,7 +155,11 @@ export function buildKernelPlan(
     operationId: step.id,
     kernelId: descriptor.id,
     kernelName: descriptor.name,
-    qualifier: settings.phase === 'decode' && descriptor.kind === 'attention' ? 'paged decode reference' : `${settings.phase} reference`,
+    qualifier: settings.attentionKernel === 'separate' && separateAttentionDescriptors[step.id]
+      ? `${settings.phase} · separate attention stage`
+      : settings.phase === 'decode' && descriptor.kind === 'attention'
+        ? 'paged decode · fused attention reference'
+        : `${settings.phase} reference`,
     fusedOperations: descriptor.fused,
     grid,
     workgroupSize,
@@ -154,6 +167,7 @@ export function buildKernelPlan(
     wavesPerGroup,
     waveSize: hardware.waveSize,
     cooperativeLanes,
+    estimatedActiveUnitFraction,
     estimatedFirstWaveOccupancy,
     tile: descriptor.tile,
     instruction: matrix ? hardware.matrixInstruction : `${hardware.waveName}-level vector / reduction ops`,

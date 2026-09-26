@@ -16,6 +16,14 @@ export function calculateSimulation(
 
   const denseFlopsPerToken = 2 * model.parametersB * GIGA;
   const attentionFlops = 4 * model.layers * model.hiddenSize * sequence;
+  const queryTokens = settings.phase === 'prefill' ? sequence : 1;
+  const attentionScoreBytes = batch * model.attentionHeads * queryTokens * sequence * (model.kvBits / 8);
+  // A separate QK -> softmax -> PV schedule writes scores, reads and writes
+  // probabilities, then reads them again. A fused attention kernel keeps that
+  // four-crossing intermediate on chip.
+  const materializedAttentionBytes = settings.attentionKernel === 'separate'
+    ? 4 * attentionScoreBytes * model.layers
+    : 0;
 
   let flops: number;
   let bytes: number;
@@ -24,12 +32,12 @@ export function calculateSimulation(
   if (settings.phase === 'decode') {
     flops = batch * (denseFlopsPerToken + attentionFlops);
     kvBytes = kvFootprintBytes;
-    bytes = weightBytes + kvBytes + batch * kvBytesPerToken;
+    bytes = weightBytes + kvBytes + batch * kvBytesPerToken + materializedAttentionBytes;
   } else {
     flops = batch * (denseFlopsPerToken * sequence + 4 * model.layers * model.hiddenSize * sequence ** 2);
     kvBytes = kvFootprintBytes;
     // The fused first-order model reads weights once and writes the completed KV cache.
-    bytes = weightBytes + kvBytes;
+    bytes = weightBytes + kvBytes + materializedAttentionBytes;
   }
 
   const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
@@ -57,6 +65,15 @@ export function calculateSimulation(
       : 'memory';
   const tokenCount = settings.phase === 'decode' ? batch : batch * sequence;
   const modelFootprintBytes = weightBytes + kvFootprintBytes;
+  const flopsPerSequence = denseFlopsPerToken + attentionFlops;
+  const kvTrafficPerSequence = kvBytesPerToken * (sequence + 1);
+  const materializedAttentionPerSequence = materializedAttentionBytes / batch;
+  // The decode limit at an infinitely large batch: weights are perfectly
+  // amortized, but each sequence still streams its own KV history. This makes
+  // it clear when batching cannot reach the hardware ridge at this context.
+  const batchLimitArithmeticIntensity = settings.phase === 'decode'
+    ? flopsPerSequence / (kvTrafficPerSequence + materializedAttentionPerSequence)
+    : flops / bytes;
 
   return {
     flops,
@@ -79,11 +96,13 @@ export function calculateSimulation(
     modelFootprintBytes,
     hbmUsedFraction: modelFootprintBytes / (hardware.hbmCapacityGB * GIGA),
     hbmTrafficBytes,
+    attentionMaterializationBytes: materializedAttentionBytes,
     hostTrafficBytes,
     hostMs: hostSeconds * 1000,
     spilledWeightBytes,
     spilledKvBytes,
     crossoverBatch: findCrossoverBatch(settings, hardware, model),
+    batchLimitArithmeticIntensity,
   };
 }
 
@@ -103,7 +122,10 @@ function findCrossoverBatch(
     2 * model.parametersB * GIGA + 4 * model.layers * model.hiddenSize * settings.sequenceLength;
 
   for (let batch = 1; batch <= 1024; batch *= 2) {
-    const bytes = weightBytes + batch * kvBytesPerToken * (settings.sequenceLength + 1);
+    const scoreBytes = settings.attentionKernel === 'separate'
+      ? 4 * batch * model.attentionHeads * settings.sequenceLength * (model.kvBits / 8) * model.layers
+      : 0;
+    const bytes = weightBytes + batch * kvBytesPerToken * (settings.sequenceLength + 1) + scoreBytes;
     if ((flopsPerSequence * batch) / bytes >= ridge) return batch;
   }
   return null;

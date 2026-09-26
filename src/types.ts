@@ -1,5 +1,8 @@
 export type Phase = 'decode' | 'prefill';
 export type ViewMode = 'story' | 'hardware';
+export type WeightBits = 4 | 8 | 16;
+export type KvBits = 8 | 16;
+export type AttentionKernel = 'fused' | 'separate';
 export type HardwareStage = 'host' | 'hbm' | 'l2' | 'shared' | 'registers' | 'compute';
 export type KernelTrack = 'runtime' | 'memory' | 'execution';
 export type KernelPhaseKind = 'submit' | 'host-transfer' | 'hbm-load' | 'stage' | 'compute' | 'sync' | 'store';
@@ -53,6 +56,9 @@ export interface SimulationSettings {
   hardwareId: string;
   batch: number;
   sequenceLength: number;
+  weightBits: WeightBits;
+  kvBits: KvBits;
+  attentionKernel: AttentionKernel;
   overlap: boolean;
   view: ViewMode;
 }
@@ -75,11 +81,13 @@ export interface SimulationResult {
   modelFootprintBytes: number;
   hbmUsedFraction: number;
   hbmTrafficBytes: number;
+  attentionMaterializationBytes: number;
   hostTrafficBytes: number;
   hostMs: number;
   spilledWeightBytes: number;
   spilledKvBytes: number;
   crossoverBatch: number | null;
+  batchLimitArithmeticIntensity: number;
 }
 
 export interface AlgorithmStep {
@@ -127,6 +135,7 @@ export interface KernelPlan {
   wavesPerGroup: number;
   waveSize: number;
   cooperativeLanes: number;
+  estimatedActiveUnitFraction: number;
   estimatedFirstWaveOccupancy: number;
   tile: string;
   instruction: string;

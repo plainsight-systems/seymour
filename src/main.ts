@@ -11,6 +11,7 @@ import {
 } from './model/calculate';
 import { buildAlgorithmSteps } from './model/algorithm';
 import { buildKernelPlan } from './model/kernels';
+import { applySoftwareStrategy, precisionLabel } from './model/strategy';
 import { buildTeachingGuide } from './model/teaching';
 import {
   batchFromSlider,
@@ -48,17 +49,16 @@ app.innerHTML = `
       </div>
       <div class="intro-copy">
         <p>Follow one real transformer operation from model code to memory, compute units, and the bottleneck it creates.</p>
-        <button class="text-button" id="start-tour" type="button">Start the guided lesson <span aria-hidden="true">→</span></button>
+        <button class="text-button" id="start-tour" type="button">Open the experiment bench <span aria-hidden="true">→</span></button>
       </div>
     </section>
 
     <section class="machine" aria-label="Interactive inference execution map">
       <div class="machine-topbar">
-        <div class="mode-switches">
-          <div class="phase-switch" role="group" aria-label="Inference phase">
-            <button type="button" data-phase="decode" aria-pressed="true"><span>01</span> Decode</button>
-            <button type="button" data-phase="prefill" aria-pressed="false"><span>02</span> Prefill</button>
-          </div>
+        <div class="scenario-label">
+          <span>Scenario</span>
+          <strong>Autoregressive decode</strong>
+          <small>one new token per sequence</small>
         </div>
         <div class="machine-tools">
           <button type="button" class="icon-button" id="share-state"><span aria-hidden="true">↗</span> Share</button>
@@ -68,21 +68,72 @@ app.innerHTML = `
       <section class="execution-lesson" aria-labelledby="algorithm-title">
         <header class="lesson-heading">
           <div>
-            <p class="kicker">Follow one operation</p>
+            <p class="kicker">Run one generated token</p>
             <h2 id="algorithm-title">How a decode token crosses the machine.</h2>
           </div>
-          <p>Choose a transformer operation, then follow its data through the runtime, memory hierarchy, kernel, and execution lanes. Nothing advances unless you ask it to.</p>
-          <div class="lesson-navigation" aria-label="Operation navigation">
-            <button id="previous-operation" type="button"><span aria-hidden="true">←</span> Previous</button>
-            <label class="operation-picker"><span>Operation</span><select id="operation-select" aria-label="Choose transformer operation"></select></label>
-            <button id="next-operation" type="button">Next <span aria-hidden="true">→</span></button>
-          </div>
+          <p>Set the workload, press <strong>Play</strong>, and watch one token pass through all twelve transformer operations. Pause at any point or step one operation at a time. Each operation dispatches a GPU <strong>kernel</strong>—similar to a compute shader.</p>
         </header>
 
-        <div class="algorithm-steps" id="algorithm-steps" aria-label="Transformer chapter progress"></div>
+        <div class="experiment-bench">
+        <section class="workload-panel" aria-labelledby="workload-controls-title">
+          <header>
+            <div><span>Shape the run</span><strong id="workload-summary"></strong></div>
+            <p id="workload-warning" hidden>Working set spills to system memory</p>
+            <button type="button" id="reset-controls" class="reset-button">Reset</button>
+          </header>
+          <form class="controls" id="controls">
+            <h3 class="sr-only" id="workload-controls-title">Change workload, software strategy, and deployment target</h3>
+            <fieldset class="control-group workload-group">
+              <legend><b>1</b><span><strong>Workload</strong><small>What arrives</small></span></legend>
+              <div class="control-group-body">
+                <label class="field range-field"><span>Concurrent sequences <output id="batch-output">1</output></span><input id="batch-range" type="range" min="0" max="10" step="1" value="0" /><span class="range-ends"><small>1</small><small>1,024 active</small></span></label>
+                <label class="field range-field"><span id="tokens-label">Context per sequence <output id="tokens-output">4,096</output></span><input id="tokens-range" type="range" min="0" max="8" step="1" value="5" /><span class="range-ends"><small>128</small><small>32K tokens</small></span></label>
+              </div>
+              <p class="control-explainer" id="workload-boundary-note"></p>
+            </fieldset>
 
-        <div class="lesson-workspace">
+            <fieldset class="control-group strategy-group">
+              <legend><b>2</b><span><strong>Software strategy</strong><small>What your stack changes</small></span></legend>
+              <div class="model-stamp"><span>Model</span><strong id="model-name">${DEFAULT_MODEL.name}</strong><small id="model-note">${DEFAULT_MODEL.parametersB}B parameters · GQA ${DEFAULT_MODEL.attentionHeads}:${DEFAULT_MODEL.kvHeads}</small></div>
+              <div class="control-group-body strategy-grid">
+                <label class="field"><span>Weight storage</span><select id="weight-select"><option value="16">FP16 · 2 bytes</option><option value="8">8-bit · 1 byte</option><option value="4">4-bit · 0.5 byte</option></select><small>Changes model bytes, not the peak-compute claim</small></label>
+                <label class="field"><span>KV cache storage</span><select id="kv-select"><option value="16">FP16 · 2 bytes</option><option value="8">8-bit · 1 byte</option></select><small>Changes cache capacity and traffic</small></label>
+                <label class="field"><span>Attention schedule</span><select id="attention-select"><option value="fused">Fused · scores stay on chip</option><option value="separate">Separate · scores cross HBM</option></select><small>Changes the QK → softmax → PV boundary</small></label>
+                <label class="toggle-field"><span><strong>Overlap compute + memory</strong><small>Runtime pipelines both floors</small></span><input id="overlap-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
+              </div>
+              <p class="control-explainer" id="strategy-impact"></p>
+            </fieldset>
+
+            <fieldset class="control-group deployment-group">
+              <legend><b>3</b><span><strong>Deployment target</strong><small>Fixed silicon to compare</small></span></legend>
+              <div class="control-group-body">
+                <label class="field"><span>Accelerator profile</span><select id="hardware-select">${HARDWARE_PROFILES.map((profile) => `<option value="${profile.id}">${profile.vendor} · ${profile.name}</option>`).join('')}</select></label>
+                <div class="hardware-context"><span>Published hardware facts</span><strong id="hardware-context-note"></strong><small id="hardware-context-ceilings"></small></div>
+              </div>
+              <p class="control-explainer">Choosing a GPU changes the comparison target. Software can select this target; it cannot resize its HBM, SM/CU count, or physical bandwidth.</p>
+            </fieldset>
+
+            <div class="assumptions"><button type="button" id="assumptions-toggle" aria-expanded="false" aria-controls="assumptions-body">Model assumptions <span aria-hidden="true">+</span></button><div id="assumptions-body" class="assumptions-body"><p>Weight and KV formats change byte counts only; Seymour keeps the published dense FP16 compute ceiling rather than inventing quantized-kernel speedups. Separate attention materializes the score/probability matrix across HBM four times per layer; fused attention keeps it on chip. Published peak × <strong id="efficiency-summary"></strong>. Host spill uses the published PCIe link ceiling. The kernel microscope exposes a 5 µs launch assumption.</p></div></div>
+          </form>
+        </section>
+
           <section class="canonical-map" aria-labelledby="machine-map-title">
+            <section class="sequence-player" aria-labelledby="sequence-player-title">
+              <div class="sequence-player-status">
+                <span>One token · complete path</span>
+                <strong id="sequence-player-title">Operation <b id="sequence-index">01 / 12</b></strong>
+                <small id="sequence-state" aria-live="polite">Paused · adjust the run, then press Play.</small>
+              </div>
+              <div class="sequence-controls" role="group" aria-label="Token path playback">
+                <button id="reset-sequence" type="button" title="Return to the first operation"><span aria-hidden="true">↺</span> Start</button>
+                <button id="previous-operation" type="button"><span aria-hidden="true">←</span> Step</button>
+                <button id="play-sequence" type="button" aria-pressed="false"><span id="play-icon" aria-hidden="true">▶</span><strong id="play-label">Play path</strong></button>
+                <button id="next-operation" type="button">Step <span aria-hidden="true">→</span></button>
+              </div>
+              <label class="operation-picker"><span>Jump to operation</span><select id="operation-select" aria-label="Choose transformer operation"></select></label>
+              <div class="algorithm-steps" id="algorithm-steps" aria-label="Twelve operations in one generated token"></div>
+            </section>
+
             <header class="canonical-map-heading">
               <div>
                 <span id="path-step">02 / 12</span>
@@ -98,17 +149,9 @@ app.innerHTML = `
 
             <div class="data-legend" id="data-legend"></div>
 
-            <aside class="tour-panel" id="tour-panel" hidden aria-live="polite">
-              <div class="tour-progress"><span id="tour-number">1 / 4</span><i id="tour-bar"></i></div>
-              <div><p class="kicker" id="tour-kicker">The machine</p><h2 id="tour-title">Start with two sides.</h2><p id="tour-copy"></p></div>
-              <div class="tour-actions">
-                <button class="button-secondary" id="tour-exit" type="button">Explore on my own</button>
-                <button class="button-primary" id="tour-next" type="button">Next <span aria-hidden="true">→</span></button>
-              </div>
-            </aside>
-
             <div class="machine-map" id="system-path" aria-label="Conceptual map of the host computer and accelerator. Highlighted regions show the selected operation's path.">
               <section class="map-host path-node" data-path-stage="host">
+                <b class="map-bottleneck">Current bottleneck</b>
                 <span>Outside the accelerator</span>
                 <strong>Host computer</strong>
                 <p>The CPU starts kernels. System memory holds data only when accelerator memory overflows.</p>
@@ -126,6 +169,7 @@ app.innerHTML = `
                 </header>
                 <div class="map-package-body">
                   <section class="map-hbm path-node" data-path-stage="hbm">
+                    <b class="map-bottleneck">Current bottleneck</b>
                     <em>1</em>
                     <span>Fast memory beside the GPU chip</span>
                     <strong>High-bandwidth memory (HBM)</strong>
@@ -138,16 +182,16 @@ app.innerHTML = `
                       <section class="map-l2 path-node" data-path-stage="l2">
                         <em>2</em><span>Shared on-chip cache</span><strong>L2 cache</strong><p>Reuses recently fetched data across compute units.</p>
                       </section>
-                      <div class="worker-array" aria-label="Many repeated compute units">
-                        <span>Many repeated compute units</span>
-                        <div aria-hidden="true">${Array.from({ length: 18 }, () => '<i></i>').join('')}</div>
+                      <div class="worker-array" id="worker-array" aria-label="Modeled compute-unit activity for the selected kernel">
+                        <div class="worker-array-copy"><span>Kernel dispatch</span><strong id="unit-utilization"></strong><small id="unit-utilization-note"></small></div>
+                        <div class="worker-array-grid" id="worker-array-grid" aria-hidden="true">${Array.from({ length: 24 }, () => '<i></i>').join('')}</div>
                       </div>
                       <section class="map-worker">
                         <header><span>One worker, enlarged</span><strong>Compute unit</strong><small>NVIDIA calls it an SM. AMD calls it a CU.</small></header>
                         <div class="worker-pipeline">
                           <section class="path-node" data-path-stage="shared"><em>3</em><span>Nearby scratchpad</span><strong>Local memory</strong><small>Shared memory on NVIDIA · Local Data Share (LDS) on AMD</small></section>
                           <section class="path-node" data-path-stage="registers"><em>4</em><span>Per-lane working values</span><strong>Registers</strong><small>Hold fragments immediately before and after math</small></section>
-                          <section class="path-node" data-path-stage="compute"><em>5</em><span>Arithmetic hardware</span><strong>Matrix + vector units</strong><small>Execute multiply-accumulate and vector instructions</small></section>
+                          <section class="path-node" data-path-stage="compute"><b class="map-bottleneck">Current bottleneck</b><em>5</em><span>Arithmetic hardware</span><strong>Matrix + vector units</strong><small>Execute multiply-accumulate and vector instructions</small></section>
                         </div>
                       </section>
                     </div>
@@ -158,7 +202,9 @@ app.innerHTML = `
 
             <p class="route-disclaimer"><strong>How to read this:</strong> numbered highlights show tensor data moving closer to the math units. The separate PCIe arrow is the CPU command path. These are diagram marks, not literal pipes.</p>
           </section>
+        </div>
 
+        <div class="lesson-workspace">
           <section class="teaching-rail">
             <article class="algorithm-detail" id="algorithm-detail">
               <div class="algorithm-detail-heading">
@@ -226,22 +272,6 @@ app.innerHTML = `
           </details>
         </div>
 
-        <details class="workload-drawer">
-          <summary><span>Workload</span><strong id="workload-summary"></strong><small>Change GPU, batch, context, and roofline assumptions</small></summary>
-          <form class="controls" id="controls">
-            <div class="control-heading">
-              <div><p class="kicker">Workload</p><h2>Change the pressure on the system.</h2></div>
-              <button type="button" id="reset-controls" class="reset-button">Reset</button>
-            </div>
-            <label class="field"><span>Accelerator</span><select id="hardware-select">${HARDWARE_PROFILES.map((profile) => `<option value="${profile.id}">${profile.vendor} · ${profile.name}</option>`).join('')}</select></label>
-            <div class="model-stamp"><span>Model</span><strong>${DEFAULT_MODEL.name}</strong><small>${DEFAULT_MODEL.parametersB}B parameters · GQA ${DEFAULT_MODEL.attentionHeads}:${DEFAULT_MODEL.kvHeads}</small></div>
-            <label class="field range-field"><span>Batch <output id="batch-output">1</output></span><input id="batch-range" type="range" min="0" max="8" step="1" value="0" /><span class="range-ends"><small>1</small><small>256 sequences</small></span></label>
-            <label class="field range-field"><span id="tokens-label">Context <output id="tokens-output">4,096</output></span><input id="tokens-range" type="range" min="0" max="8" step="1" value="5" /><span class="range-ends"><small>128</small><small>32K tokens</small></span></label>
-            <label class="toggle-field"><span><strong>Overlap compute + memory</strong><small>Optimistic roofline assumption</small></span><input id="overlap-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
-            <div class="assumptions"><button type="button" id="assumptions-toggle" aria-expanded="false" aria-controls="assumptions-body">Model assumptions <span aria-hidden="true">+</span></button><div id="assumptions-body" class="assumptions-body"><p>Dense FP16 weights and KV. Fused attention avoids materializing the score matrix. Published peak × <strong id="efficiency-summary"></strong>. Host spill uses the published PCIe link ceiling. The kernel microscope separately exposes a 5 µs launch assumption and does not feed it back into the whole-model roofline.</p></div></div>
-          </form>
-        </details>
-
         <details class="kernel-deep-dive">
           <summary><span>Kernel microscope</span><strong id="kernel-summary"></strong><small>Open launch geometry, schedule, and cooperative lanes</small></summary>
           <section class="execution-microscope" aria-labelledby="execution-title">
@@ -269,12 +299,12 @@ app.innerHTML = `
               <dl class="kernel-ledger">
                 <div><dt>Grid</dt><dd id="kernel-grid"></dd></div>
                 <div><dt>Workgroup</dt><dd id="kernel-workgroup"></dd></div>
-                <div><dt>First wave</dt><dd id="kernel-occupancy"></dd></div>
+                <div><dt>Unit coverage</dt><dd id="kernel-occupancy"></dd></div>
                 <div><dt>Tile</dt><dd id="kernel-tile"></dd></div>
                 <div><dt>HBM traffic</dt><dd id="kernel-hbm"></dd></div>
                 <div><dt>Host traffic</dt><dd id="kernel-host"></dd></div>
               </dl>
-              <div class="fused-ops"><span>Reference fusion</span><ol id="kernel-fused"></ol></div>
+              <div class="fused-ops"><span>Kernel stages</span><ol id="kernel-fused"></ol></div>
             </article>
             <article class="timeline-card">
               <header><div><span>One representative launch</span><strong id="kernel-duration"></strong></div><em id="trace-now">CPU submit</em></header>
@@ -364,7 +394,7 @@ app.innerHTML = `
         <article>
           <span class="method-number">02</span>
           <h3>Count boundary traffic</h3>
-          <p>Decode streams active weights once per step and reads prior KV. Prefill reads weights once for the prompt and writes the completed KV cache.</p>
+          <p>Decode streams active weights once per step and reads prior KV. If the working set exceeds HBM, the overflow is priced separately across the host link.</p>
         </article>
         <article>
           <span class="method-number">03</span>
@@ -379,7 +409,7 @@ app.innerHTML = `
           <p><strong>Hardware.</strong> <a href="https://www.nvidia.com/en-us/data-center/h100/">NVIDIA H100 specifications</a> and <a href="https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html">AMD MI300X specifications</a>. Sparse headline throughput is not used. A visible 55% compute / 72% HBM efficiency assumption turns theoretical peaks into analytical ceilings.</p>
           <p><strong>Model.</strong> <a href="https://huggingface.co/meta-llama/Llama-3.1-8B/blob/main/config.json">Meta Llama 3.1 8B configuration</a>: 32 layers, hidden size 4096, 32 query heads, 8 KV heads, head dimension 128.</p>
           <p><strong>Kernel semantics.</strong> <a href="https://docs.nvidia.com/cutlass/4.5.2/media/docs/pythonDSL/mma_docs/wgmma_programming.html">NVIDIA CUTLASS WGMMA guide</a>, <a href="https://docs.nvidia.com/cuda/pdf/Hopper_Tuning_Guide.pdf">Hopper tuning guide</a>, and <a href="https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html">AMD ROCm architecture specifications</a>. The displayed kernel is a transparent reference plan, not a claim about a library’s emitted code.</p>
-          <p><strong>Not yet modeled.</strong> Collectives, quantization kernels, cache-hit rates, exact scheduler residency, power throttling, continuous batching, and network/storage tiers. Host fallback is a first-order PCIe transfer model, not a paging simulator.</p>
+          <p><strong>Not yet modeled.</strong> Collectives, format-specific quantized compute throughput, cache-hit rates, exact scheduler residency, power throttling, continuous batching, and network/storage tiers. Host fallback is a first-order PCIe transfer model, not a paging simulator.</p>
         </div>
       </details>
     </section>
@@ -395,11 +425,13 @@ app.innerHTML = `
 `;
 
 let settings: SimulationSettings = readSettings();
+settings.phase = 'decode';
 if (!HARDWARE_PROFILES.some((hardware) => hardware.id === settings.hardwareId)) {
   settings.hardwareId = HARDWARE_PROFILES[0]!.id;
 }
 let hardware = getHardware(settings.hardwareId);
-let result = calculateSimulation(settings, hardware, DEFAULT_MODEL);
+let model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+let result = calculateSimulation(settings, hardware, model);
 
 const viewport = required<HTMLElement>('#viewport');
 let scene: SeymourScene;
@@ -419,31 +451,36 @@ try {
   } as unknown as SeymourScene;
 }
 
-const phaseButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-phase]')];
 const viewButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
 const hardwareSelect = required<HTMLSelectElement>('#hardware-select');
 const batchRange = required<HTMLInputElement>('#batch-range');
 const batchOutput = required<HTMLOutputElement>('#batch-output');
 const tokensRange = required<HTMLInputElement>('#tokens-range');
 const tokensOutput = required<HTMLOutputElement>('#tokens-output');
+const weightSelect = required<HTMLSelectElement>('#weight-select');
+const kvSelect = required<HTMLSelectElement>('#kv-select');
+const attentionSelect = required<HTMLSelectElement>('#attention-select');
 const overlapToggle = required<HTMLInputElement>('#overlap-toggle');
 const operationSelect = required<HTMLSelectElement>('#operation-select');
+const playSequenceButton = required<HTMLButtonElement>('#play-sequence');
+const resetSequenceButton = required<HTMLButtonElement>('#reset-sequence');
 const roofline = required<HTMLElement>('#roofline-chart');
-let selectedStepId = new URLSearchParams(window.location.search).get('op') ?? 'qkv';
+let selectedStepId = new URLSearchParams(window.location.search).get('op') ?? 'rms-attn';
 let algorithmSteps: AlgorithmStep[] = [];
 let currentKernelPlan: KernelPlan | null = null;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let scenePulseTimer = 0;
+let sequenceTimer = 0;
+let isSequencePlaying = false;
+let sequenceIdleMessage = 'Paused · adjust the run, then press Play.';
 scene.setPaused(true);
 
 function update(writeUrl = true): void {
   hardware = getHardware(settings.hardwareId);
-  result = calculateSimulation(settings, hardware, DEFAULT_MODEL);
+  model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+  result = calculateSimulation(settings, hardware, model);
   if (writeUrl) writeSettings(settings, selectedStepId);
 
-  phaseButtons.forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.dataset.phase === settings.phase));
-  });
   viewButtons.forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.view === settings.view));
   });
@@ -453,9 +490,32 @@ function update(writeUrl = true): void {
   batchOutput.value = settings.batch.toLocaleString();
   tokensRange.value = String(sequenceToSlider(settings.sequenceLength));
   tokensOutput.value = settings.sequenceLength.toLocaleString();
+  weightSelect.value = String(settings.weightBits);
+  kvSelect.value = String(settings.kvBits);
+  attentionSelect.value = settings.attentionKernel;
   overlapToggle.checked = settings.overlap;
-  setText('#workload-summary', `${hardware.name} · batch ${settings.batch} · ${settings.sequenceLength.toLocaleString()} token ${settings.phase}`);
-  setText('#algorithm-title', settings.phase === 'decode' ? 'How one decode token crosses the machine.' : 'How a prompt becomes the first KV cache.');
+  setText('#workload-summary', `${settings.batch} active · ${settings.sequenceLength.toLocaleString()} tokens · W${settings.weightBits}/KV${settings.kvBits} · ${hardware.name}`);
+  setText('#model-name', model.name);
+  setText('#model-note', `${model.parametersB}B parameters · GQA ${model.attentionHeads}:${model.kvHeads}`);
+  setText('#strategy-impact', `${precisionLabel(settings.weightBits)} weights occupy ${formatBytes(result.weightBytes)}. ${precisionLabel(settings.kvBits)} KV uses ${formatBytes(result.kvBytesPerToken)} per token. ${settings.attentionKernel === 'fused' ? 'Fused attention keeps scores on chip.' : 'Separate attention writes and rereads scores through HBM.'}`);
+  setText('#hardware-context-note', `${hardware.unitCount} ${hardware.unitName}s · ${hardware.hbmCapacityGB} GB HBM · ${hardware.hbmBandwidthTBs} TB/s`);
+  setText('#hardware-context-ceilings', `${formatNumber(hardware.fp16DenseTflops)} dense FP16 TFLOP/s · ${hardware.architecture}`);
+  setText(
+    '#workload-boundary-note',
+    result.bottleneck === 'host'
+      ? `Host-bound: ${formatBytes(result.hostTrafficBytes)} crosses PCIe because the ${formatBytes(result.modelFootprintBytes)} working set exceeds ${hardware.hbmCapacityGB} GB of HBM.`
+      : result.bottleneck === 'compute'
+        ? `Compute-bound: arithmetic now takes ${formatNumber(result.computeMs / Math.max(result.memoryMs, Number.EPSILON))}× longer than memory traffic.`
+        : result.crossoverBatch
+          ? `HBM-bound here. Around batch ${result.crossoverBatch}, weight reuse reaches this GPU’s ${formatNumber(result.ridgePoint)} FLOP/byte ridge.`
+          : `HBM-bound even with perfect weight reuse: this context tops out near ${formatNumber(result.batchLimitArithmeticIntensity)} FLOP/byte, below this GPU’s ${formatNumber(result.ridgePoint)} FLOP/byte ridge. Shorter context or smaller KV storage changes that limit.`,
+  );
+  setText('#algorithm-title', 'How one decode token crosses the machine.');
+  const workloadPanel = required<HTMLElement>('.workload-panel');
+  const spillsToHost = result.hostTrafficBytes > 0;
+  workloadPanel.dataset.spill = String(spillsToHost);
+  required<HTMLElement>('#workload-warning').hidden = !spillsToHost;
+  required<HTMLElement>('#system-path').dataset.bottleneck = result.bottleneck;
 
   setText('#efficiency-summary', `${Math.round(hardware.computeEfficiency * 100)}% compute / ${Math.round(hardware.memoryEfficiency * 100)}% HBM`);
   setText(
@@ -482,7 +542,9 @@ function update(writeUrl = true): void {
     '#traffic-note',
     result.hostTrafficBytes > 0
       ? `${formatBytes(result.hbmTrafficBytes)} HBM · ${formatBytes(result.hostTrafficBytes)} host`
-      : `${formatBytes(result.weightBytes)} weights · ${formatBytes(result.kvBytes)} KV`,
+      : result.attentionMaterializationBytes > 0
+        ? `${formatBytes(result.attentionMaterializationBytes)} score traffic from separate attention`
+        : `${formatBytes(result.weightBytes)} weights · ${formatBytes(result.kvBytes)} KV`,
   );
   setText('#flops-value', formatFlops(result.flops));
   setText('#intensity-value', `${formatNumber(result.arithmeticIntensity)} FLOP/byte`);
@@ -497,7 +559,9 @@ function update(writeUrl = true): void {
   );
   required('#roof-status').className = `status-chip ${result.bottleneck}`;
 
-  const crossover = result.crossoverBatch ? ` Around batch ${result.crossoverBatch}, the point crosses this GPU’s ridge.` : '';
+  const crossover = result.crossoverBatch
+    ? ` Around batch ${result.crossoverBatch}, the point crosses this GPU’s ridge.`
+    : ` At this context, per-sequence KV traffic caps the batch limit near ${formatNumber(result.batchLimitArithmeticIntensity)} FLOP/byte—below the ${formatNumber(result.ridgePoint)} FLOP/byte ridge.`;
   if (result.bottleneck === 'host') {
     setText('#finding-title', `${formatBytes(result.spilledKvBytes + result.spilledWeightBytes)} no longer fits in HBM.`);
     setText(
@@ -544,13 +608,6 @@ function update(writeUrl = true): void {
   renderAlgorithm();
 }
 
-phaseButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    settings.phase = button.dataset.phase === 'prefill' ? 'prefill' : 'decode';
-    update();
-  });
-});
-
 viewButtons.forEach((button) => {
   button.addEventListener('click', () => {
     settings.view = button.dataset.view === 'hardware' ? 'hardware' : 'story';
@@ -559,25 +616,45 @@ viewButtons.forEach((button) => {
 });
 
 hardwareSelect.addEventListener('change', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
   settings.hardwareId = hardwareSelect.value;
   update();
 });
 batchRange.addEventListener('input', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
   settings.batch = batchFromSlider(Number(batchRange.value));
   update();
 });
 tokensRange.addEventListener('input', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
   settings.sequenceLength = sequenceFromSlider(Number(tokensRange.value));
   update();
 });
+weightSelect.addEventListener('change', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
+  settings.weightBits = Number(weightSelect.value) as SimulationSettings['weightBits'];
+  update();
+});
+kvSelect.addEventListener('change', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
+  settings.kvBits = Number(kvSelect.value) as SimulationSettings['kvBits'];
+  update();
+});
+attentionSelect.addEventListener('change', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
+  settings.attentionKernel = attentionSelect.value as SimulationSettings['attentionKernel'];
+  update();
+});
 overlapToggle.addEventListener('change', () => {
+  pauseSequence('Settings changed · press Play to run this configuration.');
   settings.overlap = overlapToggle.checked;
   update();
 });
 
 required<HTMLButtonElement>('#reset-controls').addEventListener('click', () => {
-  settings = { phase: 'decode', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, overlap: true, view: 'hardware' };
-  selectedStepId = 'qkv';
+  pauseSequence('Defaults restored · ready to play from operation 1.');
+  settings = { phase: 'decode', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, weightBits: 16, kvBits: 16, attentionKernel: 'fused', overlap: true, view: 'hardware' };
+  selectedStepId = 'rms-attn';
   update();
   scene.focus('overview');
 });
@@ -590,12 +667,25 @@ assumptionsToggle.addEventListener('click', () => {
 });
 
 required<HTMLButtonElement>('#previous-operation').addEventListener('click', () => {
+  pauseSequence('Paused · stepped back one operation.');
   moveOperation(-1, true);
 });
 required<HTMLButtonElement>('#next-operation').addEventListener('click', () => {
+  pauseSequence('Paused · stepped forward one operation.');
   moveOperation(1, true);
 });
-operationSelect.addEventListener('change', () => selectOperation(operationSelect.value, true));
+operationSelect.addEventListener('change', () => {
+  pauseSequence('Paused · jumped to the selected operation.');
+  selectOperation(operationSelect.value, true);
+});
+resetSequenceButton.addEventListener('click', () => {
+  pauseSequence('At the start · press Play or Step forward.');
+  selectOperation(algorithmSteps[0]?.id ?? 'rms-attn', true);
+});
+playSequenceButton.addEventListener('click', () => {
+  if (isSequencePlaying) pauseSequence('Paused · use Step or resume Play.');
+  else playSequence();
+});
 
 required<HTMLButtonElement>('#export-image').addEventListener('click', async () => {
   await scene.capture();
@@ -612,75 +702,11 @@ required<HTMLButtonElement>('#share-state').addEventListener('click', async () =
   }
 });
 
-const tourSteps = [
-  {
-    kicker: 'The machine · 1 of 4',
-    title: 'Start with two sides.',
-    copy: 'The host computer starts the work. The accelerator package holds fast memory and the GPU chip. CPU commands cross PCIe; tensors normally remain on the accelerator.',
-    focus: 'overview' as const,
-    operationId: 'qkv',
-    settings: { phase: 'decode' as const, batch: 1, sequenceLength: 4096 },
-  },
-  {
-    kicker: 'Memory · 2 of 4',
-    title: 'Weights begin in high-bandwidth memory.',
-    copy: 'High-bandwidth memory—HBM—sits beside the GPU chip. For this projection, weights travel from HBM through on-chip cache toward one compute unit.',
-    focus: 'hbm' as const,
-    operationId: 'qkv',
-    settings: { phase: 'decode' as const, batch: 1, sequenceLength: 4096 },
-  },
-  {
-    kicker: 'Compute · 3 of 4',
-    title: 'One worker stages data before doing math.',
-    copy: 'A compute unit is called an SM on NVIDIA hardware and a CU on AMD hardware. It moves a small tile into local memory, then registers, then matrix and vector units.',
-    focus: 'compute' as const,
-    operationId: 'qk',
-    settings: { phase: 'decode' as const, batch: 1, sequenceLength: 4096 },
-  },
-  {
-    kicker: 'Performance · 4 of 4',
-    title: 'Optimization changes which boundary costs most.',
-    copy: 'A larger batch lets one weight load serve more token rows. The arithmetic stays the same operation, but useful math grows relative to bytes moved. That is the core performance-computing question Seymour exposes.',
-    focus: 'compute' as const,
-    operationId: 'qkv',
-    settings: { phase: 'decode' as const, batch: 128, sequenceLength: 4096 },
-  },
-];
-
-const tourPanel = required<HTMLElement>('#tour-panel');
-let tourIndex = 0;
-
-function showTourStep(index: number): void {
-  tourIndex = index;
-  const step = tourSteps[tourIndex]!;
-  tourPanel.hidden = false;
-  setText('#tour-number', `${tourIndex + 1} / ${tourSteps.length}`);
-  setText('#tour-kicker', step.kicker);
-  setText('#tour-title', step.title);
-  setText('#tour-copy', step.copy);
-  required<HTMLElement>('#tour-bar').style.transform = `scaleX(${(tourIndex + 1) / tourSteps.length})`;
-  required<HTMLButtonElement>('#tour-next').innerHTML = tourIndex === tourSteps.length - 1 ? 'Explore <span aria-hidden="true">↗</span>' : 'Next <span aria-hidden="true">→</span>';
-  selectedStepId = step.operationId;
-  settings = { ...settings, ...step.settings };
-  update();
-  scene.focus(step.focus);
-}
-
 required<HTMLButtonElement>('#start-tour').addEventListener('click', () => {
-  showTourStep(0);
-  required<HTMLElement>('.canonical-map').scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
-});
-required<HTMLButtonElement>('#tour-exit').addEventListener('click', () => {
-  tourPanel.hidden = true;
+  pauseSequence('Ready · adjust the run, then press Play.');
+  selectOperation(algorithmSteps[0]?.id ?? 'rms-attn');
+  required<HTMLElement>('.workload-panel').scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
   scene.focus('overview');
-});
-required<HTMLButtonElement>('#tour-next').addEventListener('click', () => {
-  if (tourIndex === tourSteps.length - 1) {
-    tourPanel.hidden = true;
-    scene.focus('overview');
-    return;
-  }
-  showTourStep(tourIndex + 1);
 });
 
 let toastTimer = 0;
@@ -693,7 +719,7 @@ function showToast(message: string): void {
 }
 
 function renderAlgorithm(): void {
-  algorithmSteps = buildAlgorithmSteps(settings, DEFAULT_MODEL);
+  algorithmSteps = buildAlgorithmSteps(settings, model);
   const selected = algorithmSteps.find((step) => step.id === selectedStepId) ?? algorithmSteps[0]!;
   selectedStepId = selected.id;
   const selectedIndex = algorithmSteps.indexOf(selected);
@@ -703,11 +729,17 @@ function renderAlgorithm(): void {
     { id: 'mlp', label: 'Feed-forward network', range: 'steps 9–10' },
     { id: 'output', label: 'Choose the next token', range: 'steps 11–12' },
   ] as const;
-  rail.innerHTML = chapters.map((chapter) => {
-    const steps = algorithmSteps.filter((step) => step.group === chapter.id);
-    const activeIndex = steps.findIndex((step) => step.id === selected.id);
-    return `<section data-active="${activeIndex >= 0}"><span>${chapter.label}</span><strong>${chapter.range}</strong><small>${activeIndex >= 0 ? `${activeIndex + 1} of ${steps.length} in this chapter` : 'not selected'}</small></section>`;
-  }).join('');
+  rail.innerHTML = algorithmSteps.map((step, index) => `
+    <button type="button" data-operation-id="${step.id}" data-group="${step.group}" data-status="${index < selectedIndex ? 'complete' : index === selectedIndex ? 'current' : 'upcoming'}" aria-pressed="${index === selectedIndex}" aria-label="Operation ${index + 1} of ${algorithmSteps.length}: ${step.name}">
+      <span>${step.number}</span><strong>${step.label}</strong>
+    </button>
+  `).join('');
+  rail.querySelectorAll<HTMLButtonElement>('[data-operation-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      pauseSequence('Paused · jumped to the selected operation.');
+      selectOperation(button.dataset.operationId ?? selectedStepId, true);
+    });
+  });
   operationSelect.innerHTML = chapters.map((chapter) => `
     <optgroup label="${chapter.label}">
       ${algorithmSteps.filter((step) => step.group === chapter.id).map((step) => `<option value="${step.id}">${step.number} · ${step.name}</option>`).join('')}
@@ -716,6 +748,8 @@ function renderAlgorithm(): void {
   operationSelect.value = selected.id;
   required<HTMLButtonElement>('#previous-operation').disabled = selectedIndex === 0;
   required<HTMLButtonElement>('#next-operation').disabled = selectedIndex === algorithmSteps.length - 1;
+  resetSequenceButton.disabled = selectedIndex === 0 && !isSequencePlaying;
+  syncSequencePlayer(selected, selectedIndex);
 
   setText('#algorithm-number', selected.number);
   setText('#algorithm-group', selected.group);
@@ -730,7 +764,7 @@ function renderAlgorithm(): void {
   setText('#algorithm-boundary', selected.boundaryBytes === 0 ? 'on-chip · fused' : formatBytes(selected.boundaryBytes));
   setText('#algorithm-repetition', selected.repetition);
   setText('#algorithm-location', locationName(selected.hardwareStage));
-  currentKernelPlan = buildKernelPlan(selected, settings, hardware, DEFAULT_MODEL, result);
+  currentKernelPlan = buildKernelPlan(selected, settings, hardware, model, result);
   renderKernelPlan(currentKernelPlan);
   renderTeaching(selected, currentKernelPlan);
   scene.selectStage(selected.hardwareStage);
@@ -748,6 +782,57 @@ function moveOperation(delta: number, pulse: boolean): void {
   const target = Math.max(0, Math.min(algorithmSteps.length - 1, index + delta));
   if (target === index) return;
   selectOperation(algorithmSteps[target]!.id, pulse);
+}
+
+function playSequence(): void {
+  if (algorithmSteps.length === 0) return;
+  let index = algorithmSteps.findIndex((step) => step.id === selectedStepId);
+  if (index === algorithmSteps.length - 1) {
+    index = 0;
+    selectOperation(algorithmSteps[0]!.id);
+  }
+  isSequencePlaying = true;
+  sequenceIdleMessage = '';
+  syncSequencePlayer(algorithmSteps[index]!, index);
+  traceSelectedPath();
+  scheduleSequenceAdvance();
+}
+
+function scheduleSequenceAdvance(): void {
+  window.clearTimeout(sequenceTimer);
+  sequenceTimer = window.setTimeout(() => {
+    const index = algorithmSteps.findIndex((step) => step.id === selectedStepId);
+    if (!isSequencePlaying || index < 0) return;
+    if (index === algorithmSteps.length - 1) {
+      pauseSequence('Complete · one generated token crossed all 12 operations.');
+      return;
+    }
+    selectOperation(algorithmSteps[index + 1]!.id, true);
+    scheduleSequenceAdvance();
+  }, reduceMotion ? 2100 : 1650);
+}
+
+function pauseSequence(message = 'Paused · use Step or resume Play.'): void {
+  window.clearTimeout(sequenceTimer);
+  isSequencePlaying = false;
+  sequenceIdleMessage = message;
+  scene.setPaused(true);
+  const index = algorithmSteps.findIndex((step) => step.id === selectedStepId);
+  if (index >= 0) syncSequencePlayer(algorithmSteps[index]!, index);
+}
+
+function syncSequencePlayer(selected: AlgorithmStep, index: number): void {
+  setText('#sequence-index', `${selected.number} / ${algorithmSteps.length}`);
+  setText(
+    '#sequence-state',
+    isSequencePlaying
+      ? `Playing · ${selected.name}`
+      : sequenceIdleMessage,
+  );
+  playSequenceButton.setAttribute('aria-pressed', String(isSequencePlaying));
+  setText('#play-icon', isSequencePlaying ? 'Ⅱ' : '▶');
+  setText('#play-label', isSequencePlaying ? 'Pause' : index === algorithmSteps.length - 1 ? 'Replay path' : 'Play path');
+  required<HTMLElement>('.sequence-player').dataset.playing = String(isSequencePlaying);
 }
 
 function renderTeaching(selected: AlgorithmStep, plan: KernelPlan): void {
@@ -770,6 +855,20 @@ function renderTeaching(selected: AlgorithmStep, plan: KernelPlan): void {
   setText('#host-data-note', plan.hostBytes > 0
     ? `${formatBytes(plan.hostBytes)} of tensor data also crosses PCIe because it did not fit in accelerator memory.`
     : 'Only the launch command crosses PCIe for this operation; tensor data stays on the accelerator.');
+
+  const activeUnitCount = Math.min(hardware.unitCount, plan.groups);
+  const idleUnitCount = Math.max(0, hardware.unitCount - activeUnitCount);
+  const activePercent = plan.estimatedActiveUnitFraction * 100;
+  setText('#unit-utilization', `${activeUnitCount} / ${hardware.unitCount} ${hardware.unitName}s active`);
+  setText('#unit-utilization-note', `${formatNumber(activePercent)}% first-wave coverage · ${idleUnitCount} idle · modeled, not profiler telemetry`);
+  const workerArray = required<HTMLElement>('#worker-array');
+  workerArray.setAttribute('aria-label', `${activeUnitCount} of ${hardware.unitCount} ${hardware.unitName}s receive work in the first modeled scheduling wave; ${idleUnitCount} are idle.`);
+  const unitCells = [...required<HTMLElement>('#worker-array-grid').querySelectorAll<HTMLElement>('i')];
+  const activeCells = Math.max(1, Math.round(plan.estimatedActiveUnitFraction * unitCells.length));
+  unitCells.forEach((cell, index) => {
+    cell.dataset.active = String(index < activeCells);
+    cell.classList.toggle('is-enlarged', index === activeCells - 1);
+  });
   required<HTMLElement>('#term-list').innerHTML = guide.terms.map((term) =>
     `<p><strong>${term.term}</strong><span>${term.definition}</span></p>`,
   ).join('');
@@ -817,7 +916,7 @@ function renderKernelPlan(plan: KernelPlan): void {
   setText('#kernel-id', plan.kernelId);
   setText('#kernel-grid', `${plan.grid[0].toLocaleString()} × ${plan.grid[1].toLocaleString()} × ${plan.grid[2]} = ${plan.groups.toLocaleString()} groups`);
   setText('#kernel-workgroup', `${plan.workgroupSize} threads · ${plan.wavesPerGroup} ${hardware.waveName}s`);
-  setText('#kernel-occupancy', `${formatNumber(plan.estimatedFirstWaveOccupancy * 100)}% of ${hardware.unitCount} ${hardware.unitName}s × 2 slots`);
+  setText('#kernel-occupancy', `${Math.min(hardware.unitCount, plan.groups)} of ${hardware.unitCount} ${hardware.unitName}s active · ${formatNumber(plan.estimatedFirstWaveOccupancy * 100)}% of 2 assumed resident slots`);
   setText('#kernel-tile', plan.tile);
   setText('#kernel-hbm', formatBytes(plan.hbmBytes));
   setText('#kernel-host', plan.hostBytes > 0 ? formatBytes(plan.hostBytes) : '0 B · resident');

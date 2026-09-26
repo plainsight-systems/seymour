@@ -8,6 +8,9 @@ describe('buildAlgorithmSteps', () => {
     hardwareId: 'h100-sxm',
     batch: 4,
     sequenceLength: 4096,
+    weightBits: 16 as const,
+    kvBits: 16 as const,
+    attentionKernel: 'fused' as const,
     overlap: true,
     view: 'hardware' as const,
   };
@@ -27,6 +30,16 @@ describe('buildAlgorithmSteps', () => {
     expect(steps.find((step) => step.id === 'qk')?.outputShape).toContain('1, 4,096');
     expect(steps.find((step) => step.id === 'kv-cache')?.activationBytes).toBe(
       2 * settings.batch * settings.sequenceLength * DEFAULT_MODEL.kvHeads * DEFAULT_MODEL.headDim * 2,
+    );
+  });
+
+  it('materializes attention scores only for the separate schedule', () => {
+    const fused = buildAlgorithmSteps(settings, DEFAULT_MODEL);
+    const separate = buildAlgorithmSteps({ ...settings, attentionKernel: 'separate' }, DEFAULT_MODEL);
+    expect(fused.find((step) => step.id === 'softmax')?.boundaryBytes).toBe(0);
+    expect(separate.find((step) => step.id === 'softmax')?.boundaryBytes).toBeGreaterThan(0);
+    expect(separate.find((step) => step.id === 'qk')!.boundaryBytes).toBeGreaterThan(
+      fused.find((step) => step.id === 'qk')!.boundaryBytes,
     );
   });
 });
