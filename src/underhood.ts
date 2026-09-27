@@ -34,7 +34,7 @@ const app = document.querySelector<HTMLDivElement>('#route-root');
 if (!app) throw new Error('Missing #route-root');
 
 app.innerHTML = `
-  <main>
+  <div class="underhood-page">
     <section class="intro" aria-labelledby="page-title">
       <div>
         <p class="kicker">A visual introduction to inference hardware</p>
@@ -451,7 +451,7 @@ app.innerHTML = `
         </div>
       </details>
     </section>
-  </main>
+  </div>
 
   <footer>
     <div class="footer-plant" aria-hidden="true"><i></i><i></i><i></i></div>

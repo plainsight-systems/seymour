@@ -22,7 +22,7 @@ export const CHALLENGES: Challenge[] = [
   {
     id: 'long-document',
     title: 'The long document',
-    brief: 'Handle sixteen 32K-token conversations, fit them in GPU memory, and return the first token within five seconds.',
+    brief: 'Handle sixteen 32K-token conversations, fit them in GPU memory, and return the first token within ten seconds.',
     fixed: { hardwareId: 'h100-sxm', batch: 16, sequenceLength: 32768, kvPlacement: 'hbm' },
     adjustable: ['kvBits', 'reusePromptPrefixes', 'prefixCachePercent'],
     constraints: [

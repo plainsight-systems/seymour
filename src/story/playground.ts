@@ -17,23 +17,23 @@ export function mountPlayground(root: HTMLElement): void {
   root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints.</p></header>
     <div class="playground-shell">
       <aside class="playground-controls">
-        <label><span>Mode</span><select data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">${challenge.title}</option>`).join('')}</select></label>
+        <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">${challenge.title}</option>`).join('')}</select></label>
         <fieldset><legend>Workload</legend>
-          <label><span>Concurrent users <output data-output="batch"></output></span><input data-control="batch" type="range" min="0" max="10" step="1"></label>
-          <label><span>Context length <output data-output="sequenceLength"></output></span><input data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
+          <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
+          <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
         </fieldset>
         <fieldset><legend>Bytes</legend>
-          <label><span>Model precision</span><select data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
-          <label><span>KV precision</span><select data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
+          <label><span>Model precision</span><select aria-label="Model precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
+          <label><span>KV precision</span><select aria-label="KV precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
           <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt prefix</span></label>
-          <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
+          <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input aria-label="Prefix already available" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
         </fieldset>
         <fieldset><legend>Placement + target</legend>
-          <label><span>Active KV location</span><select data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">Another GPU</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
-          <label><span>Accelerator</span><select data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
+          <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">Another GPU</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
+          <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
         </fieldset>
       </aside>
-      <div class="playground-workbench"><div data-playground-picture></div><div class="playground-readout"><span data-readout-tag></span><p data-readout-copy></p></div><section class="challenge-board" data-challenge-board></section></div>
+      <div class="playground-workbench"><div data-playground-picture></div><section class="challenge-board" data-challenge-board></section></div>
     </div>`;
 
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
@@ -96,8 +96,6 @@ export function mountPlayground(root: HTMLElement): void {
     const result = calculateSimulation(settings, hardware, model);
     const picture = buildPictureModel(result, settings, hardware, model);
     renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'modelBlock', 'throughput', 'kvBlock', 'distanceLadder']));
-    root.querySelector<HTMLElement>('[data-readout-tag]')!.textContent = picture.bottleneckTag;
-    root.querySelector<HTMLElement>('[data-readout-copy]')!.textContent = picture.bottleneckSentence;
     renderChallenge();
   }
 

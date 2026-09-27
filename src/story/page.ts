@@ -41,7 +41,10 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, settings: Simula
     return `One generated token costs about ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× as much time as one prompt token here. The jobs look similar in code but behave differently on the machine.`;
   }
   if (panel.id === 'read-model') return `${precisionLabel(settings.weightBits)} stores this model in ${formatBytes(picture.modelBytes)}. Reading it takes ${formatDuration(decode.readMs)}; the math takes ${formatDuration(decode.mathMs)}.`;
-  if (panel.id === 'share-read') return `${settings.batch.toLocaleString()} users receive ${formatNumber(picture.totalTokensPerSecond)} tokens each second in total while each user advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s.`;
+  if (panel.id === 'share-read') {
+    const audience = settings.batch === 1 ? 'user receives' : 'users receive';
+    return `${settings.batch.toLocaleString()} ${audience} ${formatNumber(picture.totalTokensPerSecond)} tokens each second in total while each user advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s.`;
+  }
   if (panel.id === 'memory-wall') return picture.overflowBytes > 0
     ? `The model plus KV exceed the serving budget by ${formatBytes(picture.overflowBytes)}. The red overflow must cross the slower system-memory link.`
     : `KV is ${formatNumber(picture.kvBytes / picture.modelBytes)}× the model’s size at this setting. Increase context to find the capacity wall.`;
