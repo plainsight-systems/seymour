@@ -115,7 +115,7 @@ describe('plates', () => {
   });
 
   it('lights the data path for every KV placement', () => {
-    for (const placement of ['hbm', 'host', 'peer', 'ssd', 'object'] as KvPlacement[]) {
+    for (const placement of ['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as KvPlacement[]) {
       const plate = serverPlate(inputsFor({ kvPlacement: placement }).inputs);
       expect(plate.litPath).toBe(placement);
       expect(plate.defaultSelection).toEqual([PLACEMENT_PART[placement]]);

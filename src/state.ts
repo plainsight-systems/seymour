@@ -30,7 +30,7 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const kvBits = ([8, 16] as const).includes(Number(params.get('kv')) as KvBits)
     ? Number(params.get('kv')) as KvBits
     : DEFAULT_SETTINGS.kvBits;
-  const kvPlacement = (['hbm', 'host', 'peer', 'ssd', 'object'] as const).includes(params.get('placement') as KvPlacement)
+  const kvPlacement = (['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as const).includes(params.get('placement') as KvPlacement)
     ? params.get('placement') as KvPlacement
     : DEFAULT_SETTINGS.kvPlacement;
   const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';

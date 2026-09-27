@@ -25,7 +25,7 @@ export function formatBandwidth(bytesPerSecond: number): string {
 
 /** The part a KV placement lights up on the server plate. */
 export const PLACEMENT_PART: Record<KvPlacement, string> = {
-  hbm: 'gpu', peer: 'peers', host: 'host', ssd: 'ssd', object: 'net',
+  hbm: 'gpu', peer: 'peers', peers: 'peers', host: 'host', ssd: 'ssd', object: 'net',
 };
 
 // ---------------------------------------------------------------------------
@@ -50,11 +50,13 @@ export function serverPlate(inputs: CutawayInputs): Plate {
   if (switched) {
     for (let i = 0; i < 4; i++) {
       b.box({ id: `switch${i}`, part: 'switch', x: 4 + i * 11, y: 13.5, w: 5, d: 3, h: 1.2, fill: 'mustard', layer: 2 });
-      b.link({ from: 'gpu0', to: `switch${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond! / 4, basis: peer.basis, paths: ['peer'] });
+      // NVLink traffic to any peer is striped across all switch chips.
+      b.link({ from: 'gpu0', to: `switch${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond! / 4, basis: peer.basis, paths: ['peer', 'peers'] });
     }
   } else {
     for (let i = 1; i <= topology.peerCount; i++) {
-      b.link({ from: 'gpu0', to: `gpu${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond!, basis: peer.basis, paths: ['peer'] });
+      // One direct link per peer: reading from one peer uses one link.
+      b.link({ from: 'gpu0', to: `gpu${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond!, basis: peer.basis, paths: i === 1 ? ['peer', 'peers'] : ['peers'] });
     }
   }
 
@@ -79,7 +81,7 @@ export function serverPlate(inputs: CutawayInputs): Plate {
     b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs`, 'reached through the switch chips', 'published');
     b.label('switch', 'switch2', 'right', 'NVLink switch chips', `${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per GPU`, peer.basis);
   } else {
-    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each, ${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way`, peer.basis);
+    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each: ${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per peer, ${formatBandwidth(inputs.tiers.peers.bandwidthBytesPerSecond!)} across all seven`, peer.basis);
   }
   b.label('host', 'cpu', 'left', 'CPU and its memory', 'large, but reachable only through PCIe', 'schematic');
   b.label('pcie', 'pcie', 'left', 'PCIe Gen5 x16', `${formatBandwidth(host.bandwidthBytesPerSecond!)} each way, per GPU`, 'published');

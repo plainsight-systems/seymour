@@ -43,7 +43,7 @@ export function mountPlayground(root: HTMLElement): void {
           <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input aria-label="Prefix already available" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
         </fieldset>
         <fieldset><legend>Placement + target</legend>
-          <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">Another GPU</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
+          <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
           <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
         </fieldset>
       </aside>

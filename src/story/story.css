@@ -79,7 +79,7 @@
 .picture-distance { border: 1px solid var(--ink); }
 .picture-distance > header { display: flex; justify-content: space-between; padding: 0.75rem 1rem; }
 .picture-distance > header span { color: var(--red); font-size: 0.7rem; font-weight: 800; }
-.picture-distance ol { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); list-style: none; }
+.picture-distance ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); margin: 0; padding: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); list-style: none; }
 .picture-distance li { display: grid; gap: 0.35rem; padding: 0.8rem; border-right: 1px solid var(--line); }
 .picture-distance li:last-child { border-right: 0; }
 .picture-distance li[data-active='true'] { color: var(--paper); background: var(--red); }

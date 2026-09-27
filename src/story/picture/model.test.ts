@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildMemoryLadder } from '../../data/memoryLadder';
 import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
 import { calculateSimulation } from '../../model/calculate';
 import { applySoftwareStrategy } from '../../model/strategy';
@@ -16,7 +17,7 @@ describe('buildPictureModel', () => {
     expect(picture.modelBytes).toBe(result.weightBytes);
     expect(picture.kvBytes).toBe(result.kvFootprintBytes);
     expect(picture.totalTokensPerSecond).toBe(result.tokenRate);
-    expect(picture.ladder).toHaveLength(8);
+    expect(picture.ladder).toEqual(buildMemoryLadder(hardware));
     expect(picture.bottleneckSentence.length).toBeGreaterThan(40);
   });
 });

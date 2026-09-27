@@ -95,6 +95,6 @@ export function buildCutawayInputs(settings: SimulationSettings, hardware: Hardw
     prefill: activity(prefill, topology.enabledUnits, enabledPerCluster),
     decode: activity(decode, topology.enabledUnits, enabledPerCluster),
     placement: settings.kvPlacement,
-    tiers: { hbm: tier('hbm'), host: tier('host'), peer: tier('peer'), ssd: tier('ssd'), object: tier('object') },
+    tiers: { hbm: tier('hbm'), host: tier('host'), peer: tier('peer'), peers: tier('peers'), ssd: tier('ssd'), object: tier('object') },
   };
 }
