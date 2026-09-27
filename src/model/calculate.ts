@@ -1,5 +1,6 @@
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../types';
 import { getMemoryTier } from '../data/memoryLadder';
+import { activeParametersPerToken, expertsTouchedFraction, weightReadBytes } from './moe';
 import type { KvPlacement } from '../types';
 
 const GIGA = 1e9;
@@ -26,8 +27,14 @@ export function calculateSimulation(
   const kvBytesPerToken = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8);
   const kvFootprintBytes = kvBytesPerToken * sequence * batch;
 
-  const denseFlopsPerToken = 2 * model.parametersB * GIGA;
-  const attentionFlops = 4 * model.layers * model.hiddenSize * sequence;
+  const denseFlopsPerToken = 2 * activeParametersPerToken(model);
+  const attentionWidth = model.attentionHeads * model.headDim;
+  const attentionFlops = 4 * model.layers * attentionWidth * sequence;
+  // Tokens that share one pass over the weights: each chunk of prompt work, or
+  // one generated token per sequence. MoE models read only the experts touched.
+  const tokensPerWeightPass = settings.phase === 'prefill' ? batch * prefillChunkTokens : batch;
+  const expertsTouched = expertsTouchedFraction(model, tokensPerWeightPass);
+  const weightPassBytes = weightReadBytes(model, tokensPerWeightPass);
   const attentionScoreBytes = batch * model.attentionHeads * queryTokens * sequence * (model.kvBits / 8);
   // A separate QK -> softmax -> PV schedule writes scores, reads and writes
   // probabilities, then reads them again. A fused attention kernel keeps that
@@ -43,13 +50,13 @@ export function calculateSimulation(
   if (settings.phase === 'decode') {
     flops = batch * (denseFlopsPerToken + attentionFlops);
     kvBytes = kvFootprintBytes;
-    bytes = weightBytes + kvBytes + batch * kvBytesPerToken + materializedAttentionBytes;
+    bytes = weightPassBytes + kvBytes + batch * kvBytesPerToken + materializedAttentionBytes;
   } else {
-    flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * model.hiddenSize * queryTokens * sequence);
+    flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * attentionWidth * queryTokens * sequence);
     kvBytes = kvFootprintBytes;
     // A prefix hit leaves only the uncached suffix to process. That suffix still
     // attends over the complete cached-plus-new context.
-    bytes = queryTokens === 0 ? 0 : weightBytes * prefillChunks + kvBytes + materializedAttentionBytes;
+    bytes = queryTokens === 0 ? 0 : weightPassBytes * prefillChunks + kvBytes + materializedAttentionBytes;
   }
 
   const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
@@ -61,7 +68,7 @@ export function calculateSimulation(
   const spilledKvBytes = kvInHbm ? Math.max(0, kvFootprintBytes - hbmAfterWeights) : 0;
   const weightSpillFraction = weightBytes > 0 ? spilledWeightBytes / weightBytes : 0;
   const kvSpillFraction = kvFootprintBytes > 0 ? spilledKvBytes / kvFootprintBytes : 0;
-  const weightTrafficBytes = settings.phase === 'prefill' ? weightBytes * prefillChunks : weightBytes;
+  const weightTrafficBytes = settings.phase === 'prefill' ? weightPassBytes * prefillChunks : weightPassBytes;
   const hostTrafficBytes = bytes === 0
     ? 0
     : weightTrafficBytes * weightSpillFraction + kvBytes * kvSpillFraction;
@@ -107,6 +114,8 @@ export function calculateSimulation(
     flops,
     bytes,
     weightBytes,
+    weightReadBytes: weightPassBytes,
+    expertsTouchedFraction: expertsTouched,
     kvBytes,
     arithmeticIntensity: bytes > 0 ? flops / bytes : 0,
     ridgePoint: effectiveCompute / effectiveBandwidth,
@@ -184,16 +193,15 @@ function findCrossoverBatch(
   const ridge =
     (hardware.fp16DenseTflops * hardware.computeEfficiency) /
     (hardware.hbmBandwidthTBs * hardware.memoryEfficiency);
-  const weightBytes = model.parametersB * GIGA * (model.weightBits / 8);
   const kvBytesPerToken = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8);
   const flopsPerSequence =
-    2 * model.parametersB * GIGA + 4 * model.layers * model.hiddenSize * settings.sequenceLength;
+    2 * activeParametersPerToken(model) + 4 * model.layers * model.attentionHeads * model.headDim * settings.sequenceLength;
 
   for (let batch = 1; batch <= 1024; batch *= 2) {
     const scoreBytes = settings.attentionKernel === 'separate'
       ? 4 * batch * model.attentionHeads * settings.sequenceLength * (model.kvBits / 8) * model.layers
       : 0;
-    const bytes = weightBytes + batch * kvBytesPerToken * (settings.sequenceLength + 1) + scoreBytes;
+    const bytes = weightReadBytes(model, batch) + batch * kvBytesPerToken * (settings.sequenceLength + 1) + scoreBytes;
     if ((flopsPerSequence * batch) / bytes >= ridge) return batch;
   }
   return null;

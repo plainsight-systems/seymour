@@ -72,7 +72,32 @@ export const MODEL_PROFILES: ModelProfile[] = [
     sourceUrl: 'https://huggingface.co/meta-llama/Llama-3.1-8B/blob/main/config.json',
     sourceLabel: 'Meta Llama 3.1 8B model configuration',
   },
+  {
+    // 128 routed experts, 8 per token. Parameter total is summed from the
+    // published configuration (tested): experts, attention, router, embeddings.
+    id: 'qwen3-30b-a3b',
+    name: 'Qwen3 30B-A3B MoE · FP16',
+    parametersB: 30.53,
+    layers: 48,
+    hiddenSize: 2048,
+    attentionHeads: 32,
+    kvHeads: 4,
+    headDim: 128,
+    weightBits: 16,
+    kvBits: 16,
+    intermediateSize: 6144,
+    vocabSize: 151936,
+    moe: { experts: 128, activeExperts: 8, expertIntermediateSize: 768 },
+    sourceUrl: 'https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/config.json',
+    sourceLabel: 'Qwen3 30B-A3B model configuration',
+  },
 ];
+
+export function getModel(id: string): ModelProfile {
+  const model = MODEL_PROFILES.find((profile) => profile.id === id);
+  if (!model) throw new Error(`Unknown model "${id}"`);
+  return model;
+}
 
 export const DEFAULT_SETTINGS = {
   phase: 'decode',

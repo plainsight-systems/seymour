@@ -49,6 +49,12 @@ export interface ModelProfile {
   kvBits: number;
   intermediateSize: number;
   vocabSize: number;
+  /** Present for mixture-of-experts models; routed experts replace the dense MLP. */
+  moe?: {
+    experts: number;
+    activeExperts: number;
+    expertIntermediateSize: number;
+  };
   sourceUrl: string;
   sourceLabel: string;
 }
@@ -118,6 +124,10 @@ export interface SimulationResult {
   usableHbmCapacityBytes: number;
   prefillChunks: number;
   prefillChunkTokens: number;
+  /** Weight bytes read per step; below weightBytes only for MoE at small batches. */
+  weightReadBytes: number;
+  /** Share of each layer's experts touched this step (1 for dense models). */
+  expertsTouchedFraction: number;
 }
 
 export interface AlgorithmStep {
