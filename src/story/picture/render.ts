@@ -14,7 +14,7 @@ function costRow(step: PictureModel['steps'][number]): string {
   </article>`;
 }
 
-export function renderPictureMarkup(picture: PictureModel, layers: ReadonlySet<PictureLayer>): string {
+export function renderPictureMarkup(picture: PictureModel, layers: ReadonlySet<PictureLayer>, options: { footer?: boolean } = {}): string {
   const memoryLayers = layers.has('modelBlock') || layers.has('kvBlock');
   return `<div class="concept-picture" aria-label="Computed inference cost picture">
     ${layers.has('stepCost') ? `<section class="picture-layer picture-costs" data-picture-layer="stepCost"><h3>One request, two different jobs</h3><div>${picture.steps.map(costRow).join('')}</div></section>` : ''}
@@ -25,10 +25,10 @@ export function renderPictureMarkup(picture: PictureModel, layers: ReadonlySet<P
     </div></section>` : ''}
     ${layers.has('throughput') ? `<section class="picture-layer picture-throughput" data-picture-layer="throughput"><p><span>Each user</span><strong>${formatNumber(picture.perUserTokensPerSecond)} tok/s</strong></p><i>× ${picture.concurrentUsers.toLocaleString()} concurrent</i><p><span>Whole GPU</span><strong>${formatNumber(picture.totalTokensPerSecond)} tok/s</strong></p></section>` : ''}
     ${layers.has('distanceLadder') ? `<section class="picture-layer picture-distance" data-picture-layer="distanceLadder"><header><span>Active KV needs ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s</span><strong>Distance ladder</strong></header><ol>${picture.ladder.filter((tier) => ['hbm', 'peer', 'host', 'ssd', 'object'].includes(tier.id)).map((tier) => `<li data-tier="${tier.id}" data-active="${tier.id === picture.placement}"><span>${tier.label}${tier.term ? ` · ${tier.term}` : ''}</span><strong>${tier.bandwidthBytesPerSecond ? `${formatNumber(tier.bandwidthBytesPerSecond / 1e9)} GB/s` : 'qualitative'}</strong><small>${tier.basis}</small></li>`).join('')}</ol><p>Restore this session: <b>${formatDuration(picture.restoreMs)}</b> · rebuild with prompt processing: <b>${formatDuration(picture.recomputeMs)}</b></p></section>` : ''}
-    <footer><span>${picture.bottleneckTag}</span><p>${picture.bottleneckSentence}</p></footer>
+    ${options.footer === false ? '' : `<footer><span>${picture.bottleneckTag}</span><p>${picture.bottleneckSentence}</p></footer>`}
   </div>`;
 }
 
-export function renderPicture(root: HTMLElement, picture: PictureModel, layers: ReadonlySet<PictureLayer>): void {
-  root.innerHTML = renderPictureMarkup(picture, layers);
+export function renderPicture(root: HTMLElement, picture: PictureModel, layers: ReadonlySet<PictureLayer>, options: { footer?: boolean } = {}): void {
+  root.innerHTML = renderPictureMarkup(picture, layers, options);
 }

@@ -27,7 +27,20 @@
 .panel-surprise span, .panel-moves > span { color: var(--red); font-size: 0.64rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
 .panel-surprise p { max-width: 44ch; margin: 0; font-weight: 650; line-height: 1.55; }
 .panel-instrument { display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--paper-deep); }
-.panel-instrument > [data-picture] { display: grid; place-items: center; padding: clamp(1.5rem, 4vw, 4rem); }
+.panel-stage { display: grid; gap: 1rem; align-content: center; min-width: 0; padding: clamp(1.25rem, 3vw, 3rem); }
+.panel-zoom { display: flex; gap: 0.6rem; align-items: baseline; margin: 0; color: var(--ink-soft); font-size: 0.8rem; font-weight: 700; }
+.panel-zoom span { padding: 0.2rem 0.45rem; color: var(--paper); background: var(--ink); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.panel-figure { display: grid; gap: 0.4rem; margin: 0; padding: 0.75rem 1rem 0.5rem; border: 1px solid var(--ink); background: var(--paper); }
+.panel-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+@media (max-width: 1100px) { .panel-pair { grid-template-columns: 1fr; } }
+.panel-figure figcaption { display: grid; gap: 0.15rem; }
+.panel-figure figcaption b { font-size: 1rem; }
+.panel-figure figcaption span { color: var(--ink-soft); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.panel-caption { max-width: 72ch; margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.panel-caption b { font-variant-numeric: tabular-nums; }
+.cw-warn { color: var(--red); }
+.panel-hint { margin: 0; color: var(--ink-soft); font-size: 0.75rem; }
+.panel-numbers .concept-picture { width: 100%; }
 .concept-picture { display: grid; gap: 1.25rem; width: min(100%, 860px); color: var(--ink); }
 .picture-layer { background: var(--paper); }
 .picture-costs { border: 1px solid var(--ink); }
@@ -109,7 +122,15 @@
 .playground-controls .playground-check { grid-template-columns: auto 1fr; align-items: center; }
 .playground-controls .playground-check span { justify-content: start; }
 .playground-workbench { min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); }
-.playground-workbench > [data-playground-picture] { display: grid; place-items: center; }
+.playground-workbench > [data-playground-picture] { display: grid; place-items: center; margin-top: 1rem; }
+.playground-cutaway { display: grid; gap: 0.75rem; padding: 1rem; border: 1px solid var(--ink); background: var(--paper); }
+.playground-plate-tabs, .playground-tile { display: flex; flex-wrap: wrap; gap: 0; }
+.playground-plate-tabs button, .playground-tile button { min-height: 44px; padding: 0 0.9rem; color: var(--ink); border: 1px solid var(--ink); background: var(--paper); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 750; }
+.playground-plate-tabs button + button, .playground-tile button + button { border-left: 0; }
+.playground-plate-tabs button[aria-pressed='true'], .playground-tile button[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
+.playground-tile { align-items: center; }
+.playground-tile > span { margin-right: 0.75rem; color: var(--red); font-size: 0.65rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.playground-tile[hidden], .panel-caption[hidden] { display: none; }
 .challenge-board { display: grid; gap: 1rem; width: min(100%, 860px); margin: 1rem auto 0; padding: 1rem; border: 1px solid var(--ink); background: var(--paper); }
 .challenge-board > header { display: flex; gap: 1rem; align-items: start; justify-content: space-between; }
 .challenge-board h3 { margin: 0.25rem 0 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.5rem; }
@@ -125,5 +146,5 @@
 .challenge-success { padding: 1rem; color: var(--paper); background: var(--green); }
 .challenge-success strong { color: var(--mustard); }
 .challenge-success p { margin: 0.35rem 0 0; font-size: 0.75rem; line-height: 1.5; }
-@media (max-width: 900px) { .story-hero, .concept-panel, .playground-heading, .playground-shell { grid-template-columns: 1fr; } .story-hero { min-height: auto; } .story-hero > div { padding: 3rem 1.5rem; } .panel-narrative { min-height: auto; padding: 3rem 1.5rem; border-right: 0; border-bottom: 1px solid var(--ink); } .panel-instrument > [data-picture] { padding: 1.5rem; } .playground-controls { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--ink); } .playground-controls > label { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .story-hero, .concept-panel, .playground-heading, .playground-shell { grid-template-columns: 1fr; } .story-hero { min-height: auto; } .story-hero > div { padding: 3rem 1.5rem; } .panel-narrative { min-height: auto; padding: 3rem 1.5rem; border-right: 0; border-bottom: 1px solid var(--ink); } .panel-stage { padding: 1rem; } .playground-controls { grid-template-columns: repeat(2, 1fr); border-right: 0; border-bottom: 1px solid var(--ink); } .playground-controls > label { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .story-hero h1 { font-size: clamp(3.2rem, 17vw, 5rem); } .picture-costs > div { grid-template-columns: 1fr; } .picture-cost + .picture-cost { border-top: 1px solid var(--ink); border-left: 0; } .picture-memory { grid-template-columns: 1fr; } .memory-vessel i { min-width: 15%; border-top: 1px solid var(--ink); } .picture-throughput { grid-template-columns: 1fr; } .picture-throughput p:last-child { text-align: left; } .picture-distance ol { grid-template-columns: 1fr; } .picture-distance li { grid-template-columns: 1fr auto auto; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); } .picture-distance li span { min-height: 0; } .panel-moves { grid-template-columns: 1fr; padding: 1rem; } .panel-moves ul, .playground-controls { grid-template-columns: 1fr; } .playground-controls > label { grid-column: auto; } .playground-workbench { padding: 1rem; } .challenge-board > header { align-items: stretch; flex-direction: column; } }

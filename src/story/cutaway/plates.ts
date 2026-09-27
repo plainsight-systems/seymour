@@ -2,7 +2,7 @@ import { getTopology, type ChipTopology, type TopologySource } from '../../data/
 import { formatBytes, formatNumber } from '../../model/calculate';
 import type { KvPlacement } from '../../types';
 import type { CutawayInputs } from './inputs';
-import { SceneBuilder, illustrativeDisabledUnits, type Fill, type Scene, type SceneBox } from './scene';
+import { SceneBuilder, frontFace, illustrativeDisabledUnits, type Fill, type Scene, type SceneBox } from './scene';
 
 export type PlateId = 'server' | 'package' | 'die' | 'unit';
 
@@ -119,12 +119,17 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
   if (m.overflowBytes > 0) b.box({ ...base, id: `${id}-overflow`, part: 'overflow', z: level + 1.2, h: 1.6, fill: 'red', ghost: true, layer: 6 });
 }
 
-function fillLabels(b: SceneBuilder, inputs: CutawayInputs, leftStack: string): void {
+/** Labels the fill on the front-most left stack, aiming at each segment's visible face. */
+function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string): void {
   const m = inputs.memory;
-  if (m.weightsFraction > 0) b.label('weights', `${leftStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published');
-  if (m.kvFraction > 0) b.label('kv', `${leftStack}-kv`, 'left', `KV cache · ${formatBytes(Math.min(m.kvBytesInGpuMemory, m.usableBytes - m.weightBytes))}`, `${inputs.users} users × ${inputs.contextTokens.toLocaleString()} tokens of context`, 'published');
-  if (m.overflowBytes > 0) b.label('overflow', `${leftStack}-overflow`, 'left', `Doesn’t fit · ${formatBytes(m.overflowBytes)}`, 'this data must live off the package', 'published');
-  b.label('reserve', `${leftStack}-reserve`, 'left', 'Held back for the runtime', `${Math.round(m.reserveFraction * 100)}% of physical memory`, 'schematic');
+  const face = (part: string) => {
+    const box = b.find((candidate) => candidate.id === `${frontStack}-${part}`);
+    return box ? frontFace(box) : undefined;
+  };
+  if (m.weightsFraction > 0) b.label('weights', `${frontStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published', face('weights'));
+  if (m.kvFraction > 0) b.label('kv', `${frontStack}-kv`, 'left', `KV cache · ${formatBytes(Math.min(m.kvBytesInGpuMemory, m.usableBytes - m.weightBytes))}`, `${inputs.users} ${inputs.users === 1 ? 'user' : 'users'} × ${inputs.contextTokens.toLocaleString()} tokens of context`, 'published', face('kv'));
+  if (m.overflowBytes > 0) b.label('overflow', `${frontStack}-overflow`, 'left', `Doesn’t fit · ${formatBytes(m.overflowBytes)}`, 'this data must live off the package', 'published', face('overflow'));
+  b.label('reserve', `${frontStack}-reserve`, 'left', 'Held back for the runtime', `${Math.round(m.reserveFraction * 100)}% of physical memory`, 'schematic', face('reserve'));
 }
 
 export function packagePlate(inputs: CutawayInputs): Plate {
@@ -160,9 +165,9 @@ function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate
   b.label('die', 'die', 'right', 'GPU die', `${topology.enabledUnits} of ${topology.physicalUnits} SMs enabled`, 'published');
   b.label('hbm', 'hbm4-base', 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, 'published');
   b.label('unused', `hbm${topology.hbmSites - 1}`, 'right', 'Unused site', `${topology.hbmSites} memory sites; ${topology.hbmActiveStacks} are used`, 'published');
-  b.label('interposer', 'interposer', 'right', 'Silicon interposer', '1,024 wires per stack, millimeters long', 'published');
-  fillLabels(b, inputs, 'hbm0');
-  b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and NVLink', 'published');
+  b.label('interposer', 'interposer', 'right', 'Silicon interposer', '1,024 wires per stack, millimeters long', 'published', [interposer.x + 4, interposer.y + interposer.d - 1.5, top]);
+  fillLabels(b, inputs, `hbm${perSide - 1}`);
+  b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and NVLink', 'published', [3, 44 - 2.5, 1.4]);
   return {
     id: 'package', scene: b.build(), defaultSelection: [], litPath: null,
     note: 'Fill heights are computed from the model; data is striped across every active stack, so they fill evenly.',
@@ -198,8 +203,9 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
   b.label('compute-die', 'xcd3-0', 'right', `Compute dies · ${topology.computeDies}`, `${perCompute} CUs enabled on each; ${topology.enabledUnits} total`, 'published');
   b.label('io', 'io1', 'right', `I/O dies · ${topology.ioDies}`, 'hold the 256 MB Infinity Cache', 'published');
   b.label('hbm', 'hbm7-base', 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, 'published');
-  fillLabels(b, inputs, 'hbm0');
-  b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and Infinity Fabric', 'published');
+  fillLabels(b, inputs, `hbm${perSide - 1}`);
+  b.label('interposer', 'interposer', 'left', 'Silicon interposer', 'joins the I/O dies to each other and to their memory', 'published', [interposer.x + 3, interposer.y + interposer.d - 1.5, interposer.z + interposer.h]);
+  b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and Infinity Fabric', 'published', [3, 46 - 2.5, 1.4]);
   return {
     id: 'package', scene: b.build(), defaultSelection: [], litPath: null,
     note: 'Compute dies are stacked on the I/O dies. Fill heights are computed from the model.',
@@ -263,8 +269,9 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
   }
   busyLabels(b, job, topology.enabledUnits, 'SMs');
   if (options.detail === 'full') {
-    const firstDead = [...disabled].sort((a, z) => a - z)[0];
-    b.label('unit-off', `unit${firstDead}`, 'left', 'Disabled SM', `${topology.physicalUnits - topology.enabledUnits} of ${topology.physicalUnits} are off; positions vary per chip`, 'published');
+    // Anchor on the last disabled unit so its marker stays clear of the busy ones.
+    const lastDead = [...disabled].sort((a, z) => a - z).at(-1);
+    b.label('unit-off', `unit${lastDead}`, 'left', 'Disabled SM', `${topology.physicalUnits - topology.enabledUnits} of ${topology.physicalUnits} are off; positions vary per chip`, 'published');
     b.label('cluster', 'cluster3', 'right', `Cluster of ${topology.unitsPerCluster} SMs`, `${clusters} clusters on the die`, 'published');
     b.label('l2', 'l2-b', 'right', `L2 cache · ${topology.l2MBPerComputeDie} MB`, 'shared by every SM, in two halves', 'published');
     b.label('mc', 'mc2', 'left', 'Memory controllers', `${topology.memoryControllersActive} of ${controllers} active: two per memory stack`, 'published');

@@ -5,14 +5,22 @@ import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSli
 import type { KvPlacement, SimulationSettings } from '../types';
 import { CHALLENGES, getChallenge } from './challenges/data';
 import { evaluateChallenge, type Challenge, type ConstraintMetric, type KnobId } from './challenges/engine';
+import { buildCutawayInputs } from './cutaway/inputs';
+import { TILE_STEPS, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
+import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
 type ControlKey = KnobId | 'hardwareId';
 
+const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
+
 export function mountPlayground(root: HTMLElement): void {
   let settings: SimulationSettings = { ...getChallenge('chatbot').naive };
   let selectedChallenge: Challenge | null = getChallenge('chatbot');
+  let plateId: PlateId = 'package';
+  let tileStep = 0;
+  let cutaway: CutawayView | null = null;
 
   root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints.</p></header>
     <div class="playground-shell">
@@ -33,7 +41,17 @@ export function mountPlayground(root: HTMLElement): void {
           <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
         </fieldset>
       </aside>
-      <div class="playground-workbench"><div data-playground-picture></div><section class="challenge-board" data-challenge-board></section></div>
+      <div class="playground-workbench">
+        <section class="playground-cutaway" aria-label="Cutaway view">
+          <div class="playground-plate-tabs" role="group" aria-label="Zoom level">${PLATE_TABS.map(([id, label]) => `<button type="button" data-plate="${id}" aria-pressed="${id === 'package'}">${label}</button>`).join('')}</div>
+          <div class="playground-tile" data-tile-steps hidden></div>
+          <div data-playground-cutaway></div>
+          <p class="panel-caption" data-tile-text hidden></p>
+          <ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>
+        </section>
+        <div data-playground-picture></div>
+        <section class="challenge-board" data-challenge-board></section>
+      </div>
     </div>`;
 
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
@@ -95,9 +113,46 @@ export function mountPlayground(root: HTMLElement): void {
     const model = applySoftwareStrategy(DEFAULT_MODEL, settings);
     const result = calculateSimulation(settings, hardware, model);
     const picture = buildPictureModel(result, settings, hardware, model);
-    renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'modelBlock', 'throughput', 'kvBlock', 'distanceLadder']));
+    renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'throughput', 'distanceLadder']));
+    renderCutaway();
     renderChallenge();
   }
+
+  function currentPlate(): Plate {
+    const inputs = buildCutawayInputs(settings, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings));
+    if (plateId === 'server') return serverPlate(inputs);
+    if (plateId === 'die') return diePlate(inputs, { job: 'decode', detail: 'full' });
+    if (plateId === 'unit') return unitPlate(settings.hardwareId, tileStep);
+    return packagePlate(inputs);
+  }
+
+  function renderCutaway(): void {
+    const steps = TILE_STEPS[settings.hardwareId]!;
+    tileStep = Math.min(tileStep, steps.length - 1);
+    const stepsNode = root.querySelector<HTMLElement>('[data-tile-steps]')!;
+    const textNode = root.querySelector<HTMLElement>('[data-tile-text]')!;
+    stepsNode.hidden = plateId !== 'unit';
+    textNode.hidden = plateId !== 'unit';
+    if (plateId === 'unit') {
+      stepsNode.innerHTML = `<span>Follow one tile</span>${steps.map((step, index) => `<button type="button" data-tile="${index}" aria-pressed="${index === tileStep}">${index + 1} · ${step.title}</button>`).join('')}`;
+      textNode.innerHTML = `<b>Step ${tileStep + 1} · ${steps[tileStep]!.title}.</b> ${steps[tileStep]!.text}`;
+    }
+    const plate = currentPlate();
+    const host = root.querySelector<HTMLElement>('[data-playground-cutaway]')!;
+    if (cutaway) cutaway.update(plate);
+    else cutaway = mountCutaway(host, plate, 'Playground cutaway');
+  }
+
+  root.querySelector<HTMLElement>('.playground-cutaway')!.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('button[data-plate], button[data-tile]');
+    if (!button) return;
+    if (button.dataset.plate) {
+      plateId = button.dataset.plate as PlateId;
+      for (const tab of root.querySelectorAll<HTMLButtonElement>('button[data-plate]')) tab.setAttribute('aria-pressed', String(tab === button));
+    }
+    if (button.dataset.tile) tileStep = Number(button.dataset.tile);
+    renderCutaway();
+  });
 
   challengeSelect.addEventListener('change', () => {
     selectedChallenge = challengeSelect.value === 'free' ? null : getChallenge(challengeSelect.value);

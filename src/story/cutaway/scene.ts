@@ -40,6 +40,8 @@ export interface SceneLabel {
   title: string;
   detail: string;
   basis: Basis;
+  /** A visible point to aim at when the anchor's top face is covered. */
+  at?: Vec3;
 }
 
 export interface Scene {
@@ -63,8 +65,8 @@ export class SceneBuilder {
     return box;
   }
 
-  label(part: string, anchor: string, side: LabelSide, title: string, detail: string, basis: Basis): void {
-    this.scene.labels.push({ part, anchor, side, title, detail, basis });
+  label(part: string, anchor: string, side: LabelSide, title: string, detail: string, basis: Basis, at?: Vec3): void {
+    this.scene.labels.push(at ? { part, anchor, side, title, detail, basis, at } : { part, anchor, side, title, detail, basis });
   }
 
   link(link: SceneLink): void {
@@ -92,6 +94,11 @@ export class SceneBuilder {
   build(): Scene {
     return this.scene;
   }
+}
+
+/** Center of a box's front-left face, which is always visible. */
+export function frontFace(box: SceneBox): Vec3 {
+  return [box.x + box.w / 2, box.y + box.d, box.z + box.h / 2];
 }
 
 /**
