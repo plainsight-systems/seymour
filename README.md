@@ -18,13 +18,13 @@ The static site has three routes in one GitHub Pages build:
 
 | Route | Purpose |
 | --- | --- |
-| `#/` | The five-panel story and optimization playground |
+| `#/` | The six-panel story and optimization playground |
 | `#/under-the-hood` | The full request lifecycle, transformer operations, kernel schedules, SIMD/SIMT lanes, and Three.js hardware cutaway |
-| `#/lookup` | Portable optimization concepts mapped to vLLM, SGLang, TensorRT-LLM, and llama.cpp terminology |
+| `#/lookup` | Portable optimization concepts mapped to vLLM, SGLang, TensorRT-LLM, and llama.cpp terminology, plus the AMD Instinct stack (ROCm, AITER, ATOM) and KV-tiering projects (LMCache, Mooncake) |
 
 Old query-string share links still open Under the hood with their selected state.
 
-### The five-panel story
+### The six-panel story
 
 The story shows the chip. Each panel pairs one knob with an isometric cutaway plate—server, package, die, or compute unit—drawn from published topology and driven by the same model:
 
@@ -32,7 +32,10 @@ The story shows the chip. Each panel pairs one knob with an isometric cutaway pl
 2. **Every token re-reads the model** — the package's memory stacks fill with the model's weights, and every generated token reads all of them.
 3. **Share the read** — as users share one read, more of the die's time goes to math.
 4. **Memory fills up** — KV state fills the stacks until it hits the capacity wall and overflows off the package.
-5. **Distance is speed** — on the server plate, the KV cache's data path lights up from GPU memory out to a peer GPU, system memory, local SSD, or object storage; active state needs to stay near the math, and idle state may be worth parking farther away when restore beats recompute.
+5. **Distance is speed** — on the server plate, the KV cache's data path lights up from GPU memory out to one peer GPU, all seven peers, system memory, local SSD, or object storage; active state needs to stay near the math, and idle state may be worth parking farther away when restore beats recompute. Switched NVLink gives one peer the full per-GPU bandwidth, while a directly linked AMD platform reaches one peer over one link and all seven together.
+6. **Change what one read buys** — a mixture-of-experts model (Qwen3 30B-A3B) reads only the experts its tokens touch, so the discount fades as users share the step; speculative decoding turns one read into several tokens on a dense model but gains little on MoE at one user, because checking guesses touches more experts.
+
+Every panel can switch between NVIDIA H100 SXM, H200 SXM, and AMD MI300X, MI325X, and MI355X. Modeled moves are toggles the reader can apply (8-bit KV, shared-prompt reuse, FP8 math, speculation), and each panel describes what its concept looks like in a profiler trace alongside the model's own math and memory busy shares.
 
 Click any part to highlight its label, or any label to highlight the part. Plates are stylized and not to scale; counts and arrangement follow NVIDIA's and AMD's published documents, and every label is marked as a published figure, a representative figure, or a schematic placement.
 
@@ -87,7 +90,9 @@ memory floor  = bytes / (published HBM byte/s × memory efficiency)
 modeled time  = max(compute floor, memory floor)   # when overlap is enabled
 ```
 
-The visible default assumptions are 55% of published compute peak and 72% of published HBM bandwidth. Weight and KV formats change storage and traffic bytes only; Seymour does not invent quantized-kernel speedups. On-chip tiers show published capacity but no invented bandwidth.
+The visible default assumptions are 55% of published compute peak and 72% of published HBM bandwidth, applied identically to every accelerator so comparisons reflect published peaks rather than measured efficiency. Weight and KV formats change storage and traffic bytes; FP8 matrix math uses the published dense FP8 peak only when weights are 8-bit or smaller. MXFP4 math is not modeled. On-chip tiers show published capacity but no invented bandwidth.
+
+Mixture-of-experts steps read shared weights plus the experts their tokens touch, assuming uniform independent routing (real routers are skewed, which touches fewer experts at mid-size batches). Speculative decoding verifies k guessed tokens plus one per sequence in a single weight pass and yields (1 − a^(k+1)) / (1 − a) tokens on average with an assumed 70% acceptance; drafting cost is not modeled. The playground's response timing prices decode at the answer's midpoint context.
 
 Prompt processing prices dense work for the uncached suffix while its attention queries still see the full cached-plus-new context. Token generation counts one model-weight stream per step plus the KV read for every active sequence. Shared-prefix reuse removes prompt work only when a matching prefix is already available.
 

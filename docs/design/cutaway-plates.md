@@ -23,7 +23,7 @@ The concept-panel story (see `concept-panels.md`) shipped with an abstract pictu
 | C3 | Clicking a part highlights its label and clicking a label highlights the part. Both are keyboard-operable. |
 | C4 | Label text renders at a constant on-screen size regardless of how the SVG scales. |
 | C5 | Every number on a plate comes from `src/model` (no second copy of the math). Topology facts live in `src/data/topology.ts` with sources. |
-| C6 | Story panels are fixed to H100 SXM. The playground offers both chips and all four plates. |
+| C6 | ~~Story panels are fixed to H100 SXM.~~ **Superseded 2026-09-27:** every story panel can switch among all supported accelerators, so AMD is not second-class. The playground offers every chip and all four plates. |
 
 ## 3. Panel → plate mapping
 
