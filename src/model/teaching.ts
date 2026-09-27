@@ -198,8 +198,8 @@ export function buildTeachingGuide(
   return {
     ...guide,
     pathTitle: `${step.label} · ${plan.kernelName}`,
-    pathSummary: `${formatBytes(plan.hbmBytes)} at the modeled HBM boundary · ${formatDuration(plan.totalMs)} reference launch · ${limiting} is the longest priced stage.`,
+    pathSummary: `${formatBytes(plan.hbmBytes)} at the modeled HBM boundary · ${formatDuration(plan.totalMs)} reference launch · within this operation, ${limiting} is the longest priced stage.`,
     dataKinds,
-    performanceCopy: `${guide.performanceCopy} Here, ${plan.groups.toLocaleString()} workgroups can initially reach ${formatNumber(plan.estimatedActiveUnitFraction * 100)}% of the ${hardware.unitCount} ${hardware.unitName}s on ${hardware.name}. The remaining units are idle in that first scheduling wave; batch is ${settings.batch}.`,
+    performanceCopy: `${guide.performanceCopy} Here, ${plan.groups.toLocaleString()} workgroups can initially reach ${formatNumber(plan.estimatedActiveUnitFraction * 100)}% of the ${hardware.unitCount} ${hardware.unitName}s on ${hardware.name}.${plan.estimatedActiveUnitFraction < 1 ? ' The remaining units are idle in that first scheduling wave.' : ' Every unit can receive work in that first scheduling wave.'} Batch is ${settings.batch}.`,
   };
 }

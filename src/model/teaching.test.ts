@@ -62,4 +62,18 @@ describe('buildTeachingGuide', () => {
     expect(attention.optimizations.some((note) => note.title.includes('FlashAttention'))).toBe(true);
     expect(attention.optimizations.some((note) => note.title === 'Paged attention')).toBe(true);
   });
+
+  it('does not claim units are idle when the first scheduling wave covers them all', () => {
+    const fullCoverage = guidesFor({ ...settings, batch: 1024 })
+      .find(({ plan }) => plan.estimatedActiveUnitFraction === 1);
+
+    expect(fullCoverage).toBeDefined();
+    expect(fullCoverage!.guide.performanceCopy).toContain('Every unit can receive work');
+    expect(fullCoverage!.guide.performanceCopy).not.toContain('remaining units are idle');
+  });
+
+  it('labels the kernel timing conclusion as operation-scoped', () => {
+    const guide = guidesFor(settings)[0]!.guide;
+    expect(guide.pathSummary).toContain('within this operation');
+  });
 });

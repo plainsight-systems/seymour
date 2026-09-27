@@ -4,6 +4,7 @@ import './style.css';
 import { DEFAULT_MODEL, HARDWARE_PROFILES, getHardware } from './data/profiles';
 import {
   calculateSimulation,
+  decodeIterationCounts,
   formatBytes,
   formatDuration,
   formatFlops,
@@ -199,7 +200,7 @@ app.innerHTML = `
 
             <div class="machine-map" id="system-path" aria-label="Conceptual map of the host computer and accelerator. Highlighted regions show the selected operation's path.">
               <section class="map-host path-node" data-path-stage="host">
-                <b class="map-bottleneck">Current bottleneck</b>
+                <b class="map-bottleneck">Whole-step limit</b>
                 <span>Outside the accelerator</span>
                 <strong>Host computer</strong>
                 <p>The CPU starts kernels. System memory holds data only when accelerator memory overflows.</p>
@@ -217,7 +218,7 @@ app.innerHTML = `
                 </header>
                 <div class="map-package-body">
                   <section class="map-hbm path-node" data-path-stage="hbm">
-                    <b class="map-bottleneck">Current bottleneck</b>
+                    <b class="map-bottleneck">Whole-step limit</b>
                     <em>1</em>
                     <span>Fast memory beside the GPU chip</span>
                     <strong>High-bandwidth memory (HBM)</strong>
@@ -239,7 +240,7 @@ app.innerHTML = `
                         <div class="worker-pipeline">
                           <section class="path-node" data-path-stage="shared"><em>3</em><span>Nearby scratchpad</span><strong>Local memory</strong><small>Shared memory on NVIDIA · Local Data Share (LDS) on AMD</small></section>
                           <section class="path-node" data-path-stage="registers"><em>4</em><span>Per-lane working values</span><strong>Registers</strong><small>Hold fragments immediately before and after math</small></section>
-                          <section class="path-node" data-path-stage="compute"><b class="map-bottleneck">Current bottleneck</b><em>5</em><span>Arithmetic hardware</span><strong>Matrix + vector units</strong><small>Execute multiply-accumulate and vector instructions</small></section>
+                          <section class="path-node" data-path-stage="compute"><b class="map-bottleneck">Whole-step limit</b><em>5</em><span>Arithmetic hardware</span><strong>Matrix + vector units</strong><small>Execute multiply-accumulate and vector instructions</small></section>
                         </div>
                       </section>
                     </div>
@@ -907,7 +908,7 @@ function phaseForLifecycleStage(stageId: LifecycleStageId): SimulationSettings['
 function buildLifecycleStages(): LifecycleStage[] {
   const cachedTokens = settings.prefixCaching ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
   const uncachedTokens = settings.sequenceLength - cachedTokens;
-  const repeatedDecodeTokens = Math.max(0, settings.outputLength - 1);
+  const repeatedDecodeTokens = decodeIterationCounts(settings.outputLength).repeated;
   const prefixOutcome = !settings.prefixCaching
     ? 'Automatic prefix caching is disabled, so the runtime sends the complete prompt to prefill.'
     : settings.prefixCachePercent === 0
@@ -1025,7 +1026,7 @@ function renderLifecycle(): void {
       ? `Inside prefill · one representative layer × ${model.layers}`
       : selected.id === 'first-token'
         ? `Inside first token · one representative layer × ${model.layers}`
-        : `Inside decode · one representative iteration × ${settings.outputLength.toLocaleString()} tokens`);
+        : `Inside decode · first token + ${decodeIterationCounts(settings.outputLength).repeated.toLocaleString()} repeated ${decodeIterationCounts(settings.outputLength).repeated === 1 ? 'iteration' : 'iterations'}`);
     if (!isSequencePlaying) {
       setText('#sequence-state', isLifecyclePlaying
         ? 'The request timeline is handing control to this transformer path.'

@@ -180,3 +180,8 @@ export function formatNumber(value: number): string {
   if (value >= 10) return value.toFixed(1);
   return value.toFixed(2);
 }
+
+export function decodeIterationCounts(outputLength: number): { firstToken: number; repeated: number; total: number } {
+  const total = Math.max(1, Math.round(outputLength));
+  return { firstToken: 1, repeated: total - 1, total };
+}

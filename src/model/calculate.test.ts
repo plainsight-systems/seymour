@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../data/profiles';
-import { calculateSimulation } from './calculate';
+import { calculateSimulation, decodeIterationCounts } from './calculate';
 
 describe('calculateSimulation', () => {
   const hardware = getHardware('h100-sxm');
@@ -132,5 +132,12 @@ describe('calculateSimulation', () => {
     expect(conservative.hostTrafficBytes).toBeGreaterThan(0);
     expect(generous.hostTrafficBytes).toBe(0);
     expect(conservative.usableHbmCapacityBytes).toBeLessThan(generous.usableHbmCapacityBytes);
+  });
+});
+
+describe('decodeIterationCounts', () => {
+  it('counts the first token once and repeats only the remaining decode iterations', () => {
+    expect(decodeIterationCounts(32)).toEqual({ firstToken: 1, repeated: 31, total: 32 });
+    expect(decodeIterationCounts(1)).toEqual({ firstToken: 1, repeated: 0, total: 1 });
   });
 });
