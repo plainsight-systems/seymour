@@ -92,8 +92,8 @@
 .concept-picture > footer p { margin: 0; color: var(--ink-soft); font-size: 0.78rem; line-height: 1.45; }
 .panel-moves { display: grid; grid-template-columns: auto 1fr; gap: 1rem; padding: 1rem clamp(1.5rem, 4vw, 4rem); border-top: 1px solid var(--ink); background: var(--paper); }
 .panel-moves > span { padding-top: 0.35rem; white-space: nowrap; }
-.panel-moves ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; margin: 0; padding: 0; background: var(--line); list-style: none; }
-.panel-moves li { display: grid; gap: 0.35rem; align-content: start; padding: 0.8rem; background: var(--paper); }
+.panel-moves ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.panel-moves li { display: grid; gap: 0.35rem; align-content: start; padding: 0.8rem; border: 1px solid var(--line); background: var(--paper); }
 .panel-moves li b { font-size: 0.76rem; }
 .panel-moves li p { margin: 0; color: var(--ink-soft); font-size: 0.65rem; line-height: 1.4; }
 .panel-moves li small { width: fit-content; margin-top: 0.25rem; padding: 0.18rem 0.3rem; color: var(--green); border: 1px solid currentColor; font-size: 0.52rem; font-weight: 800; text-transform: uppercase; }
@@ -104,9 +104,9 @@
 .move-toggle:focus-visible { outline: 3px solid var(--red); outline-offset: -3px; }
 .move-toggle b { font-size: 0.76rem; }
 .move-toggle p { margin: 0; color: var(--ink-soft); font-size: 0.65rem; line-height: 1.4; }
-.move-toggle small { width: fit-content; margin-top: 0.25rem; padding: 0.18rem 0.3rem; color: var(--paper); border: 1px solid var(--green); background: var(--green); font-size: 0.55rem; font-weight: 800; text-transform: uppercase; }
+.panel-moves .move-toggle small { width: fit-content; margin-top: 0.25rem; padding: 0.18rem 0.3rem; color: var(--paper); border: 1px solid var(--green); background: var(--green); font-size: 0.55rem; font-weight: 800; text-transform: uppercase; }
 .move-toggle[aria-pressed='true'] { background: color-mix(in oklch, var(--red) 12%, var(--paper)); }
-.move-toggle[aria-pressed='true'] small { border-color: var(--red); background: var(--red); }
+.panel-moves .move-toggle[aria-pressed='true'] small { border-color: var(--red); background: var(--red); }
 .story-next { display: grid; gap: 1rem; padding: clamp(3rem, 9vw, 8rem); color: var(--paper); background: var(--green); }
 .story-next h2 { max-width: 13ch; margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: clamp(3rem, 7vw, 7rem); line-height: 0.9; }
 .story-next p { max-width: 58ch; margin: 0; line-height: 1.6; }
