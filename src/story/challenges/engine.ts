@@ -47,7 +47,8 @@ export function evaluateChallenge(challenge: Challenge, settings: SimulationSett
 
   const metrics: Record<ConstraintMetric, number | boolean> = {
     msPerToken: decode.msPerToken,
-    timeToFirstTokenMs: prefill.totalMs + decode.totalMs,
+    // Prompt processing produces the first token.
+    timeToFirstTokenMs: prefill.totalMs,
     totalTokensPerSec: decode.tokenRate,
     concurrentUsers: settings.batch,
     fitsInGpuMemory: decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
