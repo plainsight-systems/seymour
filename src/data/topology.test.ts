@@ -11,7 +11,14 @@ describe('chip topology', () => {
     for (const topology of TOPOLOGIES) {
       const hardware = HARDWARE_PROFILES.find((profile) => profile.id === topology.hardwareId)!;
       expect(topology.enabledUnits).toBe(hardware.unitCount);
-      expect(topology.hbmActiveStacks * topology.hbmGBPerStack).toBe(hardware.hbmCapacityGB);
+      const drawn = topology.hbmActiveStacks * topology.hbmGBPerStack;
+      if (topology.stackCountBasis === 'published') expect(drawn).toBe(hardware.hbmCapacityGB);
+      else {
+        // Derived counts must still add up to the published capacity (H200 exposes 141 of 144 GB).
+        expect(drawn).toBeGreaterThanOrEqual(hardware.hbmCapacityGB);
+        expect(drawn / hardware.hbmCapacityGB).toBeLessThan(1.03);
+        expect(topology.stackCountNote).toBeTruthy();
+      }
       expect(topology.l2MBPerComputeDie * topology.computeDies).toBe(hardware.l2CacheMB);
     }
   });

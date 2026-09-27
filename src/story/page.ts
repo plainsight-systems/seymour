@@ -45,7 +45,7 @@ function zoomLabel(plate: StoryPanelSpec['plate'], hardwareId: string): string {
 let storyHardwareId = DEFAULT_SETTINGS.hardwareId as string;
 
 function chipToggle(): string {
-  return `<span class="panel-chip" role="group" aria-label="Accelerator">${HARDWARE_PROFILES.map((hardware) => `<button type="button" data-chip="${hardware.id}" aria-pressed="${hardware.id === storyHardwareId}">${hardware.vendor} ${hardware.name}</button>`).join('')}</span>`;
+  return `<span class="panel-chip" role="group" aria-label="Accelerator">${HARDWARE_PROFILES.map((hardware) => `<button type="button" data-chip="${hardware.id}" aria-pressed="${hardware.id === storyHardwareId}" title="${hardware.vendor} ${hardware.name}">${hardware.name.replace(" SXM", "")}</button>`).join('')}</span>`;
 }
 
 const PLACEMENT_PHRASE: Record<KvPlacement, string> = {

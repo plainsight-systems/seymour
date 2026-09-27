@@ -202,10 +202,12 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
   const interposer = b.box({ id: 'interposer', part: 'interposer', x: 5, y: 5, w: 52, d: 36, h: 0.8, z: 5, fill: 'slate', layer: 1 });
   b.risers(interposer, 1.4);
   const iz = interposer.z + interposer.h + 3.4;
-  const positions: [number, number][] = [[17, 8], [31.5, 8], [17, 23], [31.5, 23]];
+  // Four I/O dies sit in a 2×2 grid (MI300 series); two mirrored ones sit side by side (MI350 series).
+  const positions: [number, number][] = topology.ioDies === 2 ? [[17, 8], [31.5, 8]] : [[17, 8], [31.5, 8], [17, 23], [31.5, 23]];
+  const ioDepth = topology.ioDies === 2 ? 29 : 14;
   const diesPerIo = topology.computeDies / topology.ioDies;
   positions.slice(0, topology.ioDies).forEach(([x, y], i) => {
-    const io = b.box({ id: `io${i}`, part: 'io', x, y, w: 13.5, d: 14, h: 1.0, z: iz, fill: 'mustard', layer: 3 });
+    const io = b.box({ id: `io${i}`, part: 'io', x, y, w: 13.5, d: ioDepth, h: 1.0, z: iz, fill: 'mustard', layer: 3 });
     if (i === topology.ioDies - 1) b.risers(io, interposer.z + interposer.h);
     for (let k = 0; k < diesPerIo; k++) {
       const compute = b.box({ id: `xcd${i}-${k}`, part: 'compute-die', x: x + 0.8, y: y + 0.6 + k * 6.8, w: 11.9, d: 6.2, h: 0.9, z: iz + 4.2, fill: 'red', layer: 5 });
@@ -221,7 +223,7 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
     }
   }
   const perCompute = topology.enabledUnits / topology.computeDies;
-  b.label('compute-die', 'xcd3-0', 'right', `Compute dies · ${topology.computeDies}`, `${perCompute} CUs enabled on each; ${topology.enabledUnits} total`, 'published');
+  b.label('compute-die', `xcd${topology.ioDies - 1}-0`, 'right', `Compute dies · ${topology.computeDies}`, `${perCompute} CUs enabled on each; ${topology.enabledUnits} total`, 'published');
   b.label('io', 'io1', 'right', `I/O dies · ${topology.ioDies}`, `hold the ${getHardware(inputs.hardwareId).lastLevelCacheMB} MB Infinity Cache`, 'published');
   stackLabel(b, inputs, topology, `hbm${topology.hbmSites - 1}-base`);
   fillLabels(b, inputs, `hbm${perSide - 1}`);
@@ -292,7 +294,7 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
   if (options.detail === 'full') {
     // Anchor on the last disabled unit so its marker stays clear of the busy ones.
     const lastDead = [...disabled].sort((a, z) => a - z).at(-1);
-    b.label('unit-off', `unit${lastDead}`, 'left', 'Disabled SM', `${topology.physicalUnits - topology.enabledUnits} of ${topology.physicalUnits} are off; positions vary per chip`, 'published');
+    if (lastDead !== undefined) b.label('unit-off', `unit${lastDead}`, 'left', 'Disabled SM', `${topology.physicalUnits - topology.enabledUnits} of ${topology.physicalUnits} are off; positions vary per chip`, 'published');
     b.label('cluster', 'cluster3', 'right', `Cluster of ${topology.unitsPerCluster} SMs`, `${clusters} clusters on the die`, 'published');
     b.label('l2', 'l2-b', 'right', `L2 cache · ${topology.l2MBPerComputeDie} MB`, 'shared by every SM, in two halves', 'published');
     if (controllers > 0) b.label('mc', 'mc2', 'left', 'Memory controllers', `${topology.memoryControllersActive} of ${controllers} active: two per memory stack`, 'published');
@@ -330,8 +332,10 @@ function computeDie(inputs: CutawayInputs, topology: ChipTopology, options: DieO
   const enabledPerDie = perDie - disabledCount;
   busyLabels(b, { ...job, busyUnits: job.busyUnitsPerCluster }, enabledPerDie, 'CUs');
   if (options.detail === 'full') {
-    const firstDead = [...disabled].sort((a, z) => a - z)[0];
-    b.label('unit-off', `unit${firstDead}`, 'left', 'Disabled CU', `${disabledCount} of ${perDie} per die; positions vary`, 'published');
+    if (disabledCount > 0) {
+      const firstDead = [...disabled].sort((a, z) => a - z)[0];
+      b.label('unit-off', `unit${firstDead}`, 'left', 'Disabled CU', `${disabledCount} of ${perDie} per die; positions vary`, 'published');
+    }
     b.label('l2', 'l2', 'right', `L2 cache · ${topology.l2MBPerComputeDie} MB`, 'shared by this die’s CUs only', 'published');
     b.label('io', 'io-below', 'left', 'I/O die underneath', 'the path to Infinity Cache and memory', 'published');
   }
