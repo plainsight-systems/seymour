@@ -20,6 +20,16 @@
 .lookup-row div { display: grid; gap: 0.4rem; align-content: start; }
 .lookup-row a { color: var(--red); font-size: 0.72rem; font-weight: 820; overflow-wrap: anywhere; }
 .lookup-row p { margin: 0; color: var(--ink-soft); font-size: 0.62rem; line-height: 1.45; }
+.lookup-stack { padding: 0 clamp(2rem, 5vw, 5rem) clamp(2rem, 5vw, 5rem); }
+.lookup-stack h2 { margin: 0 0 0.5rem; font-family: 'Anybody Variable', sans-serif; font-size: clamp(2rem, 4vw, 4rem); }
+.lookup-stack > p { max-width: 70ch; margin: 0 0 1.5rem; color: var(--ink-soft); line-height: 1.55; }
+.lookup-stack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.lookup-stack article { display: grid; gap: 0.6rem; align-content: start; padding: 1rem; border: 1px solid var(--ink); background: color-mix(in oklch, var(--mustard) 12%, var(--paper)); }
+.lookup-stack h3 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.4rem; }
+.lookup-stack article p { margin: 0; font-size: 0.85rem; line-height: 1.5; }
+.lookup-stack-concepts { color: var(--ink-soft); }
+.lookup-stack ul { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }
+.lookup-stack a { color: var(--red); font-size: 0.8rem; font-weight: 800; }
 .lookup-footer { display: flex; gap: 2rem; align-items: center; justify-content: space-between; padding: 2rem clamp(1rem, 5vw, 5rem); color: var(--paper); background: var(--green); }
 .lookup-footer p { max-width: 72ch; margin: 0; line-height: 1.55; }
 .lookup-footer a { padding: 0.75rem 1rem; color: var(--ink); background: var(--mustard); text-decoration: none; font-weight: 800; white-space: nowrap; }
