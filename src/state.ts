@@ -7,7 +7,10 @@ const PREFIX_CACHE_PERCENTAGES = [0, 25, 50, 75, 90, 100];
 const OUTPUT_LENGTHS = [1, 8, 32, 128, 512];
 
 export function readSettings(): SimulationSettings {
-  const params = new URLSearchParams(window.location.search);
+  return parseSettings(new URLSearchParams(window.location.search));
+}
+
+export function parseSettings(params: URLSearchParams): SimulationSettings {
   const phase: Phase = params.get('phase') === 'prefill' ? 'prefill' : 'decode';
   const hardwareId = params.get('gpu') || DEFAULT_SETTINGS.hardwareId;
   const batch = nearest(Number(params.get('batch')) || DEFAULT_SETTINGS.batch, BATCHES);
@@ -17,10 +20,10 @@ export function readSettings(): SimulationSettings {
   );
   const prefixCachePercent = nearest(Number(params.get('cache')) || DEFAULT_SETTINGS.prefixCachePercent, PREFIX_CACHE_PERCENTAGES);
   const outputLength = nearest(Number(params.get('output')) || DEFAULT_SETTINGS.outputLength, OUTPUT_LENGTHS);
-  const prefixCaching = params.get('prefix') !== 'off';
-  const chunkedPrefill = params.get('chunked') !== 'off';
-  const maxNumBatchedTokens = nearest(Number(params.get('tokenBudget')) || DEFAULT_SETTINGS.maxNumBatchedTokens, [512, 1024, 2048, 4096, 8192, 16384]);
-  const gpuMemoryUtilization = nearest(Number(params.get('memory')) || DEFAULT_SETTINGS.gpuMemoryUtilization, [0.7, 0.8, 0.9, 0.95]);
+  const reusePromptPrefixes = params.get('prefix') !== 'off';
+  const splitLongPrompts = params.get('chunked') !== 'off';
+  const promptTokensPerStep = nearest(Number(params.get('tokenBudget')) || DEFAULT_SETTINGS.promptTokensPerStep, [512, 1024, 2048, 4096, 8192, 16384]);
+  const servingMemoryFraction = nearest(Number(params.get('memory')) || DEFAULT_SETTINGS.servingMemoryFraction, [0.7, 0.8, 0.9, 0.95]);
   const weightBits = ([4, 8, 16] as const).includes(Number(params.get('weights')) as WeightBits)
     ? Number(params.get('weights')) as WeightBits
     : DEFAULT_SETTINGS.weightBits;
@@ -30,10 +33,15 @@ export function readSettings(): SimulationSettings {
   const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
   const overlap = params.get('overlap') !== 'off';
   const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, prefixCaching, chunkedPrefill, maxNumBatchedTokens, gpuMemoryUtilization, weightBits, kvBits, attentionKernel, overlap, view };
+  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
+  const params = settingsToSearchParams(settings, operationId, lifecycleStageId);
+  history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+export function settingsToSearchParams(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): URLSearchParams {
   const params = new URLSearchParams({
     phase: settings.phase,
     gpu: settings.hardwareId,
@@ -41,19 +49,19 @@ export function writeSettings(settings: SimulationSettings, operationId?: string
     tokens: String(settings.sequenceLength),
     cache: String(settings.prefixCachePercent),
     output: String(settings.outputLength),
-    tokenBudget: String(settings.maxNumBatchedTokens),
-    memory: String(settings.gpuMemoryUtilization),
+    tokenBudget: String(settings.promptTokensPerStep),
+    memory: String(settings.servingMemoryFraction),
     weights: String(settings.weightBits),
     kv: String(settings.kvBits),
     attention: settings.attentionKernel,
     view: settings.view,
   });
   if (!settings.overlap) params.set('overlap', 'off');
-  if (!settings.prefixCaching) params.set('prefix', 'off');
-  if (!settings.chunkedPrefill) params.set('chunked', 'off');
+  if (!settings.reusePromptPrefixes) params.set('prefix', 'off');
+  if (!settings.splitLongPrompts) params.set('chunked', 'off');
   if (operationId) params.set('op', operationId);
   if (lifecycleStageId) params.set('stage', lifecycleStageId);
-  history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  return params;
 }
 
 export function prefixCacheFromSlider(value: number): number {

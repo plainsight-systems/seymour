@@ -59,10 +59,10 @@ export interface SimulationSettings {
   sequenceLength: number;
   prefixCachePercent: number;
   outputLength: number;
-  prefixCaching: boolean;
-  chunkedPrefill: boolean;
-  maxNumBatchedTokens: number;
-  gpuMemoryUtilization: number;
+  reusePromptPrefixes: boolean;
+  splitLongPrompts: boolean;
+  promptTokensPerStep: number;
+  servingMemoryFraction: number;
   weightBits: WeightBits;
   kvBits: KvBits;
   attentionKernel: AttentionKernel;

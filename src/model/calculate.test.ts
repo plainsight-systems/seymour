@@ -117,7 +117,7 @@ describe('calculateSimulation', () => {
   it('ignores reusable-prefix percentage when automatic prefix caching is disabled', () => {
     const base = { ...defaults, phase: 'prefill' as const, sequenceLength: 4096, prefixCachePercent: 100 };
     const enabled = calculateSimulation(base, hardware, DEFAULT_MODEL);
-    const disabled = calculateSimulation({ ...base, prefixCaching: false }, hardware, DEFAULT_MODEL);
+    const disabled = calculateSimulation({ ...base, reusePromptPrefixes: false }, hardware, DEFAULT_MODEL);
 
     expect(enabled.totalMs).toBe(0);
     expect(disabled.flops).toBeGreaterThan(0);
@@ -126,8 +126,8 @@ describe('calculateSimulation', () => {
 
   it('prices repeated weight streams when chunked prefill needs multiple scheduler iterations', () => {
     const base = { ...defaults, phase: 'prefill' as const, batch: 1, sequenceLength: 4096, prefixCachePercent: 0 };
-    const unchunked = calculateSimulation({ ...base, chunkedPrefill: false }, hardware, DEFAULT_MODEL);
-    const chunked = calculateSimulation({ ...base, chunkedPrefill: true, maxNumBatchedTokens: 512 }, hardware, DEFAULT_MODEL);
+    const unchunked = calculateSimulation({ ...base, splitLongPrompts: false }, hardware, DEFAULT_MODEL);
+    const chunked = calculateSimulation({ ...base, splitLongPrompts: true, promptTokensPerStep: 512 }, hardware, DEFAULT_MODEL);
 
     expect(chunked.prefillChunks).toBe(8);
     expect(chunked.prefillChunkTokens).toBe(512);
@@ -137,8 +137,8 @@ describe('calculateSimulation', () => {
 
   it('uses the runtime HBM budget rather than claiming all physical HBM', () => {
     const base = { ...defaults, phase: 'decode' as const, batch: 80, sequenceLength: 4096 };
-    const conservative = calculateSimulation({ ...base, gpuMemoryUtilization: 0.7 }, hardware, DEFAULT_MODEL);
-    const generous = calculateSimulation({ ...base, gpuMemoryUtilization: 0.95 }, hardware, DEFAULT_MODEL);
+    const conservative = calculateSimulation({ ...base, servingMemoryFraction: 0.7 }, hardware, DEFAULT_MODEL);
+    const generous = calculateSimulation({ ...base, servingMemoryFraction: 0.95 }, hardware, DEFAULT_MODEL);
 
     expect(conservative.hostTrafficBytes).toBeGreaterThan(0);
     expect(generous.hostTrafficBytes).toBe(0);

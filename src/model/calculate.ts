@@ -10,12 +10,12 @@ export function calculateSimulation(
 ): SimulationResult {
   const batch = Math.max(1, Math.round(settings.batch));
   const sequence = Math.max(1, Math.round(settings.sequenceLength));
-  const cachedTokens = settings.phase === 'prefill' && settings.prefixCaching
+  const cachedTokens = settings.phase === 'prefill' && settings.reusePromptPrefixes
     ? Math.min(sequence, Math.round(sequence * settings.prefixCachePercent / 100))
     : 0;
   const queryTokens = settings.phase === 'prefill' ? sequence - cachedTokens : 1;
-  const prefillChunkTokens = settings.phase === 'prefill' && settings.chunkedPrefill
-    ? Math.max(1, Math.min(queryTokens || 1, Math.floor(settings.maxNumBatchedTokens / batch)))
+  const prefillChunkTokens = settings.phase === 'prefill' && settings.splitLongPrompts
+    ? Math.max(1, Math.min(queryTokens || 1, Math.floor(settings.promptTokensPerStep / batch)))
     : Math.max(1, queryTokens || 1);
   const prefillChunks = settings.phase === 'prefill' && queryTokens > 0
     ? Math.ceil(queryTokens / prefillChunkTokens)
@@ -52,7 +52,7 @@ export function calculateSimulation(
 
   const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
   const effectiveBandwidth = hardware.hbmBandwidthTBs * TERA * hardware.memoryEfficiency;
-  const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA * settings.gpuMemoryUtilization;
+  const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA * settings.servingMemoryFraction;
   const spilledWeightBytes = Math.max(0, weightBytes - hbmCapacityBytes);
   const hbmAfterWeights = Math.max(0, hbmCapacityBytes - weightBytes);
   const spilledKvBytes = Math.max(0, kvFootprintBytes - hbmAfterWeights);

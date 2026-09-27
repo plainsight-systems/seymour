@@ -5,10 +5,10 @@ export function buildAlgorithmSteps(
   model: ModelProfile,
 ): AlgorithmStep[] {
   const b = settings.batch;
-  const cachedTokens = settings.prefixCaching ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+  const cachedTokens = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
   const uncachedTokens = Math.max(1, settings.sequenceLength - cachedTokens);
-  const chunkTokens = settings.chunkedPrefill
-    ? Math.max(1, Math.min(uncachedTokens, Math.floor(settings.maxNumBatchedTokens / settings.batch)))
+  const chunkTokens = settings.splitLongPrompts
+    ? Math.max(1, Math.min(uncachedTokens, Math.floor(settings.promptTokensPerStep / settings.batch)))
     : uncachedTokens;
   const tq = settings.phase === 'prefill' ? chunkTokens : 1;
   const tk = settings.sequenceLength;

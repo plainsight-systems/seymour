@@ -115,10 +115,10 @@ app.innerHTML = `
               <div class="control-group-body">
                 <label class="field range-field"><span>Sequences admitted together <output id="batch-output">1</output></span><input id="batch-range" type="range" min="0" max="10" step="1" value="0" /><span class="range-ends"><small>1</small><small>1,024</small></span><small>More sequences reuse weights, consume more KV space, and expose more parallel work.</small></label>
                 <div class="runtime-grid">
-                  <label class="field"><span>Token-work budget</span><select id="max-batched-tokens-select"><option value="512">512 tokens</option><option value="1024">1,024 tokens</option><option value="2048">2,048 tokens</option><option value="4096">4,096 tokens</option><option value="8192">8,192 tokens</option><option value="16384">16,384 tokens</option></select><small>Caps how much prompt work enters one scheduling iteration.</small></label>
-                  <label class="field"><span>HBM reserved for serving</span><select id="gpu-memory-utilization-select"><option value="0.7">70% of HBM</option><option value="0.8">80% of HBM</option><option value="0.9">90% of HBM</option><option value="0.95">95% of HBM</option></select><small>Leaves the remainder for runtime overhead and safety margin.</small></label>
-                  <label class="toggle-field"><span><strong>Reuse prefix KV</strong><small>Retain eligible prompt state across requests</small></span><input id="prefix-caching-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
-                  <label class="toggle-field"><span><strong>Split long prefills</strong><small>Interleave prompt chunks with other ready work</small></span><input id="chunked-prefill-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
+                  <label class="field"><span>Prompt tokens per step</span><select id="max-batched-tokens-select"><option value="512">512 tokens</option><option value="1024">1,024 tokens</option><option value="2048">2,048 tokens</option><option value="4096">4,096 tokens</option><option value="8192">8,192 tokens</option><option value="16384">16,384 tokens</option></select><small>Caps how much prompt work enters one scheduling iteration.</small></label>
+                  <label class="field"><span>Serving memory share</span><select id="gpu-memory-utilization-select"><option value="0.7">70% of HBM</option><option value="0.8">80% of HBM</option><option value="0.9">90% of HBM</option><option value="0.95">95% of HBM</option></select><small>Leaves the remainder for runtime overhead and safety margin.</small></label>
+                  <label class="toggle-field"><span><strong>Reuse shared prompts</strong><small>Retain eligible prompt state across requests</small></span><input id="prefix-caching-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
+                  <label class="toggle-field"><span><strong>Split long prompts</strong><small>Interleave prompt chunks with other ready work</small></span><input id="chunked-prefill-toggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
                 </div>
               </div>
               <p class="control-explainer" id="runtime-impact"></p>
@@ -519,9 +519,9 @@ const prefixCacheOutput = required<HTMLOutputElement>('#prefix-cache-output');
 const outputLengthRange = required<HTMLInputElement>('#output-length-range');
 const outputLengthOutput = required<HTMLOutputElement>('#output-length-output');
 const maxBatchedTokensSelect = required<HTMLSelectElement>('#max-batched-tokens-select');
-const gpuMemoryUtilizationSelect = required<HTMLSelectElement>('#gpu-memory-utilization-select');
-const prefixCachingToggle = required<HTMLInputElement>('#prefix-caching-toggle');
-const chunkedPrefillToggle = required<HTMLInputElement>('#chunked-prefill-toggle');
+const servingMemoryFractionSelect = required<HTMLSelectElement>('#gpu-memory-utilization-select');
+const reusePromptPrefixesToggle = required<HTMLInputElement>('#prefix-caching-toggle');
+const splitLongPromptsToggle = required<HTMLInputElement>('#chunked-prefill-toggle');
 const weightSelect = required<HTMLSelectElement>('#weight-select');
 const kvSelect = required<HTMLSelectElement>('#kv-select');
 const attentionSelect = required<HTMLSelectElement>('#attention-select');
@@ -567,30 +567,30 @@ function update(writeUrl = true): void {
   tokensRange.value = String(sequenceToSlider(settings.sequenceLength));
   tokensOutput.value = settings.sequenceLength.toLocaleString();
   prefixCacheRange.value = String(prefixCacheToSlider(settings.prefixCachePercent));
-  prefixCacheRange.disabled = !settings.prefixCaching;
-  prefixCacheOutput.value = settings.prefixCaching ? `${settings.prefixCachePercent}%` : 'off';
+  prefixCacheRange.disabled = !settings.reusePromptPrefixes;
+  prefixCacheOutput.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
   outputLengthRange.value = String(outputLengthToSlider(settings.outputLength));
   outputLengthOutput.value = settings.outputLength.toLocaleString();
-  maxBatchedTokensSelect.value = String(settings.maxNumBatchedTokens);
-  maxBatchedTokensSelect.disabled = !settings.chunkedPrefill;
-  gpuMemoryUtilizationSelect.value = String(settings.gpuMemoryUtilization);
-  prefixCachingToggle.checked = settings.prefixCaching;
-  chunkedPrefillToggle.checked = settings.chunkedPrefill;
+  maxBatchedTokensSelect.value = String(settings.promptTokensPerStep);
+  maxBatchedTokensSelect.disabled = !settings.splitLongPrompts;
+  servingMemoryFractionSelect.value = String(settings.servingMemoryFraction);
+  reusePromptPrefixesToggle.checked = settings.reusePromptPrefixes;
+  splitLongPromptsToggle.checked = settings.splitLongPrompts;
   weightSelect.value = String(settings.weightBits);
   kvSelect.value = String(settings.kvBits);
   attentionSelect.value = settings.attentionKernel;
   overlapToggle.checked = settings.overlap;
-  setText('#workload-summary', `${settings.batch} scheduled · ${settings.sequenceLength.toLocaleString()} prompt · ${settings.prefixCaching ? `${settings.prefixCachePercent}% cached` : 'cache off'} · ${settings.outputLength} output`);
+  setText('#workload-summary', `${settings.batch} scheduled · ${settings.sequenceLength.toLocaleString()} prompt · ${settings.reusePromptPrefixes ? `${settings.prefixCachePercent}% cached` : 'cache off'} · ${settings.outputLength} output`);
   setText('#compact-workload-summary', `${settings.batch} × ${settings.sequenceLength.toLocaleString()} → ${settings.outputLength} · ${hardware.name}`);
   setText('#model-name', model.name);
   setText('#model-note', `${model.parametersB}B parameters · GQA ${model.attentionHeads}:${model.kvHeads}`);
   setText('#strategy-impact', `${precisionLabel(settings.weightBits)} weights occupy ${formatBytes(result.weightBytes)}. ${precisionLabel(settings.kvBits)} KV uses ${formatBytes(result.kvBytesPerToken)} per token. ${settings.attentionKernel === 'fused' ? 'Fused attention keeps scores on chip.' : 'Separate attention writes and rereads scores through HBM.'}`);
   setText(
     '#runtime-impact',
-    `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'sequence' : 'sequences'} can run per scheduling iteration. Prefix reuse is ${settings.prefixCaching ? 'enabled' : 'disabled'}. ${settings.chunkedPrefill
+    `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'sequence' : 'sequences'} can run per scheduling iteration. Prefix reuse is ${settings.reusePromptPrefixes ? 'enabled' : 'disabled'}. ${settings.splitLongPrompts
       ? prefillResult.prefillChunks > 1
         ? `Split prefill divides the uncached prompt into ${prefillResult.prefillChunks.toLocaleString()} iterations of up to ${prefillResult.prefillChunkTokens.toLocaleString()} tokens per sequence; each iteration streams the weights again.`
-        : `The ${settings.maxNumBatchedTokens.toLocaleString()}-token budget fits this prefill in one iteration.`
+        : `The ${settings.promptTokensPerStep.toLocaleString()}-token budget fits this prefill in one iteration.`
       : 'Prompt splitting is off, so the uncached prompt is admitted as one prefill iteration.'} The serving process may use ${formatBytes(result.usableHbmCapacityBytes)} of ${hardware.hbmCapacityGB} GB physical HBM.`,
   );
   setText('#hardware-context-note', `${hardware.unitCount} ${hardware.unitName}s · ${hardware.hbmCapacityGB} GB HBM · ${hardware.hbmBandwidthTBs} TB/s`);
@@ -652,7 +652,7 @@ function update(writeUrl = true): void {
   setText('#flops-value', formatFlops(result.flops));
   setText('#intensity-value', `${formatNumber(result.arithmeticIntensity)} FLOP/byte`);
   setText('#hbm-value', result.hbmUsedFraction > 1 ? `${formatBytes(result.modelFootprintBytes - result.usableHbmCapacityBytes)} spill` : `${formatNumber(result.hbmUsedFraction * 100)}%`);
-  setText('#hbm-note', `${formatBytes(result.modelFootprintBytes)} working set · ${formatBytes(result.usableHbmCapacityBytes)} runtime budget (${Math.round(settings.gpuMemoryUtilization * 100)}% of ${hardware.hbmCapacityGB} GB)`);
+  setText('#hbm-note', `${formatBytes(result.modelFootprintBytes)} working set · ${formatBytes(result.usableHbmCapacityBytes)} runtime budget (${Math.round(settings.servingMemoryFraction * 100)}% of ${hardware.hbmCapacityGB} GB)`);
   setText('#roof-status', result.totalMs === 0 ? 'prefill skipped' : `${result.bottleneck}-bound`);
   setText(
     '#chart-note',
@@ -688,11 +688,11 @@ function update(writeUrl = true): void {
         : `Weight traffic is now amortized across ${settings.batch} sequences. Compute has overtaken HBM as the longer lower bound.`,
     );
   } else {
-    const uncachedTokens = Math.max(0, settings.sequenceLength - (settings.prefixCaching ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0));
+    const uncachedTokens = Math.max(0, settings.sequenceLength - (settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0));
     setText('#finding-title', `Prefill gives every weight ${uncachedTokens.toLocaleString()} uncached tokens of work.`);
     setText(
       '#finding-copy',
-      settings.prefixCaching && settings.prefixCachePercent > 0
+      settings.reusePromptPrefixes && settings.prefixCachePercent > 0
         ? `The reusable prefix removes ${settings.prefixCachePercent}% of the dense prompt work. The remaining suffix still attends across the full ${settings.sequenceLength.toLocaleString()}-token history, so a cache hit reduces time to first token without changing the final context. HBM still matters, but dense matrix work sets this analytical floor.`
         : 'The full prompt supplies enough weight reuse to move far beyond the ridge point. HBM still matters, but dense matrix work now sets the analytical floor.',
     );
@@ -762,25 +762,25 @@ outputLengthRange.addEventListener('input', () => {
 maxBatchedTokensSelect.addEventListener('change', () => {
   pauseLifecycle('Scheduler token budget changed · restart when ready.');
   pauseSequence('Settings changed · press Play to run this configuration.');
-  settings.maxNumBatchedTokens = Number(maxBatchedTokensSelect.value);
+  settings.promptTokensPerStep = Number(maxBatchedTokensSelect.value);
   update();
 });
-gpuMemoryUtilizationSelect.addEventListener('change', () => {
+servingMemoryFractionSelect.addEventListener('change', () => {
   pauseLifecycle('Runtime memory budget changed · restart when ready.');
   pauseSequence('Settings changed · press Play to run this configuration.');
-  settings.gpuMemoryUtilization = Number(gpuMemoryUtilizationSelect.value);
+  settings.servingMemoryFraction = Number(servingMemoryFractionSelect.value);
   update();
 });
-prefixCachingToggle.addEventListener('change', () => {
+reusePromptPrefixesToggle.addEventListener('change', () => {
   pauseLifecycle('Prefix cache policy changed · restart when ready.');
   pauseSequence('Settings changed · press Play to run this configuration.');
-  settings.prefixCaching = prefixCachingToggle.checked;
+  settings.reusePromptPrefixes = reusePromptPrefixesToggle.checked;
   update();
 });
-chunkedPrefillToggle.addEventListener('change', () => {
+splitLongPromptsToggle.addEventListener('change', () => {
   pauseLifecycle('Prefill scheduling changed · restart when ready.');
   pauseSequence('Settings changed · press Play to run this configuration.');
-  settings.chunkedPrefill = chunkedPrefillToggle.checked;
+  settings.splitLongPrompts = splitLongPromptsToggle.checked;
   update();
 });
 weightSelect.addEventListener('change', () => {
@@ -811,7 +811,7 @@ overlapToggle.addEventListener('change', () => {
 required<HTMLButtonElement>('#reset-controls').addEventListener('click', () => {
   pauseLifecycle('Defaults restored · ready to play from request arrival.');
   pauseSequence('Defaults restored · ready to play from operation 1.');
-  settings = { phase: 'prefill', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, prefixCachePercent: 0, outputLength: 32, prefixCaching: true, chunkedPrefill: true, maxNumBatchedTokens: 8192, gpuMemoryUtilization: 0.9, weightBits: 16, kvBits: 16, attentionKernel: 'fused', overlap: true, view: 'hardware' };
+  settings = { phase: 'prefill', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, prefixCachePercent: 0, outputLength: 32, reusePromptPrefixes: true, splitLongPrompts: true, promptTokensPerStep: 8192, servingMemoryFraction: 0.9, weightBits: 16, kvBits: 16, attentionKernel: 'fused', overlap: true, view: 'hardware' };
   selectedLifecycleStageId = 'request';
   selectedStepId = 'rms-attn';
   update();
@@ -906,10 +906,10 @@ function phaseForLifecycleStage(stageId: LifecycleStageId): SimulationSettings['
 }
 
 function buildLifecycleStages(): LifecycleStage[] {
-  const cachedTokens = settings.prefixCaching ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+  const cachedTokens = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
   const uncachedTokens = settings.sequenceLength - cachedTokens;
   const repeatedDecodeTokens = decodeIterationCounts(settings.outputLength).repeated;
-  const prefixOutcome = !settings.prefixCaching
+  const prefixOutcome = !settings.reusePromptPrefixes
     ? 'Automatic prefix caching is disabled, so the runtime sends the complete prompt to prefill.'
     : settings.prefixCachePercent === 0
     ? 'Prefix miss: no reusable K/V pages were found, so the full prompt must run through prefill.'
@@ -927,14 +927,14 @@ function buildLifecycleStages(): LifecycleStage[] {
     {
       id: 'prefix', number: '02', label: 'Prefix lookup', title: 'Look for reusable prompt K/V pages.',
       summary: prefixOutcome,
-      equation: 'cached prefix ∩ prompt tokens', metricLabel: !settings.prefixCaching ? 'Cache policy' : settings.prefixCachePercent === 0 ? 'Cache outcome' : 'Tokens reused', metricValue: !settings.prefixCaching ? 'disabled' : settings.prefixCachePercent === 0 ? 'miss' : cachedTokens.toLocaleString(),
+      equation: 'cached prefix ∩ prompt tokens', metricLabel: !settings.reusePromptPrefixes ? 'Cache policy' : settings.prefixCachePercent === 0 ? 'Cache outcome' : 'Tokens reused', metricValue: !settings.reusePromptPrefixes ? 'disabled' : settings.prefixCachePercent === 0 ? 'miss' : cachedTokens.toLocaleString(),
       phase: 'prefill', hardwareStage: cachedTokens === 0 ? 'host' : 'hbm', hasTransformerWork: false,
     },
     {
       id: 'prefill', number: '03', label: 'Prefill', title: uncachedTokens === 0 ? 'Prefill is skipped.' : 'Process the uncached prompt suffix in parallel.',
       summary: uncachedTokens === 0
         ? 'The prefix cache already contains K/V pages for the complete prompt. No prompt transformer work is repeated.'
-        : `${uncachedTokens.toLocaleString()} uncached query tokens run through all model layers while attending over the complete ${settings.sequenceLength.toLocaleString()}-token context. ${prefillResult.prefillChunks > 1 ? `The ${settings.maxNumBatchedTokens.toLocaleString()}-token scheduler budget divides that work into ${prefillResult.prefillChunks.toLocaleString()} iterations of up to ${prefillResult.prefillChunkTokens.toLocaleString()} tokens per sequence.` : 'The scheduler admits the prefill in one iteration.'}`,
+        : `${uncachedTokens.toLocaleString()} uncached query tokens run through all model layers while attending over the complete ${settings.sequenceLength.toLocaleString()}-token context. ${prefillResult.prefillChunks > 1 ? `The ${settings.promptTokensPerStep.toLocaleString()}-token scheduler budget divides that work into ${prefillResult.prefillChunks.toLocaleString()} iterations of up to ${prefillResult.prefillChunkTokens.toLocaleString()} tokens per sequence.` : 'The scheduler admits the prefill in one iteration.'}`,
       equation: `Qsuffix · Kfullᵀ → P · Vfull`, metricLabel: prefillResult.prefillChunks > 1 ? 'Prefill iterations' : 'Prefill accelerator floor', metricValue: uncachedTokens === 0 ? 'skipped' : prefillResult.prefillChunks > 1 ? `${prefillResult.prefillChunks} · ${formatDuration(prefillResult.totalMs)}` : formatDuration(prefillResult.totalMs),
       phase: 'prefill', hardwareStage: uncachedTokens === 0 ? 'hbm' : 'compute', hasTransformerWork: uncachedTokens > 0, skipped: uncachedTokens === 0,
     },
