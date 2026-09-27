@@ -16,3 +16,5 @@ body { margin: 0; color: var(--route-ink); background: var(--route-paper); font-
 .route-placeholder h1 { max-width: 15ch; margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: clamp(2.7rem, 8vw, 7rem); line-height: 0.9; }
 .route-placeholder p { max-width: 56ch; margin: 0; line-height: 1.6; }
 @media (max-width: 720px) { .route-header { align-items: flex-start; flex-direction: column; gap: 0.5rem; } .route-header nav { width: 100%; overflow-x: auto; } .route-header nav a { white-space: nowrap; } }
+.skip-link { position: fixed; top: 0.75rem; left: 0.75rem; z-index: 200; padding: 0.6rem 0.9rem; color: var(--route-paper); background: var(--route-ink); font-weight: 750; text-decoration: none; transform: translateY(-200%); }
+.skip-link:focus { transform: translateY(0); }
