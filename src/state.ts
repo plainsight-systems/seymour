@@ -41,7 +41,7 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
   const params = settingsToSearchParams(settings, operationId, lifecycleStageId);
-  history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
 }
 
 export function settingsToSearchParams(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): URLSearchParams {
