@@ -127,7 +127,12 @@ function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string):
     return box ? frontFace(box) : undefined;
   };
   if (m.weightsFraction > 0) b.label('weights', `${frontStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published', face('weights'));
-  if (m.kvFraction > 0) b.label('kv', `${frontStack}-kv`, 'left', `KV cache · ${formatBytes(Math.min(m.kvBytesInGpuMemory, m.usableBytes - m.weightBytes))}`, `${inputs.users} ${inputs.users === 1 ? 'user' : 'users'} × ${inputs.contextTokens.toLocaleString()} tokens of context`, 'published', face('kv'));
+  if (m.kvFraction > 0) {
+    const resident = m.kvFraction * m.physicalBytes;
+    const who = `${inputs.users} ${inputs.users === 1 ? 'user' : 'users'} × ${inputs.contextTokens.toLocaleString()} tokens`;
+    const detail = resident < m.kvBytesInGpuMemory ? `${who}; only ${formatBytes(resident)} fits here` : who;
+    b.label('kv', `${frontStack}-kv`, 'left', `KV cache · ${formatBytes(m.kvBytes)}`, detail, 'published', face('kv'));
+  }
   if (m.overflowBytes > 0) b.label('overflow', `${frontStack}-overflow`, 'left', `Doesn’t fit · ${formatBytes(m.overflowBytes)}`, 'this data must live off the package', 'published', face('overflow'));
   b.label('reserve', `${frontStack}-reserve`, 'left', 'Held back for the runtime', `${Math.round(m.reserveFraction * 100)}% of physical memory`, 'schematic', face('reserve'));
 }

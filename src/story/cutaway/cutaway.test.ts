@@ -136,4 +136,12 @@ describe('plates', () => {
     expect(unitPlate('h100-sxm', 4).defaultSelection).toEqual(steps[4]!.parts);
     expect(() => unitPlate('unknown', 0)).toThrow();
   });
+
+  it('labels the whole KV cache, not just the part that fits', () => {
+    const { inputs } = inputsFor({ batch: 64, sequenceLength: 16384 });
+    const kv = packagePlate(inputs).scene.labels.find((label) => label.part === 'kv')!;
+    expect(inputs.memory.overflowBytes).toBeGreaterThan(0);
+    expect(kv.title).toContain('137 GB');
+    expect(kv.detail).toMatch(/only .* fits here/);
+  });
 });
