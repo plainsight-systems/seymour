@@ -139,6 +139,16 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
   return '';
 }
 
+/** The model's own busy shares, to compare against a real trace. */
+function traceSignature(panel: StoryPanelSpec, inputs: CutawayInputs): string {
+  const job = panel.id === 'two-jobs' ? inputs.prefill : inputs.decode;
+  const label = panel.id === 'two-jobs' ? 'prompt step' : 'decode step';
+  const pct = (share: number) => { const value = Math.min(1, share) * 100; return value < 1 ? value.toFixed(1) : Math.round(value).toString(); };
+  const math = pct(job.computeMs / job.totalMs);
+  const memory = pct(job.memoryMs / job.totalMs);
+  return `This model’s ${label}: math busy ${math}% of the time, memory traffic busy ${memory}%. It assumes 55% of peak math and 72% of peak bandwidth; a trace far below those points to another limit, such as launch overhead or small kernels.`;
+}
+
 function jobCaption(inputs: CutawayInputs, job: 'prefill' | 'decode', settings: SimulationSettings): string {
   const a = inputs[job];
   const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
@@ -205,6 +215,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
       <p class="panel-claim">${panel.claim}</p>
       ${knobMarkup(panel, settings)}
       <div class="panel-surprise"><span>The surprise</span><p data-surprise></p></div>
+      <details class="panel-trace"><summary>In a profiler trace</summary><p>${panel.trace}</p><p class="panel-trace-model" data-trace-model></p><small>What to look for in a GPU timeline, for example from rocprofv3 or Nsight Systems. Qualitative expectations, not measured traces.</small></details>
     </div>
     <div class="panel-instrument">
       <div class="panel-stage">
@@ -255,6 +266,7 @@ function renderPanel(panel: StoryPanelSpec): void {
   const numbers = section.querySelector<HTMLElement>('[data-numbers]');
   if (numbers) renderPicture(numbers, picture, new Set(panel.numbers), { footer: false });
   section.querySelector<HTMLElement>('[data-surprise]')!.textContent = surprise(panel, picture, inputs, settings);
+  section.querySelector<HTMLElement>('[data-trace-model]')!.textContent = traceSignature(panel, inputs);
   for (const button of section.querySelectorAll<HTMLButtonElement>('[data-move]')) {
     const on = moveIsOn(settings, button.dataset.move as MoveEffect);
     button.setAttribute('aria-pressed', String(on));

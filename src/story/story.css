@@ -25,6 +25,11 @@
 .story-knob small { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--ink-soft); line-height: 1.4; }
 .panel-surprise { display: grid; gap: 0.35rem; padding-top: 1rem; }
 .panel-surprise span, .panel-moves > span { color: var(--red); font-size: 0.64rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.panel-trace { padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.panel-trace summary { min-height: 44px; display: flex; align-items: center; color: var(--red); font-size: 0.64rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+.panel-trace p { max-width: 44ch; margin: 0 0 0.6rem; font-size: 0.9rem; line-height: 1.5; }
+.panel-trace-model { color: var(--ink-soft); }
+.panel-trace small { display: block; max-width: 44ch; color: var(--ink-soft); font-size: 0.72rem; line-height: 1.4; }
 .panel-surprise p { max-width: 44ch; margin: 0; font-weight: 650; line-height: 1.55; }
 .panel-instrument { display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--paper-deep); }
 .panel-stage { display: grid; gap: 1rem; align-content: center; min-width: 0; padding: clamp(1.25rem, 3vw, 3rem); }
