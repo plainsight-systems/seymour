@@ -156,4 +156,15 @@ describe('plates', () => {
     expect(inputsFor({ modelId: 'qwen3-30b-a3b', batch: 1 }).inputs.weightsReadFraction).toBeLessThan(0.2);
     expect(inputsFor({ batch: 1 }).inputs.weightsReadFraction).toBe(1);
   });
+
+  it('labels busy shading as a share of time, not units in use', () => {
+    const { inputs } = inputsFor({ batch: 64 });
+    const labels = diePlate(inputs, { job: 'decode', detail: 'full' }).scene.labels;
+    const math = labels.find((label) => label.part === 'unit-busy')!;
+    const wait = labels.find((label) => label.part === 'unit-wait')!;
+    const pct = Math.round(inputs.decode.mathShare * 100);
+    expect(math.title).toBe(`Time on math · ${pct}%`);
+    expect(wait.title).toBe(`Time waiting on memory · ${100 - pct}%`);
+    expect(math.detail).toContain('all SMs work every step');
+  });
 });

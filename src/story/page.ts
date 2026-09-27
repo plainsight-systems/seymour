@@ -79,8 +79,13 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
     return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each token step waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
   }
   if (panel.id === 'share-read') {
-    const audience = settings.batch === 1 ? 'user receives' : 'users receive';
-    return `${settings.batch.toLocaleString()} ${audience} ${formatNumber(picture.totalTokensPerSecond)} tokens each second in total, while each user still advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s.`;
+    const solo = buildPictureModel(
+      calculateSimulation({ ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings)),
+      { ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings),
+    );
+    if (settings.batch === 1) return `One user gets the whole read to itself: ${formatNumber(picture.perUserTokensPerSecond)} tokens/s. Add users and watch both numbers below.`;
+    const kvShare = picture.kvBytes / (picture.kvBytes + picture.modelBytes);
+    return `${settings.batch.toLocaleString()} users get ${formatNumber(picture.totalTokensPerSecond)} tokens/s in total, ${formatNumber(picture.totalTokensPerSecond / solo.totalTokensPerSecond)}× what one user gets. But each user now advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s instead of ${formatNumber(solo.perUserTokensPerSecond)}: the ${formatBytes(picture.modelBytes)} model read is shared, while every user adds their own KV cache to read, now ${formatBytes(picture.kvBytes)} (${Math.round(kvShare * 100)}% of each step’s bytes).`;
   }
   if (panel.id === 'memory-wall') {
     return picture.overflowBytes > 0
@@ -115,7 +120,8 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
     return `Each generated token reads <b>${formatBytes(m.weightBytes + m.kvBytes)}</b> from these stacks: reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math takes <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
   }
   if (panel.id === 'share-read') {
-    return `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user gets one read to itself' : 'users share one read'}: reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math takes <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
+    const who = settings.batch === 1 ? 'One user' : `${settings.batch.toLocaleString()} users`;
+    return `${who}: each step reads <b>${formatBytes(inputs.memory.weightBytes)}</b> of model (shared) + <b>${formatBytes(inputs.memory.kvBytes)}</b> of KV (one cache per user). Reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
   }
   if (panel.id === 'memory-wall') {
     const total = m.weightBytes + m.kvBytes;

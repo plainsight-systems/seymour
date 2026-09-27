@@ -346,11 +346,19 @@ function computeDie(inputs: CutawayInputs, topology: ChipTopology, options: DieO
   };
 }
 
-function busyLabels(b: SceneBuilder, job: { busyUnits: number }, enabled: number, unitName: string): void {
+/**
+ * Every unit works on every step; the shading shows how the step's time
+ * splits between math and waiting for memory. Titles lead with the time
+ * share so the unit count is never read as "units in use".
+ */
+function busyLabels(b: SceneBuilder, job: { busyUnits: number; mathShare: number }, enabled: number, unitName: string): void {
   const busy = b.find((box) => box.part === 'unit-busy');
   const waiting = [...b.build().boxes].reverse().find((box) => box.part === 'unit-wait');
-  if (busy) b.label('unit-busy', busy.id, 'left', `Doing math · ${job.busyUnits} of ${enabled} ${unitName}`, 'the share of the step spent computing', 'published');
-  if (waiting) b.label('unit-wait', waiting.id, 'right', `Waiting on memory · ${enabled - job.busyUnits}`, 'shading is a share of time, not specific units', 'published');
+  const math = job.mathShare * 100;
+  const mathPct = math < 1 ? math.toFixed(1) : Math.round(math).toString();
+  const waitPct = math < 1 ? (100 - math).toFixed(1) : Math.round(100 - math).toString();
+  if (busy) b.label('unit-busy', busy.id, 'left', `Time on math · ${mathPct}%`, `drawn as ${job.busyUnits} of ${enabled} ${unitName}’ worth; all ${unitName} work every step`, 'published');
+  if (waiting) b.label('unit-wait', waiting.id, 'right', `Time waiting on memory · ${waitPct}%`, 'shading shows time, not which units', 'published');
 }
 
 // ---------------------------------------------------------------------------
