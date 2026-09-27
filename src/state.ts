@@ -39,7 +39,8 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const modelId = MODEL_PROFILES.some((profile) => profile.id === params.get('model')) ? params.get('model')! : DEFAULT_SETTINGS.modelId;
   const speculativeTokens = ([0, 2, 4] as const).find((k) => k === Number(params.get('spec'))) ?? DEFAULT_SETTINGS.speculativeTokens;
   const draftAcceptanceRate = DEFAULT_SETTINGS.draftAcceptanceRate;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, modelId, speculativeTokens, draftAcceptanceRate, attentionKernel, overlap, view };
+  const mathBits = params.get('math') === '8' ? 8 : 16;
+  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, modelId, speculativeTokens, draftAcceptanceRate, mathBits, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
@@ -62,6 +63,7 @@ export function settingsToSearchParams(settings: SimulationSettings, operationId
     placement: settings.kvPlacement,
     model: settings.modelId,
     spec: String(settings.speculativeTokens),
+    math: String(settings.mathBits),
     attention: settings.attentionKernel,
     view: settings.view,
   });

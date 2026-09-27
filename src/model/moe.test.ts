@@ -92,3 +92,29 @@ describe('speculative decoding', () => {
     expect(gain(qwen)).toBeLessThan(1.2);
   });
 });
+
+describe('8-bit matrix math', () => {
+  const hardware = getHardware('h100-sxm');
+  const w8 = { ...DEFAULT_MODEL, weightBits: 8 };
+
+  it('doubles the math ceiling for prompt work when weights are 8-bit', () => {
+    const base = { ...DEFAULT_SETTINGS, phase: 'prefill' as const, sequenceLength: 4096 };
+    const fp16 = calculateSimulation({ ...base, mathBits: 16 }, hardware, w8);
+    const fp8 = calculateSimulation({ ...base, mathBits: 8 }, hardware, w8);
+    expect(fp16.bottleneck).toBe('compute');
+    expect(fp16.computeMs / fp8.computeMs).toBeCloseTo(hardware.fp8DenseTflops / hardware.fp16DenseTflops, 6);
+  });
+
+  it('barely changes a memory-bound decode step', () => {
+    const base = { ...DEFAULT_SETTINGS, batch: 1 };
+    const fp16 = calculateSimulation({ ...base, mathBits: 16 }, hardware, w8);
+    const fp8 = calculateSimulation({ ...base, mathBits: 8 }, hardware, w8);
+    expect(fp8.totalMs).toBe(fp16.totalMs);
+  });
+
+  it('stays in FP16 when weights are 16-bit', () => {
+    const base = { ...DEFAULT_SETTINGS, phase: 'prefill' as const };
+    expect(calculateSimulation({ ...base, mathBits: 8 }, hardware, DEFAULT_MODEL).computeMs)
+      .toBe(calculateSimulation({ ...base, mathBits: 16 }, hardware, DEFAULT_MODEL).computeMs);
+  });
+});

@@ -27,6 +27,8 @@ export interface HardwareProfile {
   hbmCapacityGB: number;
   hbmBandwidthTBs: number;
   fp16DenseTflops: number;
+  /** Dense FP8 matrix peak (published figure without structured sparsity). */
+  fp8DenseTflops: number;
   lastLevelCacheMB: number;
   computeEfficiency: number;
   memoryEfficiency: number;
@@ -81,6 +83,8 @@ export interface SimulationSettings {
   speculativeTokens: 0 | 2 | 4;
   /** Assumed share of guessed tokens the model accepts (representative). */
   draftAcceptanceRate: number;
+  /** Precision of the matrix math. 8-bit math applies only when weights are 8-bit or smaller. */
+  mathBits: 16 | 8;
 }
 
 export interface LifecycleStage {

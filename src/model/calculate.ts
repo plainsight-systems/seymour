@@ -63,7 +63,7 @@ export function calculateSimulation(
     bytes = queryTokens === 0 ? 0 : weightPassBytes * prefillChunks + kvBytes + materializedAttentionBytes;
   }
 
-  const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
+  const effectiveCompute = matrixPeakTflops(hardware, settings, model) * TERA * hardware.computeEfficiency;
   const effectiveBandwidth = hardware.hbmBandwidthTBs * TERA * hardware.memoryEfficiency;
   const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA * settings.servingMemoryFraction;
   const kvInHbm = settings.kvPlacement === 'hbm';
@@ -166,6 +166,18 @@ export function calculateSimulation(
 }
 
 /**
+ * Peak matrix throughput for the selected math precision. FP8 math needs
+ * weights stored in 8 bits or fewer; otherwise the math stays in FP16.
+ */
+export function matrixPeakTflops(
+  hardware: HardwareProfile,
+  settings: Pick<SimulationSettings, 'mathBits'>,
+  model: Pick<ModelProfile, 'weightBits'>,
+): number {
+  return settings.mathBits === 8 && model.weightBits <= 8 ? hardware.fp8DenseTflops : hardware.fp16DenseTflops;
+}
+
+/**
  * Expected tokens produced per verify step with `k` guesses, each accepted
  * with probability `acceptance` until the first rejection, plus the one token
  * the verify pass always yields.
@@ -209,7 +221,7 @@ function findCrossoverBatch(
   if (settings.phase !== 'decode') return 1;
 
   const ridge =
-    (hardware.fp16DenseTflops * hardware.computeEfficiency) /
+    (matrixPeakTflops(hardware, settings, model) * hardware.computeEfficiency) /
     (hardware.hbmBandwidthTBs * hardware.memoryEfficiency);
   const kvBytesPerToken = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8);
   const flopsPerSequence =

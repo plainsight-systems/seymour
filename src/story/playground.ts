@@ -11,12 +11,12 @@ import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
-type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens';
+type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens' | 'mathBits';
 
 const CONTROL_NAMES: Record<ControlKey, string> = {
   batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
   reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', hardwareId: 'accelerator',
-  modelId: 'model', speculativeTokens: 'speculative decoding',
+  modelId: 'model', speculativeTokens: 'speculative decoding', mathBits: 'math precision',
 };
 
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
@@ -43,6 +43,7 @@ export function mountPlayground(root: HTMLElement): void {
         </fieldset>
         <fieldset><legend>Bytes</legend>
           <label><span>Model precision</span><select aria-label="Model precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
+          <label><span>Math precision</span><select aria-label="Math precision" data-control="mathBits"><option value="16">FP16</option><option value="8">FP8 (needs 8- or 4-bit weights)</option></select></label>
           <label><span>KV precision</span><select aria-label="KV precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
           <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt prefix</span></label>
           <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input aria-label="Prefix already available" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
@@ -68,7 +69,7 @@ export function mountPlayground(root: HTMLElement): void {
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
   challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
-  for (const key of ['batch', 'sequenceLength', 'modelId', 'speculativeTokens', 'weightBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
+  for (const key of ['batch', 'sequenceLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
   }
 
@@ -83,6 +84,7 @@ export function mountPlayground(root: HTMLElement): void {
     (controls.get('hardwareId') as HTMLSelectElement).value = settings.hardwareId;
     (controls.get('modelId') as HTMLSelectElement).value = settings.modelId;
     (controls.get('speculativeTokens') as HTMLSelectElement).value = String(settings.speculativeTokens);
+    (controls.get('mathBits') as HTMLSelectElement).value = String(settings.mathBits);
     root.querySelector<HTMLOutputElement>('[data-output="batch"]')!.value = settings.batch.toLocaleString();
     root.querySelector<HTMLOutputElement>('[data-output="sequenceLength"]')!.value = `${settings.sequenceLength.toLocaleString()} tokens`;
     root.querySelector<HTMLOutputElement>('[data-output="prefixCachePercent"]')!.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
@@ -93,6 +95,7 @@ export function mountPlayground(root: HTMLElement): void {
       if (control.disabled) locked.push(CONTROL_NAMES[key]);
     }
     if (!settings.reusePromptPrefixes) controls.get('prefixCachePercent')!.disabled = true;
+    if (settings.weightBits === 16) controls.get('mathBits')!.disabled = true;
     const note = root.querySelector<HTMLElement>('[data-lock-note]')!;
     note.hidden = locked.length === 0;
     note.textContent = `This challenge fixes ${locked.join(', ')}. Choose Free play to change them.`;
@@ -190,6 +193,8 @@ export function mountPlayground(root: HTMLElement): void {
       if (key === 'kvPlacement') settings.kvPlacement = control.value as KvPlacement;
       if (key === 'hardwareId') settings.hardwareId = control.value;
       if (key === 'modelId') settings.modelId = control.value;
+      if (key === 'mathBits') settings.mathBits = Number(control.value) as SimulationSettings['mathBits'];
+      if (key === 'weightBits' && settings.weightBits === 16) settings.mathBits = 16;
       if (key === 'speculativeTokens') settings.speculativeTokens = Number(control.value) as SimulationSettings['speculativeTokens'];
       syncControls();
       render();

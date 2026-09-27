@@ -174,6 +174,10 @@ function moveMarkup(move: StoryMove): string {
 function applyMove(settings: SimulationSettings, effect: MoveEffect, on: boolean): void {
   if (effect === 'kv8') settings.kvBits = on ? 8 : 16;
   if (effect === 'speculate') settings.speculativeTokens = on ? 4 : 0;
+  if (effect === 'fp8') {
+    settings.weightBits = on ? 8 : 16;
+    settings.mathBits = on ? 8 : 16;
+  }
   if (effect === 'prefixReuse') {
     settings.reusePromptPrefixes = on;
     settings.prefixCachePercent = on ? 75 : 0;
@@ -183,6 +187,7 @@ function applyMove(settings: SimulationSettings, effect: MoveEffect, on: boolean
 function moveIsOn(settings: SimulationSettings, effect: MoveEffect): boolean {
   if (effect === 'kv8') return settings.kvBits === 8;
   if (effect === 'speculate') return settings.speculativeTokens > 0;
+  if (effect === 'fp8') return settings.mathBits === 8 && settings.weightBits <= 8;
   return settings.reusePromptPrefixes && settings.prefixCachePercent > 0;
 }
 

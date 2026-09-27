@@ -1,7 +1,7 @@
 import type { PictureLayer } from './picture/model';
 
 /** A modeled move the reader can switch on in its panel. */
-export type MoveEffect = 'kv8' | 'prefixReuse' | 'speculate';
+export type MoveEffect = 'kv8' | 'prefixReuse' | 'speculate' | 'fp8';
 
 export interface StoryMove {
   title: string;
@@ -35,6 +35,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
     knobLabel: 'Prompt length', plate: 'die-pair', numbers: [],
     moves: [
       { title: 'Reuse a shared prompt', explanation: 'Assume 75% of the prompt is a prefix already processed for an earlier request, and skip that work.', modeled: true, effect: 'prefixReuse' },
+      { title: 'Run the math in 8 bits', explanation: 'Store weights in 8 bits and multiply in FP8, using the published FP8 ceiling. Accuracy is a tradeoff; scaling overheads are not modeled.', modeled: true, effect: 'fp8' },
       { title: 'Split a long prompt', explanation: 'Let other users’ tokens run between prompt pieces. The benefit depends on arrival timing, which this model does not simulate.', modeled: false },
       { title: 'Separate the jobs', explanation: 'Run prompt work and token generation on different machines.', modeled: false },
     ],
