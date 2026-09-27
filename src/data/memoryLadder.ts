@@ -19,6 +19,7 @@ const TERA = 1e12;
 
 export function buildMemoryLadder(hardware: HardwareProfile): MemoryTier[] {
   const nvidia = hardware.vendor === 'NVIDIA';
+  const switched = hardware.peerFabric === 'switched';
   return [
     {
       id: 'registers',
@@ -75,34 +76,34 @@ export function buildMemoryLadder(hardware: HardwareProfile): MemoryTier[] {
     {
       id: 'peer',
       label: 'Another GPU’s memory',
-      term: nvidia ? 'NVLink peer' : 'Infinity Fabric peer',
+      term: switched ? 'NVLink peer' : 'Infinity Fabric peer',
       capacityBytes: hardware.hbmCapacityGB * GIGA,
-      bandwidthBytesPerSecond: (nvidia ? 450 : 64) * GIGA,
+      bandwidthBytesPerSecond: hardware.peerEachWayGBs * GIGA,
       basis: 'published',
       sourceUrl: nvidia
         ? 'https://docs.nvidia.com/cuda/archive/12.3.0/pdf/Hopper_Tuning_Guide.pdf'
         : 'https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/data-sheets/amd-instinct-mi300x-platform-data-sheet.pdf',
       sourceLabel: nvidia ? 'NVIDIA Hopper tuning guide' : 'AMD MI300X platform data sheet',
-      note: nvidia
-        ? 'Through NVSwitch, one GPU can drive its full NVLink bandwidth (900 GB/s bidirectional, 450 each way) to a single peer.'
-        : 'Each MI300X has one direct Infinity Fabric link to each peer: 128 GB/s bidirectional, 64 each way.',
+      note: switched
+        ? `Through NVSwitch, one GPU can drive its full NVLink bandwidth (${hardware.peerEachWayGBs} GB/s each way) to a single peer.`
+        : `Each ${hardware.name} has one direct Infinity Fabric link to each peer: ${hardware.peerEachWayGBs} GB/s each way.`,
     },
     {
       id: 'peers',
       label: 'All seven peer GPUs’ memory',
-      term: nvidia ? 'NVLink, spread across peers' : 'Infinity Fabric, all seven links',
+      term: switched ? 'NVLink, spread across peers' : 'Infinity Fabric, all seven links',
       capacityBytes: 7 * hardware.hbmCapacityGB * GIGA,
       // Spreading KV across peers does not raise NVLink's per-GPU total; on a
       // fully connected MI300X platform it uses all seven links at once.
-      bandwidthBytesPerSecond: (nvidia ? 450 : 7 * 64) * GIGA,
+      bandwidthBytesPerSecond: (switched ? hardware.peerEachWayGBs : 7 * hardware.peerEachWayGBs) * GIGA,
       basis: 'published',
       sourceUrl: nvidia
         ? 'https://docs.nvidia.com/cuda/archive/12.3.0/pdf/Hopper_Tuning_Guide.pdf'
         : 'https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/data-sheets/amd-instinct-mi300x-platform-data-sheet.pdf',
       sourceLabel: nvidia ? 'NVIDIA Hopper tuning guide' : 'AMD MI300X platform data sheet',
-      note: nvidia
-        ? 'NVLink bandwidth is a per-GPU total, so spreading KV across peers stays at 450 GB/s each way.'
-        : 'Seven links × 64 GB/s each way = 448 GB/s when KV is striped across every peer.',
+      note: switched
+        ? `NVLink bandwidth is a per-GPU total, so spreading KV across peers stays at ${hardware.peerEachWayGBs} GB/s each way.`
+        : `Seven links × ${hardware.peerEachWayGBs} GB/s each way = ${Math.round(7 * hardware.peerEachWayGBs)} GB/s when KV is striped across every peer.`,
     },
     {
       id: 'ssd',

@@ -33,6 +33,12 @@ export interface HardwareProfile {
   computeEfficiency: number;
   memoryEfficiency: number;
   hostLinkGBs: number;
+  /** switched: every GPU reaches any peer through switch chips; direct: one link per peer. */
+  peerFabric: 'switched' | 'direct';
+  /** One-direction peer bandwidth: the per-GPU total when switched, per link when direct. */
+  peerEachWayGBs: number;
+  /** Whether Under the hood has reference kernel and instruction data for this chip. */
+  kernelModel: boolean;
   sourceUrl: string;
   sourceLabel: string;
   note: string;

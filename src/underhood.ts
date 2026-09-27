@@ -1,7 +1,10 @@
 import '@fontsource-variable/anybody';
 import '@fontsource-variable/public-sans';
 import './style.css';
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from './data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES as ALL_HARDWARE, getHardware } from './data/profiles';
+
+// The kernel microscope needs reference instruction data, which only some chips have.
+const HARDWARE_PROFILES = ALL_HARDWARE.filter((profile) => profile.kernelModel);
 import {
   calculateSimulation,
   decodeIterationCounts,

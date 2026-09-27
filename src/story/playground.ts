@@ -6,7 +6,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { CHALLENGES, getChallenge } from './challenges/data';
 import { evaluateChallenge, type Challenge, type ConstraintMetric, type KnobId } from './challenges/engine';
 import { buildCutawayInputs } from './cutaway/inputs';
-import { TILE_STEPS, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
+import { tileSteps, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
 import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
@@ -174,7 +174,7 @@ export function mountPlayground(root: HTMLElement): void {
   }
 
   function renderCutaway(): void {
-    const steps = TILE_STEPS[settings.hardwareId]!;
+    const steps = tileSteps(settings.hardwareId);
     tileStep = Math.min(tileStep, steps.length - 1);
     const stepsNode = root.querySelector<HTMLElement>('[data-tile-steps]')!;
     const textNode = root.querySelector<HTMLElement>('[data-tile-text]')!;

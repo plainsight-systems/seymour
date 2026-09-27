@@ -5,7 +5,7 @@ import { calculateSimulation } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { buildCutawayInputs } from './inputs';
-import { PLACEMENT_PART, TILE_STEPS, diePlate, packagePlate, serverPlate, unitPlate, unresolvedLabels } from './plates';
+import { PLACEMENT_PART, tileSteps, diePlate, packagePlate, serverPlate, unitPlate, unresolvedLabels } from './plates';
 import { project } from './project';
 
 const base: SimulationSettings = { ...DEFAULT_SETTINGS, phase: 'decode', kvPlacement: 'hbm' };
@@ -69,7 +69,7 @@ describe('plates', () => {
       packagePlate(inputs),
       diePlate(inputs, { job: 'decode', detail: 'full' }),
       diePlate(inputs, { job: 'prefill', detail: 'minimal' }),
-      ...TILE_STEPS[hardware.id]!.map((_, step) => unitPlate(hardware.id, step)),
+      ...tileSteps(hardware.id).map((_, step) => unitPlate(hardware.id, step)),
     ];
   });
 
@@ -132,7 +132,7 @@ describe('plates', () => {
   });
 
   it('highlights each step of the tile path', () => {
-    const steps = TILE_STEPS['h100-sxm']!;
+    const steps = tileSteps('h100-sxm');
     expect(unitPlate('h100-sxm', 4).defaultSelection).toEqual(steps[4]!.parts);
     expect(() => unitPlate('unknown', 0)).toThrow();
   });

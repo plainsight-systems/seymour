@@ -1,3 +1,4 @@
+import { getHardware } from '../../data/profiles';
 import { getTopology, type ChipTopology, type TopologySource } from '../../data/topology';
 import { formatBytes, formatNumber } from '../../model/calculate';
 import type { KvPlacement } from '../../types';
@@ -34,7 +35,7 @@ export const PLACEMENT_PART: Record<KvPlacement, string> = {
 export function serverPlate(inputs: CutawayInputs): Plate {
   const topology = getTopology(inputs.hardwareId);
   const b = new SceneBuilder();
-  const switched = topology.peerFabric === 'switched';
+  const switched = getHardware(inputs.hardwareId).peerFabric === 'switched';
   b.box({ id: 'baseboard', x: 0, y: 0, w: 46, d: 30, h: 0.8 });
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 4; col++) {
@@ -124,6 +125,11 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
 }
 
 /** Labels the fill on the front-most left stack, aiming at each segment's visible face. */
+function stackLabel(b: SceneBuilder, inputs: CutawayInputs, topology: ChipTopology, anchor: string): void {
+  const count = topology.stackCountBasis === 'derived' && topology.stackCountNote ? topology.stackCountNote : `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB`;
+  b.label('hbm', anchor, 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${count}, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, topology.stackCountBasis === 'derived' ? 'schematic' : 'published');
+}
+
 function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string): void {
   const m = inputs.memory;
   const face = (part: string) => {
@@ -178,8 +184,8 @@ function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate
     }
   }
   b.label('die', 'die', 'right', 'GPU die', `${topology.enabledUnits} of ${topology.physicalUnits} SMs enabled`, 'published');
-  b.label('hbm', 'hbm4-base', 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, 'published');
-  b.label('unused', `hbm${topology.hbmSites - 1}`, 'right', 'Unused site', `${topology.hbmSites} memory sites; ${topology.hbmActiveStacks} are used`, 'published');
+  stackLabel(b, inputs, topology, `hbm${topology.hbmSites - 2}-base`);
+  if (topology.hbmActiveStacks < topology.hbmSites) b.label('unused', `hbm${topology.hbmSites - 1}`, 'right', 'Unused site', `${topology.hbmSites} memory sites; ${topology.hbmActiveStacks} are used`, 'published');
   b.label('interposer', 'interposer', 'right', 'Silicon interposer', '1,024 wires per stack, millimeters long', 'published', [interposer.x + 4, interposer.y + interposer.d - 1.5, top]);
   fillLabels(b, inputs, `hbm${perSide - 1}`);
   b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and NVLink', 'published', [3, 44 - 2.5, 1.4]);
@@ -216,8 +222,8 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
   }
   const perCompute = topology.enabledUnits / topology.computeDies;
   b.label('compute-die', 'xcd3-0', 'right', `Compute dies · ${topology.computeDies}`, `${perCompute} CUs enabled on each; ${topology.enabledUnits} total`, 'published');
-  b.label('io', 'io1', 'right', `I/O dies · ${topology.ioDies}`, 'hold the 256 MB Infinity Cache', 'published');
-  b.label('hbm', 'hbm7-base', 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, 'published');
+  b.label('io', 'io1', 'right', `I/O dies · ${topology.ioDies}`, `hold the ${getHardware(inputs.hardwareId).lastLevelCacheMB} MB Infinity Cache`, 'published');
+  stackLabel(b, inputs, topology, `hbm${topology.hbmSites - 1}-base`);
   fillLabels(b, inputs, `hbm${perSide - 1}`);
   b.label('interposer', 'interposer', 'left', 'Silicon interposer', 'joins the I/O dies to each other and to their memory', 'published', [interposer.x + 3, interposer.y + interposer.d - 1.5, interposer.z + interposer.h]);
   b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and Infinity Fabric', 'published', [3, 46 - 2.5, 1.4]);
@@ -289,7 +295,7 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
     b.label('unit-off', `unit${lastDead}`, 'left', 'Disabled SM', `${topology.physicalUnits - topology.enabledUnits} of ${topology.physicalUnits} are off; positions vary per chip`, 'published');
     b.label('cluster', 'cluster3', 'right', `Cluster of ${topology.unitsPerCluster} SMs`, `${clusters} clusters on the die`, 'published');
     b.label('l2', 'l2-b', 'right', `L2 cache · ${topology.l2MBPerComputeDie} MB`, 'shared by every SM, in two halves', 'published');
-    b.label('mc', 'mc2', 'left', 'Memory controllers', `${topology.memoryControllersActive} of ${controllers} active: two per memory stack`, 'published');
+    if (controllers > 0) b.label('mc', 'mc2', 'left', 'Memory controllers', `${topology.memoryControllersActive} of ${controllers} active: two per memory stack`, 'published');
   }
   return {
     id: 'die', scene: b.build(), defaultSelection: [], litPath: null,
@@ -352,28 +358,33 @@ export interface TileStep {
   parts: string[];
 }
 
-export const TILE_STEPS: Record<string, TileStep[]> = {
-  'h100-sxm': [
-    { title: 'GPU memory', text: 'Weights and KV cache start in the memory stacks beside the die (package plate).', parts: [] },
-    { title: 'L2 cache', text: 'The tile passes through the 50 MB L2 shared by every SM (die plate).', parts: [] },
-    { title: 'Shared memory', text: 'The Tensor Memory Accelerator copies the tile into this SM’s scratchpad: up to 228 KB.', parts: ['smem', 'tma'] },
-    { title: 'Registers', text: 'Each quadrant loads its piece into a 64 KB register file, the only place the math can read from.', parts: ['registers'] },
-    { title: 'Tensor cores', text: 'The multiply-accumulate happens here. Results go back to registers, then out.', parts: ['matrix'] },
-  ],
-  mi300x: [
+/** The path one tile of weights takes, from memory to the matrix units, for a chip. */
+export function tileSteps(hardwareId: string): TileStep[] {
+  const hardware = getHardware(hardwareId);
+  const topology = getTopology(hardwareId);
+  if (topology.computeDies === 1) {
+    return [
+      { title: 'GPU memory', text: 'Weights and KV cache start in the memory stacks beside the die (package plate).', parts: [] },
+      { title: 'L2 cache', text: `The tile passes through the ${hardware.l2CacheMB} MB L2 shared by every SM (die plate).`, parts: [] },
+      { title: 'Shared memory', text: `The Tensor Memory Accelerator copies the tile into this SM’s scratchpad: up to ${hardware.sharedMemoryKB} KB.`, parts: ['smem', 'tma'] },
+      { title: 'Registers', text: `Each quadrant loads its piece into a ${hardware.registerFileKB / topology.unitPartitions} KB register file, the only place the math can read from.`, parts: ['registers'] },
+      { title: 'Tensor cores', text: 'The multiply-accumulate happens here. Results go back to registers, then out.', parts: ['matrix'] },
+    ];
+  }
+  return [
     { title: 'GPU memory', text: 'Weights and KV cache start in the memory stacks beside the I/O dies (package plate).', parts: [] },
-    { title: 'Infinity Cache', text: '256 MB on the I/O dies, shared by all eight compute dies.', parts: [] },
-    { title: 'L2 cache', text: '4 MB on this compute die, shared by its CUs (die plate).', parts: [] },
-    { title: 'Local Data Share', text: 'The tile is staged in this CU’s 64 KB scratchpad.', parts: ['smem'] },
-    { title: 'Registers', text: 'Each SIMD loads its piece into registers: 512 KB across the CU.', parts: ['registers'] },
+    { title: 'Infinity Cache', text: `${hardware.lastLevelCacheMB} MB on the I/O dies, shared by all ${topology.computeDies} compute dies.`, parts: [] },
+    { title: 'L2 cache', text: `${topology.l2MBPerComputeDie} MB on this compute die, shared by its CUs (die plate).`, parts: [] },
+    { title: 'Local Data Share', text: `The tile is staged in this CU’s ${hardware.sharedMemoryKB} KB scratchpad.`, parts: ['smem'] },
+    { title: 'Registers', text: `Each SIMD loads its piece into registers: ${hardware.registerFileKB} KB across the CU.`, parts: ['registers'] },
     { title: 'Matrix cores', text: 'The multiply-accumulate happens here. Results go back to registers, then out.', parts: ['matrix'] },
-  ],
-};
+  ];
+}
 
 export function unitPlate(hardwareId: string, tileStep: number): Plate {
   const topology = getTopology(hardwareId);
-  const steps = TILE_STEPS[hardwareId];
-  if (!steps) throw new Error(`No tile path for hardware "${hardwareId}"`);
+  const hardware = getHardware(hardwareId);
+  const steps = tileSteps(hardwareId);
   const step = steps[Math.max(0, Math.min(steps.length - 1, tileStep))]!;
   const b = new SceneBuilder();
   if (topology.computeDies === 1) {
@@ -392,10 +403,10 @@ export function unitPlate(hardwareId: string, tileStep: number): Plate {
     b.box({ id: 'smem', part: 'smem', x: 1, y: 18.2, w: 18.5, d: 4.8, h: 1.4, z: 0.8, fill: 'leaf', layer: 2 });
     b.box({ id: 'tma', part: 'tma', x: 20.5, y: 18.2, w: 4.5, d: 4.8, h: 1.0, z: 0.8, fill: 'slate', layer: 2 });
     b.label('matrix', 'matrix1', 'right', 'Tensor core', `${topology.unitPartitions} per SM: the matrix math`, 'published');
-    b.label('registers', 'registers1', 'right', 'Register file · 64 KB', 'per quadrant; 256 KB per SM', 'published');
+    b.label('registers', 'registers1', 'right', `Register file · ${hardware.registerFileKB / topology.unitPartitions} KB`, `per quadrant; ${hardware.registerFileKB} KB per SM`, 'published');
     b.label('lanes', 'lane0-4', 'left', `${topology.vectorLanesPerPartition} vector lanes`, 'per quadrant, for non-matrix math', 'published');
     b.label('scheduler', 'scheduler2', 'left', 'Warp scheduler', 'picks which 32 threads run next', 'published');
-    b.label('smem', 'smem', 'left', 'Shared memory · up to 228 KB', 'the scratchpad for tiles', 'published');
+    b.label('smem', 'smem', 'left', `Shared memory · up to ${hardware.sharedMemoryKB} KB`, 'the scratchpad for tiles', 'published');
     b.label('tma', 'tma', 'right', 'Tensor Memory Accelerator', 'copies tiles into shared memory', 'published');
   } else {
     b.box({ id: 'cu', x: 0, y: 0, w: 26, d: 22, h: 0.8 });
@@ -411,9 +422,9 @@ export function unitPlate(hardwareId: string, tileStep: number): Plate {
     b.box({ id: 'smem', part: 'smem', x: 1, y: 15.2, w: 14, d: 5.6, h: 1.4, z: 0.8, fill: 'leaf', layer: 2 });
     b.box({ id: 'l1', part: 'l1', x: 16, y: 15.2, w: 9, d: 5.6, h: 1.0, z: 0.8, fill: 'slate', layer: 2 });
     b.label('matrix', 'matrix1', 'right', 'Matrix core', `${topology.unitPartitions} per CU: the matrix math`, 'published');
-    b.label('registers', 'registers3', 'right', 'Vector registers', '512 KB per CU', 'published');
+    b.label('registers', 'registers3', 'right', 'Vector registers', `${hardware.registerFileKB} KB per CU`, 'published');
     b.label('lanes', 'lane0-1', 'left', `SIMD units · ${topology.unitPartitions}`, 'vector lanes; 64 threads per wavefront (lanes drawn schematically)', 'schematic');
-    b.label('smem', 'smem', 'left', 'Local Data Share · 64 KB', 'the scratchpad for tiles', 'published');
+    b.label('smem', 'smem', 'left', `Local Data Share · ${hardware.sharedMemoryKB} KB`, 'the scratchpad for tiles', 'published');
     b.label('l1', 'l1', 'right', 'L1 cache · 32 KB', 'per CU', 'published');
   }
   return {

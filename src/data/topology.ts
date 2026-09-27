@@ -20,12 +20,14 @@ export interface ChipTopology {
   hbmSites: number;
   hbmActiveStacks: number;
   hbmGBPerStack: number;
+  /** 'derived' when the vendor states capacity but not the stack count. */
+  stackCountBasis: 'published' | 'derived';
+  stackCountNote?: string;
   /** Drawn only where the vendor publishes the count. */
   memoryControllers?: number;
   memoryControllersActive?: number;
   l2MBPerComputeDie: number;
   peerCount: number;
-  peerFabric: 'switched' | 'direct';
   /** Inside one compute unit. */
   unitPartitions: number;
   /** Published only where a vendor document states it. */
@@ -64,11 +66,11 @@ export const TOPOLOGIES: ChipTopology[] = [
     hbmSites: 6,
     hbmActiveStacks: 5,
     hbmGBPerStack: 16,
+    stackCountBasis: 'published',
     memoryControllers: 12,
     memoryControllersActive: 10,
     l2MBPerComputeDie: 50,
     peerCount: 7,
-    peerFabric: 'switched',
     unitPartitions: 4,
     vectorLanesPerPartition: 32,
     sources: [HOPPER_WHITEPAPER],
@@ -86,9 +88,9 @@ export const TOPOLOGIES: ChipTopology[] = [
     hbmSites: 8,
     hbmActiveStacks: 8,
     hbmGBPerStack: 24,
+    stackCountBasis: 'published',
     l2MBPerComputeDie: 4,
     peerCount: 7,
-    peerFabric: 'direct',
     // 1,216 matrix cores across 304 CUs: four SIMD units, each with a matrix core.
     unitPartitions: 4,
     sources: [ROCM_MI300, ROCM_SPECS, CDNA3_ANALYSIS],
