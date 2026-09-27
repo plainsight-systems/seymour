@@ -175,7 +175,8 @@ function platesFor(panel: StoryPanelSpec, inputs: CutawayInputs): Map<string, Pl
 
 function moveMarkup(move: StoryMove): string {
   const body = `<b>${move.title}</b><p>${move.explanation}</p>`;
-  if (move.effect) return `<li><button type="button" class="move-toggle" data-move="${move.effect}" aria-pressed="false">${body}<small data-modeled="true"><span data-move-state>Try it: off</span></small></button></li>`;
+  // A real on/off switch: the state reads Off or On, never an instruction.
+  if (move.effect) return `<li><button type="button" class="move-toggle" role="switch" data-move="${move.effect}" aria-checked="false">${body}<span class="move-switch"><i aria-hidden="true"></i><span data-move-state>Off</span></span></button></li>`;
   const tag = move.viaKnob ? 'the knob above' : move.modeled ? 'shown below the plate' : 'not modeled';
   return `<li>${body}<small data-modeled="${move.modeled}">${tag}</small></li>`;
 }
@@ -225,7 +226,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
         ${LEGEND}
         <p class="panel-hint">Click any part or label to pair them.</p>
       </div>
-      <div class="panel-moves"><span>The moves</span><ul>${panel.moves.map(moveMarkup).join('')}</ul></div>
+      <div class="panel-moves"><span>The moves${panel.moves.some((move) => move.effect) ? '<small>Switch one on to apply it to the plate</small>' : ''}</span><ul>${panel.moves.map(moveMarkup).join('')}</ul></div>
     </div>
   </section>`;
 }
@@ -269,8 +270,8 @@ function renderPanel(panel: StoryPanelSpec): void {
   section.querySelector<HTMLElement>('[data-trace-model]')!.textContent = traceSignature(panel, inputs);
   for (const button of section.querySelectorAll<HTMLButtonElement>('[data-move]')) {
     const on = moveIsOn(settings, button.dataset.move as MoveEffect);
-    button.setAttribute('aria-pressed', String(on));
-    button.querySelector('[data-move-state]')!.textContent = on ? 'Applied · click to undo' : 'Try it: off';
+    button.setAttribute('aria-checked', String(on));
+    button.querySelector('[data-move-state]')!.textContent = on ? 'On' : 'Off';
   }
   const output = section.querySelector<HTMLOutputElement>('.story-knob output');
   if (output) output.value = panel.id === 'share-read' || panel.id === 'heavier-tokens' ? settings.batch.toLocaleString() : `${settings.sequenceLength.toLocaleString()} tokens`;
