@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL } from '../data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS } from '../data/profiles';
 import { buildAlgorithmSteps } from './algorithm';
 
 describe('buildAlgorithmSteps', () => {
   const settings = {
+    ...DEFAULT_SETTINGS,
     phase: 'decode' as const,
     hardwareId: 'h100-sxm',
     batch: 4,
     sequenceLength: 4096,
+    prefixCachePercent: 0,
+    outputLength: 32,
     weightBits: 16 as const,
     kvBits: 16 as const,
     attentionKernel: 'fused' as const,

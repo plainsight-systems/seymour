@@ -3,6 +3,7 @@ export type ViewMode = 'story' | 'hardware';
 export type WeightBits = 4 | 8 | 16;
 export type KvBits = 8 | 16;
 export type AttentionKernel = 'fused' | 'separate';
+export type LifecycleStageId = 'request' | 'prefix' | 'prefill' | 'kv-ready' | 'first-token' | 'decode' | 'stream' | 'release';
 export type HardwareStage = 'host' | 'hbm' | 'l2' | 'shared' | 'registers' | 'compute';
 export type KernelTrack = 'runtime' | 'memory' | 'execution';
 export type KernelPhaseKind = 'submit' | 'host-transfer' | 'hbm-load' | 'stage' | 'compute' | 'sync' | 'store';
@@ -56,11 +57,32 @@ export interface SimulationSettings {
   hardwareId: string;
   batch: number;
   sequenceLength: number;
+  prefixCachePercent: number;
+  outputLength: number;
+  prefixCaching: boolean;
+  chunkedPrefill: boolean;
+  maxNumBatchedTokens: number;
+  gpuMemoryUtilization: number;
   weightBits: WeightBits;
   kvBits: KvBits;
   attentionKernel: AttentionKernel;
   overlap: boolean;
   view: ViewMode;
+}
+
+export interface LifecycleStage {
+  id: LifecycleStageId;
+  number: string;
+  label: string;
+  title: string;
+  summary: string;
+  equation: string;
+  metricLabel: string;
+  metricValue: string;
+  phase: Phase;
+  hardwareStage: HardwareStage;
+  hasTransformerWork: boolean;
+  skipped?: boolean;
 }
 
 export interface SimulationResult {
@@ -88,6 +110,9 @@ export interface SimulationResult {
   spilledKvBytes: number;
   crossoverBatch: number | null;
   batchLimitArithmeticIntensity: number;
+  usableHbmCapacityBytes: number;
+  prefillChunks: number;
+  prefillChunkTokens: number;
 }
 
 export interface AlgorithmStep {

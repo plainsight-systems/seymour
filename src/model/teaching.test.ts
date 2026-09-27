@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL, getHardware } from '../data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../data/profiles';
 import type { SimulationSettings } from '../types';
 import { buildAlgorithmSteps } from './algorithm';
 import { calculateSimulation } from './calculate';
@@ -17,10 +17,13 @@ function guidesFor(settings: SimulationSettings) {
 
 describe('buildTeachingGuide', () => {
   const settings: SimulationSettings = {
+    ...DEFAULT_SETTINGS,
     phase: 'decode',
     hardwareId: 'h100-sxm',
     batch: 8,
     sequenceLength: 32768,
+    prefixCachePercent: 0,
+    outputLength: 32,
     weightBits: 16,
     kvBits: 16,
     attentionKernel: 'fused',

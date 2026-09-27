@@ -5,7 +5,12 @@ export function buildAlgorithmSteps(
   model: ModelProfile,
 ): AlgorithmStep[] {
   const b = settings.batch;
-  const tq = settings.phase === 'prefill' ? settings.sequenceLength : 1;
+  const cachedTokens = settings.prefixCaching ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+  const uncachedTokens = Math.max(1, settings.sequenceLength - cachedTokens);
+  const chunkTokens = settings.chunkedPrefill
+    ? Math.max(1, Math.min(uncachedTokens, Math.floor(settings.maxNumBatchedTokens / settings.batch)))
+    : uncachedTokens;
+  const tq = settings.phase === 'prefill' ? chunkTokens : 1;
   const tk = settings.sequenceLength;
   const d = model.hiddenSize;
   const h = model.attentionHeads;

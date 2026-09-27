@@ -10,13 +10,22 @@ export function calculateSimulation(
 ): SimulationResult {
   const batch = Math.max(1, Math.round(settings.batch));
   const sequence = Math.max(1, Math.round(settings.sequenceLength));
+  const cachedTokens = settings.phase === 'prefill' && settings.prefixCaching
+    ? Math.min(sequence, Math.round(sequence * settings.prefixCachePercent / 100))
+    : 0;
+  const queryTokens = settings.phase === 'prefill' ? sequence - cachedTokens : 1;
+  const prefillChunkTokens = settings.phase === 'prefill' && settings.chunkedPrefill
+    ? Math.max(1, Math.min(queryTokens || 1, Math.floor(settings.maxNumBatchedTokens / batch)))
+    : Math.max(1, queryTokens || 1);
+  const prefillChunks = settings.phase === 'prefill' && queryTokens > 0
+    ? Math.ceil(queryTokens / prefillChunkTokens)
+    : 0;
   const weightBytes = model.parametersB * GIGA * (model.weightBits / 8);
   const kvBytesPerToken = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8);
   const kvFootprintBytes = kvBytesPerToken * sequence * batch;
 
   const denseFlopsPerToken = 2 * model.parametersB * GIGA;
   const attentionFlops = 4 * model.layers * model.hiddenSize * sequence;
-  const queryTokens = settings.phase === 'prefill' ? sequence : 1;
   const attentionScoreBytes = batch * model.attentionHeads * queryTokens * sequence * (model.kvBits / 8);
   // A separate QK -> softmax -> PV schedule writes scores, reads and writes
   // probabilities, then reads them again. A fused attention kernel keeps that
@@ -34,22 +43,25 @@ export function calculateSimulation(
     kvBytes = kvFootprintBytes;
     bytes = weightBytes + kvBytes + batch * kvBytesPerToken + materializedAttentionBytes;
   } else {
-    flops = batch * (denseFlopsPerToken * sequence + 4 * model.layers * model.hiddenSize * sequence ** 2);
+    flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * model.hiddenSize * queryTokens * sequence);
     kvBytes = kvFootprintBytes;
-    // The fused first-order model reads weights once and writes the completed KV cache.
-    bytes = weightBytes + kvBytes + materializedAttentionBytes;
+    // A prefix hit leaves only the uncached suffix to process. That suffix still
+    // attends over the complete cached-plus-new context.
+    bytes = queryTokens === 0 ? 0 : weightBytes * prefillChunks + kvBytes + materializedAttentionBytes;
   }
 
   const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
   const effectiveBandwidth = hardware.hbmBandwidthTBs * TERA * hardware.memoryEfficiency;
-  const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA;
+  const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA * settings.gpuMemoryUtilization;
   const spilledWeightBytes = Math.max(0, weightBytes - hbmCapacityBytes);
   const hbmAfterWeights = Math.max(0, hbmCapacityBytes - weightBytes);
   const spilledKvBytes = Math.max(0, kvFootprintBytes - hbmAfterWeights);
   const weightSpillFraction = weightBytes > 0 ? spilledWeightBytes / weightBytes : 0;
   const kvSpillFraction = kvFootprintBytes > 0 ? spilledKvBytes / kvFootprintBytes : 0;
-  const hostTrafficBytes =
-    weightBytes * weightSpillFraction + kvBytes * kvSpillFraction;
+  const weightTrafficBytes = settings.phase === 'prefill' ? weightBytes * prefillChunks : weightBytes;
+  const hostTrafficBytes = bytes === 0
+    ? 0
+    : weightTrafficBytes * weightSpillFraction + kvBytes * kvSpillFraction;
   const hbmTrafficBytes = Math.max(0, bytes - hostTrafficBytes);
   const computeSeconds = flops / effectiveCompute;
   const hbmSeconds = hbmTrafficBytes / effectiveBandwidth;
@@ -63,7 +75,7 @@ export function calculateSimulation(
     : hostSeconds > hbmSeconds
       ? 'host'
       : 'memory';
-  const tokenCount = settings.phase === 'decode' ? batch : batch * sequence;
+  const tokenCount = settings.phase === 'decode' ? batch : batch * queryTokens;
   const modelFootprintBytes = weightBytes + kvFootprintBytes;
   const flopsPerSequence = denseFlopsPerToken + attentionFlops;
   const kvTrafficPerSequence = kvBytesPerToken * (sequence + 1);
@@ -73,14 +85,14 @@ export function calculateSimulation(
   // it clear when batching cannot reach the hardware ridge at this context.
   const batchLimitArithmeticIntensity = settings.phase === 'decode'
     ? flopsPerSequence / (kvTrafficPerSequence + materializedAttentionPerSequence)
-    : flops / bytes;
+    : bytes > 0 ? flops / bytes : 0;
 
   return {
     flops,
     bytes,
     weightBytes,
     kvBytes,
-    arithmeticIntensity: flops / bytes,
+    arithmeticIntensity: bytes > 0 ? flops / bytes : 0,
     ridgePoint: effectiveCompute / effectiveBandwidth,
     computeMs: computeSeconds * 1000,
     memoryMs: memorySeconds * 1000,
@@ -94,7 +106,7 @@ export function calculateSimulation(
     kvBytesPerToken,
     kvFootprintBytes,
     modelFootprintBytes,
-    hbmUsedFraction: modelFootprintBytes / (hardware.hbmCapacityGB * GIGA),
+    hbmUsedFraction: modelFootprintBytes / hbmCapacityBytes,
     hbmTrafficBytes,
     attentionMaterializationBytes: materializedAttentionBytes,
     hostTrafficBytes,
@@ -103,6 +115,9 @@ export function calculateSimulation(
     spilledKvBytes,
     crossoverBatch: findCrossoverBatch(settings, hardware, model),
     batchLimitArithmeticIntensity,
+    usableHbmCapacityBytes: hbmCapacityBytes,
+    prefillChunks,
+    prefillChunkTokens,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL, getHardware } from '../data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../data/profiles';
 import type { SimulationSettings } from '../types';
 import { buildAlgorithmSteps } from './algorithm';
 import { calculateSimulation } from './calculate';
@@ -7,7 +7,9 @@ import { buildKernelPlan } from './kernels';
 
 function scenario(hardwareId: string, overrides: Partial<SimulationSettings> = {}) {
   const settings: SimulationSettings = {
+    ...DEFAULT_SETTINGS,
     phase: 'decode', hardwareId, batch: 128, sequenceLength: 4096,
+    prefixCachePercent: 0, outputLength: 32,
     weightBits: 16, kvBits: 16, attentionKernel: 'fused',
     overlap: true, view: 'hardware', ...overrides,
   };
