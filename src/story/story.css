@@ -140,6 +140,13 @@
 .playground-controls .playground-check span { justify-content: start; }
 .playground-workbench { min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); }
 .playground-workbench > [data-playground-picture] { display: grid; place-items: center; margin-top: 1rem; }
+.playground-response { display: grid; gap: 0.6rem; margin-top: 1rem; padding: 1rem; color: var(--paper); background: var(--green); }
+.playground-response h3 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.1rem; }
+.playground-response > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+.playground-response p { display: grid; gap: 0.15rem; margin: 0; }
+.playground-response span { color: var(--mustard); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.playground-response strong { font-family: 'Anybody Variable', sans-serif; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.playground-response small { color: color-mix(in oklch, var(--paper) 75%, transparent); font-size: 0.68rem; }
 .playground-cutaway { display: grid; gap: 0.75rem; padding: 1rem; border: 1px solid var(--ink); background: var(--paper); }
 .playground-plate-tabs, .playground-tile { display: flex; flex-wrap: wrap; gap: 0; }
 .playground-plate-tabs button, .playground-tile button { min-height: 44px; padding: 0 0.9rem; color: var(--ink); border: 1px solid var(--ink); background: var(--paper); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 750; }

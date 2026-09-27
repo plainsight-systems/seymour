@@ -276,3 +276,32 @@ export function decodeIterationCounts(outputLength: number): { firstToken: numbe
   const total = Math.max(1, Math.round(outputLength));
   return { firstToken: 1, repeated: total - 1, total };
 }
+
+export interface ResponseTiming {
+  /** Prompt processing produces the first token. */
+  firstTokenMs: number;
+  /** Per-token time for one user, priced at the answer's midpoint context. */
+  msPerToken: number;
+  /** First token plus the remaining tokens of the answer. */
+  fullAnswerMs: number;
+  /** GPU time spent per 1,000 generated tokens across every concurrent user. */
+  gpuSecondsPer1kTokens: number;
+}
+
+/**
+ * End-to-end timing for an answer of `outputLength` tokens. The KV cache grows
+ * while the answer is written, so decode is priced once at the midpoint
+ * context (prompt + half the answer) rather than at the prompt length.
+ */
+export function responseTiming(settings: SimulationSettings, hardware: HardwareProfile, model: ModelProfile): ResponseTiming {
+  const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, model);
+  const midpoint = Math.round(settings.sequenceLength + settings.outputLength / 2);
+  const decode = calculateSimulation({ ...settings, phase: 'decode', sequenceLength: midpoint }, hardware, model);
+  const remaining = Math.max(0, settings.outputLength - 1);
+  return {
+    firstTokenMs: prefill.totalMs,
+    msPerToken: decode.msPerToken,
+    fullAnswerMs: prefill.totalMs + remaining * decode.msPerToken,
+    gpuSecondsPer1kTokens: 1000 / Math.max(decode.tokenRate, Number.EPSILON),
+  };
+}

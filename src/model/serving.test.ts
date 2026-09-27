@@ -118,3 +118,26 @@ describe('8-bit matrix math', () => {
       .toBe(calculateSimulation({ ...base, mathBits: 16 }, hardware, DEFAULT_MODEL).computeMs);
   });
 });
+
+describe('response timing', () => {
+  it('prices a long answer at its midpoint context and adds it to the first token', async () => {
+    const { responseTiming } = await import('./calculate');
+    const hardware = getHardware('h100-sxm');
+    const settings = { ...DEFAULT_SETTINGS, batch: 8, sequenceLength: 4096, outputLength: 2048 };
+    const timing = responseTiming(settings, hardware, DEFAULT_MODEL);
+    const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, DEFAULT_MODEL);
+    const mid = calculateSimulation({ ...settings, sequenceLength: 4096 + 1024 }, hardware, DEFAULT_MODEL);
+    expect(timing.firstTokenMs).toBe(prefill.totalMs);
+    expect(timing.fullAnswerMs).toBeCloseTo(prefill.totalMs + 2047 * mid.msPerToken, 9);
+    expect(timing.gpuSecondsPer1kTokens).toBeCloseTo(1000 / mid.tokenRate, 12);
+  });
+
+  it('makes long answers dominate the response time', async () => {
+    const { responseTiming } = await import('./calculate');
+    const hardware = getHardware('h100-sxm');
+    const short = responseTiming({ ...DEFAULT_SETTINGS, outputLength: 32 }, hardware, DEFAULT_MODEL);
+    const long = responseTiming({ ...DEFAULT_SETTINGS, outputLength: 8192 }, hardware, DEFAULT_MODEL);
+    expect(long.fullAnswerMs - long.firstTokenMs).toBeGreaterThan(10 * long.firstTokenMs);
+    expect(short.fullAnswerMs).toBeLessThan(long.fullAnswerMs);
+  });
+});

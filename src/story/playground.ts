@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../data/profiles';
-import { calculateSimulation, formatDuration, formatNumber } from '../model/calculate';
+import { calculateSimulation, formatDuration, formatNumber, responseTiming } from '../model/calculate';
 import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
@@ -11,15 +11,24 @@ import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
-type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens' | 'mathBits';
+type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens' | 'mathBits' | 'outputLength';
+
+/** Answer lengths, up to long reasoning-style answers. */
+const ANSWER_LENGTHS = [1, 32, 128, 512, 2048, 8192];
 
 const CONTROL_NAMES: Record<ControlKey, string> = {
   batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
   reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', hardwareId: 'accelerator',
-  modelId: 'model', speculativeTokens: 'speculative decoding', mathBits: 'math precision',
+  modelId: 'model', speculativeTokens: 'speculative decoding', mathBits: 'math precision', outputLength: 'answer length',
 };
 
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
+
+function nearestIndex(choices: number[], value: number): number {
+  let best = 0;
+  choices.forEach((choice, index) => { if (Math.abs(choice - value) < Math.abs(choices[best]! - value)) best = index; });
+  return best;
+}
 
 export function mountPlayground(root: HTMLElement): void {
   // Open in free play: every knob is live until the reader accepts a challenge.
@@ -36,6 +45,7 @@ export function mountPlayground(root: HTMLElement): void {
         <fieldset><legend>Workload</legend>
           <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
+          <label><span>Answer length <output data-output="outputLength"></output></span><input aria-label="Answer length" data-control="outputLength" type="range" min="0" max="${ANSWER_LENGTHS.length - 1}" step="1"></label>
         </fieldset>
         <fieldset><legend>Model + decoding</legend>
           <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.name.split(' · ')[0]}</option>`).join('')}</select></label>
@@ -61,6 +71,7 @@ export function mountPlayground(root: HTMLElement): void {
           <p class="panel-caption" data-tile-text hidden></p>
           <ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>
         </section>
+        <section class="playground-response" data-response aria-label="Response timing"></section>
         <div data-playground-picture></div>
         <section class="challenge-board" data-challenge-board></section>
       </div>
@@ -69,7 +80,7 @@ export function mountPlayground(root: HTMLElement): void {
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
   challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
-  for (const key of ['batch', 'sequenceLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
+  for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
   }
 
@@ -87,6 +98,8 @@ export function mountPlayground(root: HTMLElement): void {
     (controls.get('mathBits') as HTMLSelectElement).value = String(settings.mathBits);
     root.querySelector<HTMLOutputElement>('[data-output="batch"]')!.value = settings.batch.toLocaleString();
     root.querySelector<HTMLOutputElement>('[data-output="sequenceLength"]')!.value = `${settings.sequenceLength.toLocaleString()} tokens`;
+    (controls.get('outputLength') as HTMLInputElement).value = String(nearestIndex(ANSWER_LENGTHS, settings.outputLength));
+    root.querySelector<HTMLOutputElement>('[data-output="outputLength"]')!.value = `${settings.outputLength.toLocaleString()} tokens`;
     root.querySelector<HTMLOutputElement>('[data-output="prefixCachePercent"]')!.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
 
     const locked: string[] = [];
@@ -135,8 +148,21 @@ export function mountPlayground(root: HTMLElement): void {
     const result = calculateSimulation(settings, hardware, model);
     const picture = buildPictureModel(result, settings, hardware, model);
     renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'throughput', 'distanceLadder']));
+    renderResponse(hardware, model);
     renderCutaway();
     renderChallenge();
+  }
+
+  function renderResponse(hardware: ReturnType<typeof getHardware>, model: ReturnType<typeof modelFor>): void {
+    const timing = responseTiming(settings, hardware, model);
+    const node = root.querySelector<HTMLElement>('[data-response]')!;
+    const metric = (label: string, value: string, note: string) => `<p><span>${label}</span><strong>${value}</strong><small>${note}</small></p>`;
+    node.innerHTML = `<h3>One answer of ${settings.outputLength.toLocaleString()} tokens</h3><div>${[
+      metric('First token', formatDuration(timing.firstTokenMs), 'prompt processing'),
+      metric('Each token after', formatDuration(timing.msPerToken), 'priced at the answer’s midpoint context'),
+      metric('Full answer', formatDuration(timing.fullAnswerMs), `first token + ${Math.max(0, settings.outputLength - 1).toLocaleString()} more`),
+      metric('GPU time per 1K tokens', `${formatNumber(timing.gpuSecondsPer1kTokens)} s`, settings.batch === 1 ? 'for one user' : `across all ${settings.batch.toLocaleString()} users`),
+    ].join('')}</div>`;
   }
 
   function currentPlate(): Plate {
@@ -186,6 +212,7 @@ export function mountPlayground(root: HTMLElement): void {
     control.addEventListener('input', () => {
       if (key === 'batch') settings.batch = batchFromSlider(Number(control.value));
       if (key === 'sequenceLength') settings.sequenceLength = sequenceFromSlider(Number(control.value));
+      if (key === 'outputLength') settings.outputLength = ANSWER_LENGTHS[Number(control.value)]!;
       if (key === 'weightBits') settings.weightBits = Number(control.value) as SimulationSettings['weightBits'];
       if (key === 'kvBits') settings.kvBits = Number(control.value) as SimulationSettings['kvBits'];
       if (key === 'reusePromptPrefixes') settings.reusePromptPrefixes = (control as HTMLInputElement).checked;
