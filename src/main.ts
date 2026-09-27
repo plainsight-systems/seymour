@@ -1,7 +1,7 @@
 import '@fontsource-variable/anybody';
 import '@fontsource-variable/public-sans';
 import './router.css';
-import { resolveRoute } from './router';
+import { isRouteChange, resolveRoute } from './router';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
@@ -32,8 +32,22 @@ async function boot(): Promise<void> {
   } else {
     document.title = 'Seymour — feed the machine';
     await import('./story/page');
+    if (resolved.anchor) scrollToAnchor(resolved.anchor);
   }
 }
 
-window.addEventListener('hashchange', () => window.location.reload());
+function scrollToAnchor(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ block: 'start' });
+}
+
+window.addEventListener('hashchange', (event) => {
+  const fromHash = new URL(event.oldURL).hash;
+  const toHash = window.location.hash;
+  if (isRouteChange(fromHash, toHash, window.location.search)) {
+    window.location.reload();
+    return;
+  }
+  const { anchor } = resolveRoute(toHash, window.location.search);
+  if (anchor) scrollToAnchor(anchor);
+});
 void boot();
