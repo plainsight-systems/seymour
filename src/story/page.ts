@@ -27,6 +27,7 @@ function defaultsFor(panelId: string): SimulationSettings {
   // Moves start switched off so each one visibly changes the plate when applied.
   const base = { ...DEFAULT_SETTINGS, phase: 'decode' as const, kvPlacement: 'hbm' as const, kvBits: 16 as const, reusePromptPrefixes: false, prefixCachePercent: 0 };
   if (panelId === 'memory-wall' || panelId === 'distance') return { ...base, batch: 64, sequenceLength: 4096 };
+  if (panelId === 'heavier-tokens') return { ...base, modelId: 'qwen3-30b-a3b', batch: 1, sequenceLength: 2048 };
   return base;
 }
 
@@ -60,7 +61,7 @@ function knobMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string
   if (panel.id === 'read-model') {
     return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select><small>Fewer bits mean fewer bytes per weight.</small></label>`;
   }
-  if (panel.id === 'share-read') {
+  if (panel.id === 'share-read' || panel.id === 'heavier-tokens') {
     return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="10" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
   }
   return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="kvPlacement"><option value="hbm">GPU memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="host">System memory</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select><small>The model prices this read on every generated token.</small></label>`;
@@ -86,6 +87,23 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
       ? `The model plus KV exceed the serving budget by ${formatBytes(picture.overflowBytes)}. That overflow has to live off the package, behind a far slower link.`
       : `The KV cache is ${formatNumber(picture.kvBytes / picture.modelBytes)}× the model’s size at this setting. Push the context longer to find the wall.`;
   }
+  if (panel.id === 'heavier-tokens') {
+    const read = inputs.memory.weightBytes * inputs.weightsReadFraction;
+    const experts = Math.round(inputs.expertsTouchedFraction * 100);
+    const who = `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'}`;
+    const discount = inputs.expertsTouchedFraction > 0.95
+      ? 'With this many users nearly every expert is touched, so each step reads almost the whole model: the experts discount is gone, and sharing the read is what pays.'
+      : 'Add users and watch the discount shrink as more experts are touched.';
+    let spec = '';
+    if (settings.speculativeTokens > 0) {
+      const off = buildCutawayInputs({ ...settings, speculativeTokens: 0 }, getHardware(settings.hardwareId), modelFor(settings));
+      const moreRead = inputs.weightsReadFraction / off.weightsReadFraction;
+      spec = moreRead > 1.2
+        ? ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step, but checking ${settings.speculativeTokens + 1} tokens touches ${Math.round(inputs.expertsTouchedFraction * 100)}% of the experts instead of ${Math.round(off.expertsTouchedFraction * 100)}%, so each step reads ${formatNumber(moreRead)}× more. Per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}: on a dense model the same trick pays far more.`
+        : ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step for nearly the same read, so per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}.`;
+    }
+    return `With ${who}, each step reads ${formatBytes(read)} of the model’s ${formatBytes(inputs.memory.weightBytes)}: ${experts}% of the experts. ${discount}${spec}`;
+  }
   const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), modelFor(settings));
   if (settings.kvPlacement === 'hbm') return `Every token re-reads ${formatBytes(picture.kvBytes)} of KV. Keeping each step at ${formatDuration(hbm.totalMs)} needs about ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s for the KV alone. Now move it.`;
   return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${PLACEMENT_PHRASE[settings.kvPlacement]}.`;
@@ -105,6 +123,12 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
       ? `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b>. <strong class="cw-warn">Only ${formatBytes(m.usableBytes)} is usable: ${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>`
       : `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b> of ${formatBytes(m.usableBytes)} usable.`;
     return `${fill} Each token: <b>${formatDuration(inputs.decode.totalMs)}</b>. Reading all ${settings.batch} prompts: <b>${formatDuration(inputs.prefill.totalMs)}</b>.`;
+  }
+  if (panel.id === 'heavier-tokens') {
+    const read = m.weightBytes * inputs.weightsReadFraction;
+    const spec = settings.speculativeTokens > 0 ? ` <b>${formatNumber(inputs.tokensPerStep)}</b> tokens per step per user.` : '';
+    const overflow = m.overflowBytes > 0 ? ` <strong class="cw-warn">${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>` : '';
+    return `Stored: <b>${formatBytes(m.weightBytes)}</b>. Read per step: <b>${formatBytes(read)}</b> (${Math.round(inputs.expertsTouchedFraction * 100)}% of experts, assuming uniform routing).${spec} Each token: <b>${formatDuration(inputs.msPerToken)}</b>.${overflow}`;
   }
   if (panel.id === 'distance') {
     const tier = inputs.tiers[settings.kvPlacement];
@@ -149,6 +173,7 @@ function moveMarkup(move: StoryMove): string {
 /** Applies or removes a modeled move on a panel's settings. */
 function applyMove(settings: SimulationSettings, effect: MoveEffect, on: boolean): void {
   if (effect === 'kv8') settings.kvBits = on ? 8 : 16;
+  if (effect === 'speculate') settings.speculativeTokens = on ? 4 : 0;
   if (effect === 'prefixReuse') {
     settings.reusePromptPrefixes = on;
     settings.prefixCachePercent = on ? 75 : 0;
@@ -156,7 +181,9 @@ function applyMove(settings: SimulationSettings, effect: MoveEffect, on: boolean
 }
 
 function moveIsOn(settings: SimulationSettings, effect: MoveEffect): boolean {
-  return effect === 'kv8' ? settings.kvBits === 8 : settings.reusePromptPrefixes && settings.prefixCachePercent > 0;
+  if (effect === 'kv8') return settings.kvBits === 8;
+  if (effect === 'speculate') return settings.speculativeTokens > 0;
+  return settings.reusePromptPrefixes && settings.prefixCachePercent > 0;
 }
 
 function panelMarkup(panel: StoryPanelSpec): string {
@@ -168,7 +195,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
   return `<section class="concept-panel" id="${panel.id}" data-panel="${panel.id}" aria-labelledby="title-${panel.id}">
     <div class="panel-narrative">
       <span class="panel-number">${panel.number}</span>
-      <p class="panel-kicker">Concept ${Number(panel.number) + 1} of 5</p>
+      <p class="panel-kicker">Concept ${Number(panel.number) + 1} of ${STORY_PANELS.length}</p>
       <h2 id="title-${panel.id}">${panel.title}</h2>
       <p class="panel-claim">${panel.claim}</p>
       ${knobMarkup(panel, settings)}
@@ -190,7 +217,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
 root.innerHTML = `<div class="story-page">
   <header class="story-hero">
     <div><p>Inference performance, from first principles</p><h1>Before the jargon,<br><em>follow the cost.</em></h1></div>
-    <div class="story-hero-copy"><p>A GPU does not run “an AI model” as one mysterious act. It moves bytes, schedules work, and repeats a small number of expensive operations. Five knobs, and a look inside the chip, are enough to see why the bottleneck moves—on NVIDIA H100 or AMD MI300X; switch on any panel.</p><nav aria-label="Story concepts">${STORY_PANELS.map((panel) => `<a href="#${panel.id}"><span>${panel.number}</span>${panel.title}</a>`).join('')}</nav></div>
+    <div class="story-hero-copy"><p>A GPU does not run “an AI model” as one mysterious act. It moves bytes, schedules work, and repeats a small number of expensive operations. Six knobs, and a look inside the chip, are enough to see why the bottleneck moves—on NVIDIA H100 or AMD MI300X; switch on any panel.</p><nav aria-label="Story concepts">${STORY_PANELS.map((panel) => `<a href="#${panel.id}"><span>${panel.number}</span>${panel.title}</a>`).join('')}</nav></div>
   </header>
   ${STORY_PANELS.map(panelMarkup).join('')}
   <section class="story-next"><span>Now use the whole instrument</span><h2>Prove the mental model under pressure.</h2><p>The playground combines every knob, lets you zoom from the server down to one compute unit on either chip, and gives you three constraints to beat.</p><p class="story-assumption">${EFFICIENCY_NOTE}</p><div><a href="#playground">Open the playground ↓</a><a href="#/under-the-hood">Go under the hood →</a><a href="#/lookup">Find the names →</a></div></section>
@@ -229,7 +256,7 @@ function renderPanel(panel: StoryPanelSpec): void {
     button.querySelector('[data-move-state]')!.textContent = on ? 'Applied · click to undo' : 'Try it: off';
   }
   const output = section.querySelector<HTMLOutputElement>('.story-knob output');
-  if (output) output.value = panel.id === 'share-read' ? settings.batch.toLocaleString() : `${settings.sequenceLength.toLocaleString()} tokens`;
+  if (output) output.value = panel.id === 'share-read' || panel.id === 'heavier-tokens' ? settings.batch.toLocaleString() : `${settings.sequenceLength.toLocaleString()} tokens`;
 }
 
 for (const panel of STORY_PANELS) {

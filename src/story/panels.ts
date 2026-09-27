@@ -1,7 +1,7 @@
 import type { PictureLayer } from './picture/model';
 
 /** A modeled move the reader can switch on in its panel. */
-export type MoveEffect = 'kv8' | 'prefixReuse';
+export type MoveEffect = 'kv8' | 'prefixReuse' | 'speculate';
 
 export interface StoryMove {
   title: string;
@@ -77,6 +77,16 @@ export const STORY_PANELS: StoryPanelSpec[] = [
       { title: 'Keep active state near the math', explanation: 'Token generation rereads it on every step.', modeled: true, viaKnob: true },
       { title: 'Park idle state farther away', explanation: 'Restore it when a session resumes if that beats rebuilding the prompt.', modeled: true },
       { title: 'Prefetch before use', explanation: 'Hide some transfer time when the next request is predictable.', modeled: false },
+    ],
+  },
+  {
+    id: 'heavier-tokens', number: '05', title: 'Change what one read buys',
+    claim: 'A mixture-of-experts model reads only the experts each token needs, and speculative decoding turns one read into several tokens. Both change how much useful work comes back from one trip through memory.',
+    knobLabel: 'Concurrent users', plate: 'package', numbers: ['throughput'],
+    moves: [
+      { title: 'Speculate 4 tokens ahead', explanation: 'Guess 4 tokens from the prompt text and check them in one step. Assumes 70% of guesses are accepted; the cost of guessing is not modeled.', modeled: true, effect: 'speculate' },
+      { title: 'Take steps together', explanation: 'More users touch more experts, so each step reads more of the model.', modeled: true, viaKnob: true },
+      { title: 'Spread experts across GPUs', explanation: 'Put different experts on different GPUs, trading memory for all-to-all traffic between them.', modeled: false },
     ],
   },
 ];

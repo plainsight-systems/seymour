@@ -106,8 +106,10 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
     return;
   }
   const m = inputs.memory;
+  const idle = m.weightsFraction * (1 - inputs.weightsReadFraction);
   const parts: [number, Fill, string, boolean][] = [
-    [m.weightsFraction, 'green', 'weights', false],
+    [m.weightsFraction - idle, 'green', 'weights', false],
+    [idle, 'leaf', 'weights-idle', false],
     [m.kvFraction, 'mustard', 'kv', false],
     [m.freeFraction, 'paperBright', 'free', false],
     [m.reserveFraction, 'paperDeep', 'reserve', true],
@@ -128,7 +130,13 @@ function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string):
     const box = b.find((candidate) => candidate.id === `${frontStack}-${part}`);
     return box ? frontFace(box) : undefined;
   };
-  if (m.weightsFraction > 0) b.label('weights', `${frontStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published', face('weights'));
+  if (m.weightsFraction > 0 && inputs.weightsReadFraction >= 0.999) {
+    b.label('weights', `${frontStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published', face('weights'));
+  } else if (m.weightsFraction > 0) {
+    const read = m.weightBytes * inputs.weightsReadFraction;
+    b.label('weights', `${frontStack}-weights`, 'left', `Read this step · ${formatBytes(read)}`, `shared weights + ${Math.round(inputs.expertsTouchedFraction * 100)}% of experts (uniform routing)`, 'representative', face('weights'));
+    b.label('weights-idle', `${frontStack}-weights-idle`, 'left', `Experts not needed · ${formatBytes(m.weightBytes - read)}`, 'stored here, not read this step', 'representative', face('weights-idle'));
+  }
   if (m.kvFraction > 0) {
     const resident = m.kvFraction * m.physicalBytes;
     const who = `${inputs.users} ${inputs.users === 1 ? 'user' : 'users'} × ${inputs.contextTokens.toLocaleString()} tokens`;

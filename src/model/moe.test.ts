@@ -81,4 +81,14 @@ describe('speculative decoding', () => {
     expect(on.bottleneck).toBe('compute');
     expect(on.msPerToken).toBeGreaterThan(off.msPerToken);
   });
+
+  it('pays far less on an MoE model at one user, because guesses touch more experts', () => {
+    const gain = (model: typeof qwen) => {
+      const off = calculateSimulation(base, hardware, model);
+      const on = calculateSimulation({ ...base, speculativeTokens: 4 }, hardware, model);
+      return off.msPerToken / on.msPerToken;
+    };
+    expect(gain(DEFAULT_MODEL)).toBeGreaterThan(2);
+    expect(gain(qwen)).toBeLessThan(1.2);
+  });
 });

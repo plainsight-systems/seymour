@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/profiles';
+import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/profiles';
 import { getTopology } from '../../data/topology';
 import { calculateSimulation } from '../../model/calculate';
-import { applySoftwareStrategy } from '../../model/strategy';
+import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { buildCutawayInputs } from './inputs';
 import { PLACEMENT_PART, TILE_STEPS, diePlate, packagePlate, serverPlate, unitPlate, unresolvedLabels } from './plates';
@@ -13,7 +13,7 @@ const base: SimulationSettings = { ...DEFAULT_SETTINGS, phase: 'decode', kvPlace
 function inputsFor(overrides: Partial<SimulationSettings> = {}) {
   const settings = { ...base, ...overrides };
   const hardware = getHardware(settings.hardwareId);
-  const model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+  const model = modelFor(settings);
   return { inputs: buildCutawayInputs(settings, hardware, model), settings, hardware, model };
 }
 
@@ -143,5 +143,17 @@ describe('plates', () => {
     expect(inputs.memory.overflowBytes).toBeGreaterThan(0);
     expect(kv.title).toContain('137 GB');
     expect(kv.detail).toMatch(/only .* fits here/);
+  });
+
+  it('splits MoE weights into read and not-read segments from the model', () => {
+    for (const batch of [1, 8, 256]) {
+      const { inputs } = inputsFor({ modelId: 'qwen3-30b-a3b', sequenceLength: 2048, batch });
+      const plate = packagePlate(inputs);
+      expect(unresolvedLabels(plate.scene)).toEqual([]);
+      const idle = plate.scene.boxes.some((box) => box.part === 'weights-idle');
+      expect(idle).toBe(inputs.weightsReadFraction < 0.999);
+    }
+    expect(inputsFor({ modelId: 'qwen3-30b-a3b', batch: 1 }).inputs.weightsReadFraction).toBeLessThan(0.2);
+    expect(inputsFor({ batch: 1 }).inputs.weightsReadFraction).toBe(1);
   });
 });

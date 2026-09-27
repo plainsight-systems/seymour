@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
+import { DEFAULT_SETTINGS, HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber } from '../model/calculate';
 import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
@@ -11,11 +11,12 @@ import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
-type ControlKey = KnobId | 'hardwareId';
+type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens';
 
 const CONTROL_NAMES: Record<ControlKey, string> = {
   batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
   reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', hardwareId: 'accelerator',
+  modelId: 'model', speculativeTokens: 'speculative decoding',
 };
 
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
@@ -35,6 +36,10 @@ export function mountPlayground(root: HTMLElement): void {
         <fieldset><legend>Workload</legend>
           <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
+        </fieldset>
+        <fieldset><legend>Model + decoding</legend>
+          <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.name.split(' · ')[0]}</option>`).join('')}</select></label>
+          <label><span>Speculative decoding</span><select aria-label="Speculative decoding" data-control="speculativeTokens"><option value="0">Off</option><option value="2">Guess 2 tokens ahead</option><option value="4">Guess 4 tokens ahead</option></select></label>
         </fieldset>
         <fieldset><legend>Bytes</legend>
           <label><span>Model precision</span><select aria-label="Model precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
@@ -63,7 +68,7 @@ export function mountPlayground(root: HTMLElement): void {
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
   challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
-  for (const key of ['batch', 'sequenceLength', 'weightBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
+  for (const key of ['batch', 'sequenceLength', 'modelId', 'speculativeTokens', 'weightBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
   }
 
@@ -76,6 +81,8 @@ export function mountPlayground(root: HTMLElement): void {
     (controls.get('prefixCachePercent') as HTMLInputElement).value = String(prefixCacheToSlider(settings.prefixCachePercent));
     (controls.get('kvPlacement') as HTMLSelectElement).value = settings.kvPlacement;
     (controls.get('hardwareId') as HTMLSelectElement).value = settings.hardwareId;
+    (controls.get('modelId') as HTMLSelectElement).value = settings.modelId;
+    (controls.get('speculativeTokens') as HTMLSelectElement).value = String(settings.speculativeTokens);
     root.querySelector<HTMLOutputElement>('[data-output="batch"]')!.value = settings.batch.toLocaleString();
     root.querySelector<HTMLOutputElement>('[data-output="sequenceLength"]')!.value = `${settings.sequenceLength.toLocaleString()} tokens`;
     root.querySelector<HTMLOutputElement>('[data-output="prefixCachePercent"]')!.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
@@ -182,6 +189,8 @@ export function mountPlayground(root: HTMLElement): void {
       if (key === 'prefixCachePercent') settings.prefixCachePercent = prefixCacheFromSlider(Number(control.value));
       if (key === 'kvPlacement') settings.kvPlacement = control.value as KvPlacement;
       if (key === 'hardwareId') settings.hardwareId = control.value;
+      if (key === 'modelId') settings.modelId = control.value;
+      if (key === 'speculativeTokens') settings.speculativeTokens = Number(control.value) as SimulationSettings['speculativeTokens'];
       syncControls();
       render();
     });

@@ -33,6 +33,12 @@ export interface MemoryFill {
 
 export interface CutawayInputs {
   hardwareId: string;
+  /** Share of stored weight bytes read in one decode step (below 1 only for MoE). */
+  weightsReadFraction: number;
+  expertsTouchedFraction: number;
+  isMoe: boolean;
+  tokensPerStep: number;
+  msPerToken: number;
   hardwareName: string;
   hbmPeakBytesPerSecond: number;
   users: number;
@@ -76,6 +82,11 @@ export function buildCutawayInputs(settings: SimulationSettings, hardware: Hardw
 
   return {
     hardwareId: hardware.id,
+    weightsReadFraction: Math.min(1, decode.weightReadBytes / decode.weightBytes),
+    expertsTouchedFraction: decode.expertsTouchedFraction,
+    isMoe: Boolean(model.moe),
+    tokensPerStep: decode.tokensPerStep,
+    msPerToken: decode.msPerToken,
     hardwareName: hardware.name,
     hbmPeakBytesPerSecond: hardware.hbmBandwidthTBs * 1e12,
     users: settings.batch,
