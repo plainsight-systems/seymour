@@ -79,6 +79,17 @@ describe('calculateSimulation', () => {
     expect(result.bottleneck).toBe('host');
   });
 
+  it('prices host reads with the one-direction PCIe Gen5 x16 ceiling', () => {
+    const result = calculateSimulation(
+      { ...defaults, phase: 'decode', batch: 256, sequenceLength: 32768 },
+      hardware,
+      DEFAULT_MODEL,
+    );
+
+    expect(hardware.hostLinkGBs).toBe(64);
+    expect(result.hostMs).toBeCloseTo(result.hostTrafficBytes / 64e9 * 1000, 8);
+  });
+
   it('shows byte-level software strategies changing memory pressure without changing FLOPs', () => {
     const base = { ...defaults, phase: 'decode' as const, batch: 8, sequenceLength: 4096 };
     const fp16 = calculateSimulation(base, hardware, DEFAULT_MODEL);

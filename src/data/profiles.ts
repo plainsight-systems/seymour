@@ -22,10 +22,10 @@ export const HARDWARE_PROFILES: HardwareProfile[] = [
     lastLevelCacheMB: 50,
     computeEfficiency: 0.55,
     memoryEfficiency: 0.72,
-    hostLinkGBs: 128,
+    hostLinkGBs: 64,
     sourceUrl: 'https://www.nvidia.com/en-us/data-center/h100/',
     sourceLabel: 'NVIDIA H100 product specifications',
-    note: 'FP16 dense peak is half the published structured-sparsity figure.',
+    note: 'FP16 dense peak is half the published structured-sparsity figure. Host traffic uses the one-direction PCIe Gen5 x16 ceiling.',
   },
   {
     id: 'mi300x',
@@ -48,10 +48,10 @@ export const HARDWARE_PROFILES: HardwareProfile[] = [
     lastLevelCacheMB: 256,
     computeEfficiency: 0.55,
     memoryEfficiency: 0.72,
-    hostLinkGBs: 128,
+    hostLinkGBs: 64,
     sourceUrl: 'https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html',
     sourceLabel: 'AMD Instinct MI300X specifications',
-    note: 'Peak theoretical FP16 and HBM figures; 256 MB is Infinity Cache.',
+    note: 'Peak theoretical FP16 and HBM figures; 256 MB is Infinity Cache. Host traffic uses the one-direction PCIe Gen5 x16 ceiling.',
   },
 ];
 
