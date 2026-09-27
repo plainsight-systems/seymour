@@ -118,6 +118,8 @@
 .playground-controls output { color: var(--red); font-weight: 800; }
 .playground-controls select { width: 100%; min-height: 44px; padding: 0 0.5rem; color: var(--ink); border: 1px solid var(--ink); border-radius: 0; background: var(--paper); }
 .playground-controls input { min-height: 44px; accent-color: var(--red); }
+.playground-lock { color: var(--red); font-size: 0.72rem; font-weight: 700; line-height: 1.4; }
+.playground-lock[hidden] { display: none; }
 .playground-controls select:disabled, .playground-controls input:disabled { cursor: not-allowed; opacity: 0.4; }
 .playground-controls .playground-check { grid-template-columns: auto 1fr; align-items: center; }
 .playground-controls .playground-check span { justify-content: start; }

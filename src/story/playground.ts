@@ -13,11 +13,17 @@ import { renderPicture } from './picture/render';
 
 type ControlKey = KnobId | 'hardwareId';
 
+const CONTROL_NAMES: Record<ControlKey, string> = {
+  batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
+  reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', hardwareId: 'accelerator',
+};
+
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
 
 export function mountPlayground(root: HTMLElement): void {
-  let settings: SimulationSettings = { ...getChallenge('chatbot').naive };
-  let selectedChallenge: Challenge | null = getChallenge('chatbot');
+  // Open in free play: every knob is live until the reader accepts a challenge.
+  let settings: SimulationSettings = { ...DEFAULT_SETTINGS };
+  let selectedChallenge: Challenge | null = null;
   let plateId: PlateId = 'package';
   let tileStep = 0;
   let cutaway: CutawayView | null = null;
@@ -25,7 +31,7 @@ export function mountPlayground(root: HTMLElement): void {
   root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints.</p></header>
     <div class="playground-shell">
       <aside class="playground-controls">
-        <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">${challenge.title}</option>`).join('')}</select></label>
+        <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">Challenge: ${challenge.title}</option>`).join('')}</select><small class="playground-lock" data-lock-note hidden></small></label>
         <fieldset><legend>Workload</legend>
           <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
@@ -55,7 +61,7 @@ export function mountPlayground(root: HTMLElement): void {
     </div>`;
 
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
-  challengeSelect.value = selectedChallenge.id;
+  challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
   for (const key of ['batch', 'sequenceLength', 'weightBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
@@ -74,10 +80,15 @@ export function mountPlayground(root: HTMLElement): void {
     root.querySelector<HTMLOutputElement>('[data-output="sequenceLength"]')!.value = `${settings.sequenceLength.toLocaleString()} tokens`;
     root.querySelector<HTMLOutputElement>('[data-output="prefixCachePercent"]')!.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
 
+    const locked: string[] = [];
     for (const [key, control] of controls) {
       control.disabled = selectedChallenge !== null && !selectedChallenge.adjustable.includes(key as KnobId);
+      if (control.disabled) locked.push(CONTROL_NAMES[key]);
     }
     if (!settings.reusePromptPrefixes) controls.get('prefixCachePercent')!.disabled = true;
+    const note = root.querySelector<HTMLElement>('[data-lock-note]')!;
+    note.hidden = locked.length === 0;
+    note.textContent = `This challenge fixes ${locked.join(', ')}. Choose Free play to change them.`;
   }
 
   function metricLabel(metric: ConstraintMetric): string {
