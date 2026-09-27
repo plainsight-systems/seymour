@@ -7,6 +7,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { STORY_PANELS, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
+import { mountPlayground } from './playground';
 
 const root = document.querySelector<HTMLElement>('#route-root');
 if (!root) throw new Error('Missing #route-root');
@@ -70,7 +71,7 @@ root.innerHTML = `<div class="story-page">
   </header>
   ${STORY_PANELS.map(panelMarkup).join('')}
   <section class="story-next"><span>Now use the whole instrument</span><h2>Prove the mental model under pressure.</h2><p>The playground combines every knob and gives you three constraints to beat. Or inspect the hardware path inside one step.</p><div><a href="#playground">Open the playground ↓</a><a href="#/under-the-hood">Go under the hood →</a><a href="#/lookup">Find the names →</a></div></section>
-  <section id="playground" class="playground-placeholder"><span>Playground arrives next</span><p>The tested challenge engine is ready; its controls and readout are the next implementation step.</p></section>
+  <section id="playground" class="playground"></section>
 </div>`;
 
 function renderPanel(panel: StoryPanelSpec): void {
@@ -100,3 +101,5 @@ for (const panel of STORY_PANELS) {
   });
   renderPanel(panel);
 }
+
+mountPlayground(root.querySelector<HTMLElement>('#playground')!);
