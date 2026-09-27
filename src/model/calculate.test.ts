@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../data/profiles';
-import { calculateSimulation, decodeIterationCounts } from './calculate';
+import { calculateSimulation, decodeIterationCounts, restoreVsRecompute } from './calculate';
 
 describe('calculateSimulation', () => {
   const hardware = getHardware('h100-sxm');
@@ -143,6 +143,84 @@ describe('calculateSimulation', () => {
     expect(conservative.hostTrafficBytes).toBeGreaterThan(0);
     expect(generous.hostTrafficBytes).toBe(0);
     expect(conservative.usableHbmCapacityBytes).toBeLessThan(generous.usableHbmCapacityBytes);
+  });
+
+  it('pins HBM placement to the pre-placement model outputs', () => {
+    const scenarios = [
+      { name: 'default', settings: { ...defaults } },
+      { name: 'batch 64', settings: { ...defaults, batch: 64 } },
+      { name: '32K context', settings: { ...defaults, sequenceLength: 32768 } },
+    ].map(({ name, settings }) => {
+      const result = calculateSimulation(settings, hardware, DEFAULT_MODEL);
+      return {
+        name,
+        totalMs: result.totalMs,
+        computeMs: result.computeMs,
+        memoryMs: result.memoryMs,
+        hbmTrafficBytes: result.hbmTrafficBytes,
+        hostTrafficBytes: result.hostTrafficBytes,
+        hbmUsedFraction: result.hbmUsedFraction,
+      };
+    });
+
+    expect(scenarios).toMatchInlineSnapshot(`
+      [
+        {
+          "computeMs": 0.03345580164086545,
+          "hbmTrafficBytes": 16597001983.999998,
+          "hbmUsedFraction": 0.23051209599999997,
+          "hostTrafficBytes": 0,
+          "memoryMs": 6.881012431177445,
+          "name": "default",
+          "totalMs": 6.881012431177445,
+        },
+        {
+          "computeMs": 2.141171305015389,
+          "hbmTrafficBytes": 50428126976,
+          "hbmUsedFraction": 0.700274144,
+          "hostTrafficBytes": 0,
+          "memoryMs": 20.90718365505804,
+          "name": "batch 64",
+          "totalMs": 20.90718365505804,
+        },
+        {
+          "computeMs": 0.0610774388975148,
+          "hbmTrafficBytes": 20355098368,
+          "hbmUsedFraction": 0.2827078791111111,
+          "hostTrafficBytes": 0,
+          "memoryMs": 8.439095509121062,
+          "name": "32K context",
+          "totalMs": 8.439095509121062,
+        },
+      ]
+    `);
+  });
+
+  it('makes farther KV tiers slower and frees HBM capacity', () => {
+    const base = { ...defaults, phase: 'decode' as const, batch: 64, sequenceLength: 4096 };
+    const tiers = (['hbm', 'peer', 'host', 'ssd', 'object'] as const)
+      .map((kvPlacement) => calculateSimulation({ ...base, kvPlacement }, hardware, DEFAULT_MODEL));
+
+    expect(tiers.map((result) => result.totalMs)).toEqual([...tiers.map((result) => result.totalMs)].sort((a, b) => a - b));
+    expect(tiers[1]!.hbmUsedFraction).toBeLessThan(tiers[0]!.hbmUsedFraction);
+    expect(tiers.slice(1).every((result) => result.bottleneck === 'placement')).toBe(true);
+  });
+
+  it('computes restore versus recompute deterministically from the selected tier', () => {
+    const settings = { ...defaults, sequenceLength: 32768 };
+    const first = restoreVsRecompute(settings, hardware, DEFAULT_MODEL, 'host');
+    const second = restoreVsRecompute(settings, hardware, DEFAULT_MODEL, 'host');
+    const object = restoreVsRecompute(settings, hardware, DEFAULT_MODEL, 'object');
+
+    expect(first).toEqual(second);
+    expect(first.cheaper).toBe('restore');
+    expect(object).toMatchInlineSnapshot(`
+      {
+        "cheaper": "restore",
+        "recomputeMs": 2001.385517793765,
+        "restoreMs": 493.59738368,
+      }
+    `);
   });
 });
 

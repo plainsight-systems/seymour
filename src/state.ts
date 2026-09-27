@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from './data/profiles';
-import type { AttentionKernel, KvBits, LifecycleStageId, Phase, SimulationSettings, ViewMode, WeightBits } from './types';
+import type { AttentionKernel, KvBits, KvPlacement, LifecycleStageId, Phase, SimulationSettings, ViewMode, WeightBits } from './types';
 
 const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
 const SEQUENCES = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
@@ -30,10 +30,13 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const kvBits = ([8, 16] as const).includes(Number(params.get('kv')) as KvBits)
     ? Number(params.get('kv')) as KvBits
     : DEFAULT_SETTINGS.kvBits;
+  const kvPlacement = (['hbm', 'host', 'peer', 'ssd', 'object'] as const).includes(params.get('placement') as KvPlacement)
+    ? params.get('placement') as KvPlacement
+    : DEFAULT_SETTINGS.kvPlacement;
   const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
   const overlap = params.get('overlap') !== 'off';
   const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, attentionKernel, overlap, view };
+  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
@@ -53,6 +56,7 @@ export function settingsToSearchParams(settings: SimulationSettings, operationId
     memory: String(settings.servingMemoryFraction),
     weights: String(settings.weightBits),
     kv: String(settings.kvBits),
+    placement: settings.kvPlacement,
     attention: settings.attentionKernel,
     view: settings.view,
   });

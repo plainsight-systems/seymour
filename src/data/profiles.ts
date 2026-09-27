@@ -87,6 +87,7 @@ export const DEFAULT_SETTINGS = {
   servingMemoryFraction: 0.9,
   weightBits: 16,
   kvBits: 16,
+  kvPlacement: 'hbm',
   attentionKernel: 'fused',
   overlap: true,
   view: 'hardware',

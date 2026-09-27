@@ -1,8 +1,6 @@
 import type { HardwareProfile } from '../types';
 
 export type MemoryTierId = 'registers' | 'shared' | 'l2' | 'hbm' | 'host' | 'peer' | 'ssd' | 'object';
-export type KvPlacement = Extract<MemoryTierId, 'hbm' | 'host' | 'peer' | 'ssd' | 'object'>;
-
 export interface MemoryTier {
   id: MemoryTierId;
   label: string;

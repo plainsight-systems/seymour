@@ -811,7 +811,7 @@ overlapToggle.addEventListener('change', () => {
 required<HTMLButtonElement>('#reset-controls').addEventListener('click', () => {
   pauseLifecycle('Defaults restored · ready to play from request arrival.');
   pauseSequence('Defaults restored · ready to play from operation 1.');
-  settings = { phase: 'prefill', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, prefixCachePercent: 0, outputLength: 32, reusePromptPrefixes: true, splitLongPrompts: true, promptTokensPerStep: 8192, servingMemoryFraction: 0.9, weightBits: 16, kvBits: 16, attentionKernel: 'fused', overlap: true, view: 'hardware' };
+  settings = { phase: 'prefill', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, prefixCachePercent: 0, outputLength: 32, reusePromptPrefixes: true, splitLongPrompts: true, promptTokensPerStep: 8192, servingMemoryFraction: 0.9, weightBits: 16, kvBits: 16, kvPlacement: 'hbm', attentionKernel: 'fused', overlap: true, view: 'hardware' };
   selectedLifecycleStageId = 'request';
   selectedStepId = 'rms-attn';
   update();

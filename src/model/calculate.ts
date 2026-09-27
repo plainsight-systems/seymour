@@ -1,4 +1,6 @@
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../types';
+import { getMemoryTier } from '../data/memoryLadder';
+import type { KvPlacement } from '../types';
 
 const GIGA = 1e9;
 const TERA = 1e12;
@@ -53,30 +55,44 @@ export function calculateSimulation(
   const effectiveCompute = hardware.fp16DenseTflops * TERA * hardware.computeEfficiency;
   const effectiveBandwidth = hardware.hbmBandwidthTBs * TERA * hardware.memoryEfficiency;
   const hbmCapacityBytes = hardware.hbmCapacityGB * GIGA * settings.servingMemoryFraction;
+  const kvInHbm = settings.kvPlacement === 'hbm';
   const spilledWeightBytes = Math.max(0, weightBytes - hbmCapacityBytes);
   const hbmAfterWeights = Math.max(0, hbmCapacityBytes - weightBytes);
-  const spilledKvBytes = Math.max(0, kvFootprintBytes - hbmAfterWeights);
+  const spilledKvBytes = kvInHbm ? Math.max(0, kvFootprintBytes - hbmAfterWeights) : 0;
   const weightSpillFraction = weightBytes > 0 ? spilledWeightBytes / weightBytes : 0;
   const kvSpillFraction = kvFootprintBytes > 0 ? spilledKvBytes / kvFootprintBytes : 0;
   const weightTrafficBytes = settings.phase === 'prefill' ? weightBytes * prefillChunks : weightBytes;
   const hostTrafficBytes = bytes === 0
     ? 0
     : weightTrafficBytes * weightSpillFraction + kvBytes * kvSpillFraction;
-  const hbmTrafficBytes = Math.max(0, bytes - hostTrafficBytes);
+  const remoteKvTrafficBytes = settings.phase === 'decode' && !kvInHbm ? kvBytes : 0;
+  const hbmTrafficBytes = Math.max(0, bytes - hostTrafficBytes - remoteKvTrafficBytes);
   const computeSeconds = flops / effectiveCompute;
   const hbmSeconds = hbmTrafficBytes / effectiveBandwidth;
   const hostSeconds = hostTrafficBytes / (hardware.hostLinkGBs * GIGA);
-  const memorySeconds = hbmSeconds + hostSeconds;
-  const totalSeconds = settings.overlap
-    ? Math.max(computeSeconds, memorySeconds)
-    : computeSeconds + memorySeconds;
-  const bottleneck = computeSeconds >= memorySeconds
-    ? 'compute'
-    : hostSeconds > hbmSeconds
-      ? 'host'
-      : 'memory';
+  const kvTier = getMemoryTier(hardware, settings.kvPlacement);
+  const kvTierSeconds = settings.phase === 'decode' && remoteKvTrafficBytes > 0
+    ? remoteKvTrafficBytes / kvTier.bandwidthBytesPerSecond! + (kvTier.firstByteLatencyMs ?? 0) / 1000
+    : 0;
+  const localMemorySeconds = hbmSeconds + hostSeconds;
+  const memorySeconds = localMemorySeconds + kvTierSeconds;
+  const totalSeconds = kvInHbm
+    ? settings.overlap
+      ? Math.max(computeSeconds, localMemorySeconds)
+      : computeSeconds + localMemorySeconds
+    : settings.overlap
+      ? Math.max(computeSeconds, localMemorySeconds, kvTierSeconds)
+      : computeSeconds + localMemorySeconds + kvTierSeconds;
+  const bottleneck = !kvInHbm && kvTierSeconds >= Math.max(computeSeconds, localMemorySeconds)
+    ? 'placement'
+    : computeSeconds >= localMemorySeconds
+      ? 'compute'
+      : hostSeconds > hbmSeconds
+        ? 'host'
+        : 'memory';
   const tokenCount = settings.phase === 'decode' ? batch : batch * queryTokens;
   const modelFootprintBytes = weightBytes + kvFootprintBytes;
+  const hbmResidentBytes = weightBytes + (kvInHbm ? kvFootprintBytes : 0);
   const flopsPerSequence = denseFlopsPerToken + attentionFlops;
   const kvTrafficPerSequence = kvBytesPerToken * (sequence + 1);
   const materializedAttentionPerSequence = materializedAttentionBytes / batch;
@@ -106,11 +122,23 @@ export function calculateSimulation(
     kvBytesPerToken,
     kvFootprintBytes,
     modelFootprintBytes,
-    hbmUsedFraction: modelFootprintBytes / hbmCapacityBytes,
+    hbmUsedFraction: hbmResidentBytes / hbmCapacityBytes,
     hbmTrafficBytes,
     attentionMaterializationBytes: materializedAttentionBytes,
     hostTrafficBytes,
     hostMs: hostSeconds * 1000,
+    kvTierId: settings.kvPlacement,
+    kvTierMs: kvInHbm && settings.phase === 'decode'
+      ? kvBytes / effectiveBandwidth * 1000
+      : kvTierSeconds * 1000,
+    kvTierBandwidthNeeded: settings.phase === 'decode' && kvBytes > 0
+      ? kvBytes / Math.max(
+        settings.overlap
+          ? Math.max(computeSeconds, bytes / effectiveBandwidth)
+          : computeSeconds + bytes / effectiveBandwidth,
+        Number.EPSILON,
+      )
+      : 0,
     spilledWeightBytes,
     spilledKvBytes,
     crossoverBatch: findCrossoverBatch(settings, hardware, model),
@@ -119,6 +147,31 @@ export function calculateSimulation(
     prefillChunks,
     prefillChunkTokens,
   };
+}
+
+export function restoreVsRecompute(
+  settings: SimulationSettings,
+  hardware: HardwareProfile,
+  model: ModelProfile,
+  tierId: KvPlacement,
+): { restoreMs: number; recomputeMs: number; cheaper: 'restore' | 'recompute' } {
+  const tier = getMemoryTier(hardware, tierId);
+  const oneSequenceKvBytes = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8) * settings.sequenceLength;
+  const restoreMs = oneSequenceKvBytes / tier.bandwidthBytesPerSecond! * 1000 + (tier.firstByteLatencyMs ?? 0);
+  const recompute = calculateSimulation(
+    {
+      ...settings,
+      phase: 'prefill',
+      batch: 1,
+      prefixCachePercent: 0,
+      reusePromptPrefixes: false,
+      kvPlacement: 'hbm',
+    },
+    hardware,
+    model,
+  );
+  const recomputeMs = recompute.totalMs;
+  return { restoreMs, recomputeMs, cheaper: restoreMs <= recomputeMs ? 'restore' : 'recompute' };
 }
 
 function findCrossoverBatch(

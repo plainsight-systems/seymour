@@ -3,6 +3,7 @@ export type ViewMode = 'story' | 'hardware';
 export type WeightBits = 4 | 8 | 16;
 export type KvBits = 8 | 16;
 export type AttentionKernel = 'fused' | 'separate';
+export type KvPlacement = 'hbm' | 'host' | 'peer' | 'ssd' | 'object';
 export type LifecycleStageId = 'request' | 'prefix' | 'prefill' | 'kv-ready' | 'first-token' | 'decode' | 'stream' | 'release';
 export type HardwareStage = 'host' | 'hbm' | 'l2' | 'shared' | 'registers' | 'compute';
 export type KernelTrack = 'runtime' | 'memory' | 'execution';
@@ -65,6 +66,7 @@ export interface SimulationSettings {
   servingMemoryFraction: number;
   weightBits: WeightBits;
   kvBits: KvBits;
+  kvPlacement: KvPlacement;
   attentionKernel: AttentionKernel;
   overlap: boolean;
   view: ViewMode;
@@ -95,7 +97,7 @@ export interface SimulationResult {
   computeMs: number;
   memoryMs: number;
   totalMs: number;
-  bottleneck: 'memory' | 'compute' | 'host';
+  bottleneck: 'memory' | 'compute' | 'host' | 'placement';
   utilization: number;
   tokenRate: number;
   kvBytesPerToken: number;
@@ -106,6 +108,9 @@ export interface SimulationResult {
   attentionMaterializationBytes: number;
   hostTrafficBytes: number;
   hostMs: number;
+  kvTierId: KvPlacement;
+  kvTierMs: number;
+  kvTierBandwidthNeeded: number;
   spilledWeightBytes: number;
   spilledKvBytes: number;
   crossoverBatch: number | null;
