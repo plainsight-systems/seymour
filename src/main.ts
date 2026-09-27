@@ -32,8 +32,7 @@ async function boot(): Promise<void> {
     root.innerHTML = '<section class="route-placeholder"><span>Concept lookup</span><h1>Framework names come after the idea.</h1><p>This page will map each optimization concept to documented framework terminology.</p></section>';
   } else {
     document.title = 'Seymour — feed the machine';
-    const root = document.querySelector<HTMLElement>('#route-root')!;
-    root.innerHTML = '<section class="route-placeholder"><span>New guided story</span><h1>Learn the cost before the vocabulary.</h1><p>The five-panel teaching path is being assembled on this foundation. The complete existing experience is preserved under <a href="#/under-the-hood">Under the hood</a>.</p></section>';
+    await import('./story/page');
   }
 }
 
