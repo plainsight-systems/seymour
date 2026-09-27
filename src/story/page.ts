@@ -1,5 +1,6 @@
 import './story.css';
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, getHardware } from '../data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
+import { getTopology } from '../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../model/calculate';
 import { applySoftwareStrategy, precisionLabel } from '../model/strategy';
 import { batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
@@ -31,12 +32,26 @@ function defaultsFor(panelId: string): SimulationSettings {
 
 const LEGEND = `<ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>`;
 
-const ZOOM: Record<StoryPanelSpec['plate'], string> = {
-  'die-pair': 'Inside the GPU die, twice',
-  package: 'The GPU package, exploded',
-  die: 'Inside the GPU die',
-  server: 'The whole server',
+function zoomLabel(plate: StoryPanelSpec['plate'], hardwareId: string): string {
+  const chiplets = getTopology(hardwareId).computeDies > 1;
+  if (plate === 'die-pair') return chiplets ? 'One of eight compute dies, twice' : 'Inside the GPU die, twice';
+  if (plate === 'die') return chiplets ? 'One of eight compute dies' : 'Inside the GPU die';
+  if (plate === 'package') return 'The GPU package, exploded';
+  return 'The whole server';
+}
+
+/** The accelerator shown by every story panel; switching it on any panel switches all. */
+let storyHardwareId = DEFAULT_SETTINGS.hardwareId as string;
+
+function chipToggle(): string {
+  return `<span class="panel-chip" role="group" aria-label="Accelerator">${HARDWARE_PROFILES.map((hardware) => `<button type="button" data-chip="${hardware.id}" aria-pressed="${hardware.id === storyHardwareId}">${hardware.vendor} ${hardware.name}</button>`).join('')}</span>`;
+}
+
+const PLACEMENT_PHRASE: Record<KvPlacement, string> = {
+  hbm: 'GPU memory', peer: 'one other GPU', peers: 'all seven other GPUs', host: 'system memory', ssd: 'local SSD', object: 'network object storage',
 };
+
+const EFFICIENCY_NOTE = 'Both accelerators use the same efficiency assumptions—55% of peak math and 72% of peak memory bandwidth—so comparisons reflect published peaks, not measured results on either vendor.';
 
 function knobMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string {
   if (panel.id === 'two-jobs' || panel.id === 'memory-wall') {
@@ -73,7 +88,7 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
   }
   const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings));
   if (settings.kvPlacement === 'hbm') return `Every token re-reads ${formatBytes(picture.kvBytes)} of KV. Keeping each step at ${formatDuration(hbm.totalMs)} needs about ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s for the KV alone. Now move it.`;
-  return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${inputs.tiers[settings.kvPlacement].label.toLowerCase()}.`;
+  return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${PLACEMENT_PHRASE[settings.kvPlacement]}.`;
 }
 
 function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: SimulationSettings): string {
@@ -94,7 +109,7 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
   if (panel.id === 'distance') {
     const tier = inputs.tiers[settings.kvPlacement];
     const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings), settings.kvPlacement);
-    const where = settings.kvPlacement === 'hbm' ? 'GPU memory' : tier.label.toLowerCase();
+    const where = PLACEMENT_PHRASE[settings.kvPlacement];
     return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): one decode step takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
   }
   return '';
@@ -161,7 +176,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
     </div>
     <div class="panel-instrument">
       <div class="panel-stage">
-        <p class="panel-zoom"><span>Zoom</span>${ZOOM[panel.plate]} · ${getHardware(settings.hardwareId).name}</p>
+        <div class="panel-zoom"><span>Zoom</span><b data-zoom>${zoomLabel(panel.plate, settings.hardwareId)}</b>${chipToggle()}</div>
         ${stage}
         ${panel.numbers.length ? '<div class="panel-numbers" data-numbers></div>' : ''}
         ${LEGEND}
@@ -175,10 +190,10 @@ function panelMarkup(panel: StoryPanelSpec): string {
 root.innerHTML = `<div class="story-page">
   <header class="story-hero">
     <div><p>Inference performance, from first principles</p><h1>Before the jargon,<br><em>follow the cost.</em></h1></div>
-    <div class="story-hero-copy"><p>A GPU does not run “an AI model” as one mysterious act. It moves bytes, schedules work, and repeats a small number of expensive operations. Five knobs, and a look inside the chip, are enough to see why the bottleneck moves.</p><nav aria-label="Story concepts">${STORY_PANELS.map((panel) => `<a href="#${panel.id}"><span>${panel.number}</span>${panel.title}</a>`).join('')}</nav></div>
+    <div class="story-hero-copy"><p>A GPU does not run “an AI model” as one mysterious act. It moves bytes, schedules work, and repeats a small number of expensive operations. Five knobs, and a look inside the chip, are enough to see why the bottleneck moves—on NVIDIA H100 or AMD MI300X; switch on any panel.</p><nav aria-label="Story concepts">${STORY_PANELS.map((panel) => `<a href="#${panel.id}"><span>${panel.number}</span>${panel.title}</a>`).join('')}</nav></div>
   </header>
   ${STORY_PANELS.map(panelMarkup).join('')}
-  <section class="story-next"><span>Now use the whole instrument</span><h2>Prove the mental model under pressure.</h2><p>The playground combines every knob, lets you zoom from the server down to one compute unit on either chip, and gives you three constraints to beat.</p><div><a href="#playground">Open the playground ↓</a><a href="#/under-the-hood">Go under the hood →</a><a href="#/lookup">Find the names →</a></div></section>
+  <section class="story-next"><span>Now use the whole instrument</span><h2>Prove the mental model under pressure.</h2><p>The playground combines every knob, lets you zoom from the server down to one compute unit on either chip, and gives you three constraints to beat.</p><p class="story-assumption">${EFFICIENCY_NOTE}</p><div><a href="#playground">Open the playground ↓</a><a href="#/under-the-hood">Go under the hood →</a><a href="#/lookup">Find the names →</a></div></section>
   <section id="playground" class="playground"></section>
 </div>`;
 
@@ -195,8 +210,10 @@ function renderPanel(panel: StoryPanelSpec): void {
   for (const [key, plate] of platesFor(panel, inputs)) {
     const existing = state.views.get(key);
     if (existing) existing.update(plate);
-    else state.views.set(key, mountCutaway(section.querySelector<HTMLElement>(`[data-cutaway="${key}"]`)!, plate, `${panel.title}: ${ZOOM[panel.plate]}`, { labels: panel.plate === 'die-pair' ? 'chips' : 'auto' }));
+    else state.views.set(key, mountCutaway(section.querySelector<HTMLElement>(`[data-cutaway="${key}"]`)!, plate, `${panel.title}: ${zoomLabel(panel.plate, settings.hardwareId)}`, { labels: panel.plate === 'die-pair' ? 'chips' : 'auto' }));
   }
+  section.querySelector<HTMLElement>('[data-zoom]')!.textContent = zoomLabel(panel.plate, settings.hardwareId);
+  for (const button of section.querySelectorAll<HTMLButtonElement>('[data-chip]')) button.setAttribute('aria-pressed', String(button.dataset.chip === settings.hardwareId));
   for (const job of ['prefill', 'decode'] as const) {
     const node = section.querySelector<HTMLElement>(`[data-job-caption="${job}"]`);
     if (node) node.innerHTML = jobCaption(inputs, job, settings);
@@ -226,6 +243,15 @@ for (const panel of STORY_PANELS) {
     const effect = button.dataset.move as MoveEffect;
     applyMove(settings, effect, !moveIsOn(settings, effect));
     renderPanel(panel);
+  });
+  section.querySelector('.panel-chip')!.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('[data-chip]');
+    if (!button || button.dataset.chip === storyHardwareId) return;
+    storyHardwareId = button.dataset.chip!;
+    for (const other of STORY_PANELS) {
+      panelState.get(other.id)!.settings.hardwareId = storyHardwareId;
+      renderPanel(other);
+    }
   });
   control.addEventListener('input', () => {
     if (control.dataset.knob === 'sequenceLength') settings.sequenceLength = sequenceFromSlider(Number(control.value));

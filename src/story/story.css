@@ -28,7 +28,13 @@
 .panel-surprise p { max-width: 44ch; margin: 0; font-weight: 650; line-height: 1.55; }
 .panel-instrument { display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--paper-deep); }
 .panel-stage { display: grid; gap: 1rem; align-content: center; min-width: 0; padding: clamp(1.25rem, 3vw, 3rem); }
-.panel-zoom { display: flex; gap: 0.6rem; align-items: baseline; margin: 0; color: var(--ink-soft); font-size: 0.8rem; font-weight: 700; }
+.panel-zoom { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0; color: var(--ink-soft); font-size: 0.8rem; font-weight: 700; }
+.panel-chip { display: inline-flex; margin-left: auto; border: 1px solid var(--ink); }
+.panel-chip button { min-height: 44px; padding: 0 0.7rem; color: var(--ink); border: 0; background: var(--paper); font: inherit; font-size: 0.75rem; font-weight: 750; cursor: pointer; }
+.panel-chip button + button { border-left: 1px solid var(--ink); }
+.panel-chip button[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
+.panel-chip button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.story-assumption { color: color-mix(in oklch, var(--paper) 75%, transparent); font-size: 0.85rem; }
 .panel-zoom span { padding: 0.2rem 0.45rem; color: var(--paper); background: var(--ink); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; }
 .panel-figure { display: grid; gap: 0.4rem; margin: 0; padding: 0.75rem 1rem 0.5rem; border: 1px solid var(--ink); background: var(--paper); }
 .panel-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }

@@ -28,7 +28,7 @@ export function mountPlayground(root: HTMLElement): void {
   let tileStep = 0;
   let cutaway: CutawayView | null = null;
 
-  root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints.</p></header>
+  root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints. Both accelerators use the same efficiency assumptions (55% of peak math, 72% of peak memory bandwidth), so comparisons reflect published peaks, not measurements.</p></header>
     <div class="playground-shell">
       <aside class="playground-controls">
         <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">Challenge: ${challenge.title}</option>`).join('')}</select><small class="playground-lock" data-lock-note hidden></small></label>
