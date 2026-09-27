@@ -76,6 +76,11 @@ export interface SimulationSettings {
   attentionKernel: AttentionKernel;
   overlap: boolean;
   view: ViewMode;
+  modelId: string;
+  /** Tokens guessed ahead and verified in one step; 0 turns speculation off. */
+  speculativeTokens: 0 | 2 | 4;
+  /** Assumed share of guessed tokens the model accepts (representative). */
+  draftAcceptanceRate: number;
 }
 
 export interface LifecycleStage {
@@ -128,6 +133,10 @@ export interface SimulationResult {
   weightReadBytes: number;
   /** Share of each layer's experts touched this step (1 for dense models). */
   expertsTouchedFraction: number;
+  /** Generated tokens per sequence per decode step (1 without speculation). */
+  tokensPerStep: number;
+  /** Decode time per generated token for one user: totalMs / tokensPerStep. */
+  msPerToken: number;
 }
 
 export interface AlgorithmStep {

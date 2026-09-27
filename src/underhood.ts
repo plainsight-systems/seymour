@@ -1,7 +1,7 @@
 import '@fontsource-variable/anybody';
 import '@fontsource-variable/public-sans';
 import './style.css';
-import { DEFAULT_MODEL, HARDWARE_PROFILES, getHardware } from './data/profiles';
+import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from './data/profiles';
 import {
   calculateSimulation,
   decodeIterationCounts,
@@ -799,7 +799,7 @@ overlapToggle.addEventListener('change', () => {
 required<HTMLButtonElement>('#reset-controls').addEventListener('click', () => {
   pauseLifecycle('Defaults restored · ready to play from request arrival.');
   pauseSequence('Defaults restored · ready to play from operation 1.');
-  settings = { phase: 'prefill', hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, prefixCachePercent: 0, outputLength: 32, reusePromptPrefixes: true, splitLongPrompts: true, promptTokensPerStep: 8192, servingMemoryFraction: 0.9, weightBits: 16, kvBits: 16, kvPlacement: 'hbm', attentionKernel: 'fused', overlap: true, view: 'hardware' };
+  settings = { ...DEFAULT_SETTINGS, phase: 'prefill' };
   selectedLifecycleStageId = 'request';
   selectedStepId = 'rms-attn';
   update();

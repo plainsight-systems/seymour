@@ -1,3 +1,4 @@
+import { getModel } from '../data/profiles';
 import type { ModelProfile, SimulationSettings } from '../types';
 
 export function applySoftwareStrategy(
@@ -17,4 +18,9 @@ export function precisionLabel(bits: number): string {
   if (bits === 16) return 'FP16';
   if (bits === 8) return '8-bit';
   return '4-bit';
+}
+
+/** The selected model with the settings' weight and KV precision applied. */
+export function modelFor(settings: Pick<SimulationSettings, 'modelId' | 'weightBits' | 'kvBits'>): ModelProfile {
+  return applySoftwareStrategy(getModel(settings.modelId), settings);
 }

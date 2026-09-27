@@ -1,8 +1,8 @@
 import './story.css';
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
+import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
 import { getTopology } from '../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../model/calculate';
-import { applySoftwareStrategy, precisionLabel } from '../model/strategy';
+import { modelFor, precisionLabel } from '../model/strategy';
 import { batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
@@ -86,7 +86,7 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
       ? `The model plus KV exceed the serving budget by ${formatBytes(picture.overflowBytes)}. That overflow has to live off the package, behind a far slower link.`
       : `The KV cache is ${formatNumber(picture.kvBytes / picture.modelBytes)}× the model’s size at this setting. Push the context longer to find the wall.`;
   }
-  const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings));
+  const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), modelFor(settings));
   if (settings.kvPlacement === 'hbm') return `Every token re-reads ${formatBytes(picture.kvBytes)} of KV. Keeping each step at ${formatDuration(hbm.totalMs)} needs about ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s for the KV alone. Now move it.`;
   return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${PLACEMENT_PHRASE[settings.kvPlacement]}.`;
 }
@@ -108,7 +108,7 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
   }
   if (panel.id === 'distance') {
     const tier = inputs.tiers[settings.kvPlacement];
-    const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings), settings.kvPlacement);
+    const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), modelFor(settings), settings.kvPlacement);
     const where = PLACEMENT_PHRASE[settings.kvPlacement];
     return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): one decode step takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
   }
@@ -202,7 +202,7 @@ function renderPanel(panel: StoryPanelSpec): void {
   const state = panelState.get(panel.id)!;
   const { settings } = state;
   const hardware = getHardware(settings.hardwareId);
-  const model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+  const model = modelFor(settings);
   const result = calculateSimulation(settings, hardware, model);
   const picture = buildPictureModel(result, settings, hardware, model);
   const inputs = buildCutawayInputs(settings, hardware, model);

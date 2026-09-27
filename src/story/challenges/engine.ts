@@ -1,6 +1,6 @@
-import { DEFAULT_MODEL, getHardware } from '../../data/profiles';
+import { getHardware } from '../../data/profiles';
 import { calculateSimulation, restoreVsRecompute } from '../../model/calculate';
-import { applySoftwareStrategy } from '../../model/strategy';
+import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
 
 export type KnobId = 'batch' | 'sequenceLength' | 'weightBits' | 'kvBits' | 'reusePromptPrefixes' | 'prefixCachePercent' | 'kvPlacement';
@@ -38,7 +38,7 @@ export interface ChallengeEvaluation {
 
 export function evaluateChallenge(challenge: Challenge, settings: SimulationSettings): ChallengeEvaluation {
   const hardware = getHardware(settings.hardwareId);
-  const model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+  const model = modelFor(settings);
   const decode = calculateSimulation({ ...settings, phase: 'decode' }, hardware, model);
   const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, model);
   const parking = challenge.parkingTier
@@ -46,7 +46,7 @@ export function evaluateChallenge(challenge: Challenge, settings: SimulationSett
     : null;
 
   const metrics: Record<ConstraintMetric, number | boolean> = {
-    msPerToken: decode.totalMs,
+    msPerToken: decode.msPerToken,
     timeToFirstTokenMs: prefill.totalMs + decode.totalMs,
     totalTokensPerSec: decode.tokenRate,
     concurrentUsers: settings.batch,

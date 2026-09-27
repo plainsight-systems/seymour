@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from './data/profiles';
+import { DEFAULT_SETTINGS, MODEL_PROFILES } from './data/profiles';
 import type { AttentionKernel, KvBits, KvPlacement, LifecycleStageId, Phase, SimulationSettings, ViewMode, WeightBits } from './types';
 
 const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
@@ -36,7 +36,10 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
   const overlap = params.get('overlap') !== 'off';
   const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, attentionKernel, overlap, view };
+  const modelId = MODEL_PROFILES.some((profile) => profile.id === params.get('model')) ? params.get('model')! : DEFAULT_SETTINGS.modelId;
+  const speculativeTokens = ([0, 2, 4] as const).find((k) => k === Number(params.get('spec'))) ?? DEFAULT_SETTINGS.speculativeTokens;
+  const draftAcceptanceRate = DEFAULT_SETTINGS.draftAcceptanceRate;
+  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, modelId, speculativeTokens, draftAcceptanceRate, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
@@ -57,6 +60,8 @@ export function settingsToSearchParams(settings: SimulationSettings, operationId
     weights: String(settings.weightBits),
     kv: String(settings.kvBits),
     placement: settings.kvPlacement,
+    model: settings.modelId,
+    spec: String(settings.speculativeTokens),
     attention: settings.attentionKernel,
     view: settings.view,
   });

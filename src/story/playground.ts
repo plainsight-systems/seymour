@@ -1,6 +1,6 @@
-import { DEFAULT_MODEL, DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
+import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber } from '../model/calculate';
-import { applySoftwareStrategy } from '../model/strategy';
+import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
 import { CHALLENGES, getChallenge } from './challenges/data';
@@ -121,7 +121,7 @@ export function mountPlayground(root: HTMLElement): void {
 
   function render(): void {
     const hardware = getHardware(settings.hardwareId);
-    const model = applySoftwareStrategy(DEFAULT_MODEL, settings);
+    const model = modelFor(settings);
     const result = calculateSimulation(settings, hardware, model);
     const picture = buildPictureModel(result, settings, hardware, model);
     renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'throughput', 'distanceLadder']));
@@ -130,7 +130,7 @@ export function mountPlayground(root: HTMLElement): void {
   }
 
   function currentPlate(): Plate {
-    const inputs = buildCutawayInputs(settings, getHardware(settings.hardwareId), applySoftwareStrategy(DEFAULT_MODEL, settings));
+    const inputs = buildCutawayInputs(settings, getHardware(settings.hardwareId), modelFor(settings));
     if (plateId === 'server') return serverPlate(inputs);
     if (plateId === 'die') return diePlate(inputs, { job: 'decode', detail: 'full' });
     if (plateId === 'unit') return unitPlate(settings.hardwareId, tileStep);

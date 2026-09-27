@@ -46,3 +46,39 @@ describe('mixture-of-experts arithmetic', () => {
     expect(() => getModel('nope')).toThrow(/Unknown model/);
   });
 });
+
+describe('speculative decoding', () => {
+  const hardware = getHardware('h100-sxm');
+  const base = { ...DEFAULT_SETTINGS, batch: 1, sequenceLength: 2048 };
+
+  it('expects 1 token without speculation and more with it', async () => {
+    const { expectedAcceptedTokens } = await import('./calculate');
+    expect(expectedAcceptedTokens(0, 0.7)).toBe(1);
+    expect(expectedAcceptedTokens(4, 0.7)).toBeCloseTo((1 - 0.7 ** 5) / 0.3, 12);
+    expect(expectedAcceptedTokens(4, 1)).toBe(5);
+  });
+
+  it('turns one weight read into several tokens for a single user', () => {
+    const off = calculateSimulation(base, hardware, DEFAULT_MODEL);
+    const on = calculateSimulation({ ...base, speculativeTokens: 4 }, hardware, DEFAULT_MODEL);
+    expect(on.weightReadBytes).toBe(off.weightReadBytes);
+    expect(on.tokensPerStep).toBeGreaterThan(2.7);
+    expect(on.msPerToken).toBeLessThan(off.msPerToken / 2);
+    expect(on.flops).toBeCloseTo(off.flops * 5, 0);
+  });
+
+  it('touches more experts when verifying guesses on an MoE model', () => {
+    const off = calculateSimulation(base, hardware, qwen);
+    const on = calculateSimulation({ ...base, speculativeTokens: 4 }, hardware, qwen);
+    expect(on.expertsTouchedFraction).toBeGreaterThan(off.expertsTouchedFraction);
+    expect(on.weightReadBytes).toBeGreaterThan(off.weightReadBytes);
+  });
+
+  it('stops paying off once the step is limited by math', () => {
+    const busy = { ...DEFAULT_SETTINGS, batch: 512, sequenceLength: 512 };
+    const off = calculateSimulation(busy, hardware, DEFAULT_MODEL);
+    const on = calculateSimulation({ ...busy, speculativeTokens: 4 }, hardware, DEFAULT_MODEL);
+    expect(on.bottleneck).toBe('compute');
+    expect(on.msPerToken).toBeGreaterThan(off.msPerToken);
+  });
+});

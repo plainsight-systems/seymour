@@ -87,7 +87,7 @@ export function buildPictureModel(
         totalMs: decode.totalMs, limit: decode.bottleneck === 'compute' ? 'math' : decode.bottleneck === 'placement' ? 'distance' : 'reading', unit: 'one generated token per user',
       },
     ],
-    perUserTokensPerSecond: 1000 / Math.max(decode.totalMs, Number.EPSILON),
+    perUserTokensPerSecond: 1000 / Math.max(decode.msPerToken, Number.EPSILON),
     totalTokensPerSecond: decode.tokenRate,
     concurrentUsers: settings.batch,
     placement: settings.kvPlacement,

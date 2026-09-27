@@ -32,7 +32,11 @@ export function calculateSimulation(
   const attentionFlops = 4 * model.layers * attentionWidth * sequence;
   // Tokens that share one pass over the weights: each chunk of prompt work, or
   // one generated token per sequence. MoE models read only the experts touched.
-  const tokensPerWeightPass = settings.phase === 'prefill' ? batch * prefillChunkTokens : batch;
+  // Speculative decoding verifies `k` guessed tokens plus one new token per
+  // sequence in a single step. Drafting is assumed to come from prompt-text
+  // lookup, whose cost is not modeled.
+  const verifyTokens = settings.phase === 'decode' ? 1 + settings.speculativeTokens : 1;
+  const tokensPerWeightPass = settings.phase === 'prefill' ? batch * prefillChunkTokens : batch * verifyTokens;
   const expertsTouched = expertsTouchedFraction(model, tokensPerWeightPass);
   const weightPassBytes = weightReadBytes(model, tokensPerWeightPass);
   const attentionScoreBytes = batch * model.attentionHeads * queryTokens * sequence * (model.kvBits / 8);
@@ -48,9 +52,9 @@ export function calculateSimulation(
   let kvBytes: number;
 
   if (settings.phase === 'decode') {
-    flops = batch * (denseFlopsPerToken + attentionFlops);
+    flops = batch * verifyTokens * (denseFlopsPerToken + attentionFlops);
     kvBytes = kvFootprintBytes;
-    bytes = weightPassBytes + kvBytes + batch * kvBytesPerToken + materializedAttentionBytes;
+    bytes = weightPassBytes + kvBytes + batch * verifyTokens * kvBytesPerToken + materializedAttentionBytes;
   } else {
     flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * attentionWidth * queryTokens * sequence);
     kvBytes = kvFootprintBytes;
@@ -97,7 +101,8 @@ export function calculateSimulation(
       : hostSeconds > hbmSeconds
         ? 'host'
         : 'memory';
-  const tokenCount = settings.phase === 'decode' ? batch : batch * queryTokens;
+  const tokensPerStep = settings.phase === 'decode' ? expectedAcceptedTokens(settings.speculativeTokens, settings.draftAcceptanceRate) : 1;
+  const tokenCount = settings.phase === 'decode' ? batch * tokensPerStep : batch * queryTokens;
   const modelFootprintBytes = weightBytes + kvFootprintBytes;
   const hbmResidentBytes = weightBytes + (kvInHbm ? kvFootprintBytes : 0);
   const flopsPerSequence = denseFlopsPerToken + attentionFlops;
@@ -115,6 +120,8 @@ export function calculateSimulation(
     bytes,
     weightBytes,
     weightReadBytes: weightPassBytes,
+    tokensPerStep,
+    msPerToken: totalSeconds * 1000 / tokensPerStep,
     expertsTouchedFraction: expertsTouched,
     kvBytes,
     arithmeticIntensity: bytes > 0 ? flops / bytes : 0,
@@ -156,6 +163,17 @@ export function calculateSimulation(
     prefillChunks,
     prefillChunkTokens,
   };
+}
+
+/**
+ * Expected tokens produced per verify step with `k` guesses, each accepted
+ * with probability `acceptance` until the first rejection, plus the one token
+ * the verify pass always yields.
+ */
+export function expectedAcceptedTokens(k: number, acceptance: number): number {
+  if (k <= 0) return 1;
+  if (acceptance >= 1) return k + 1;
+  return (1 - Math.pow(acceptance, k + 1)) / (1 - acceptance);
 }
 
 export function restoreVsRecompute(
