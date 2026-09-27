@@ -7,7 +7,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, type Plate } from './cutaway/plates';
 import { mountCutaway, type CutawayView } from './cutaway/render';
-import { STORY_PANELS, type StoryPanelSpec } from './panels';
+import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 import { mountPlayground } from './playground';
@@ -23,7 +23,8 @@ interface PanelState {
 const panelState = new Map<string, PanelState>();
 
 function defaultsFor(panelId: string): SimulationSettings {
-  const base = { ...DEFAULT_SETTINGS, phase: 'decode' as const, kvPlacement: 'hbm' as const };
+  // Moves start switched off so each one visibly changes the plate when applied.
+  const base = { ...DEFAULT_SETTINGS, phase: 'decode' as const, kvPlacement: 'hbm' as const, kvBits: 16 as const, reusePromptPrefixes: false, prefixCachePercent: 0 };
   if (panelId === 'memory-wall' || panelId === 'distance') return { ...base, batch: 64, sequenceLength: 4096 };
   return base;
 }
@@ -54,7 +55,8 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
   const prefill = picture.steps[0]!;
   const decode = picture.steps[1]!;
   if (panel.id === 'two-jobs') {
-    const promptPerToken = prefill.totalMs / settings.sequenceLength;
+    const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+    const promptPerToken = prefill.totalMs / Math.max(1, settings.sequenceLength - reused);
     return `One generated token costs about ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× as much time as one prompt token here. The same chip is busy in one job and idle in the other.`;
   }
   if (panel.id === 'read-model') {
@@ -84,9 +86,10 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
   }
   if (panel.id === 'memory-wall') {
     const total = m.weightBytes + m.kvBytes;
-    return m.overflowBytes > 0
-      ? `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of KV = <b>${formatBytes(total)}</b>. <strong class="cw-warn">Only ${formatBytes(m.usableBytes)} is usable: ${formatBytes(m.overflowBytes)} doesn’t fit.</strong>`
-      : `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of KV = <b>${formatBytes(total)}</b> of ${formatBytes(m.usableBytes)} usable.`;
+    const fill = m.overflowBytes > 0
+      ? `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b>. <strong class="cw-warn">Only ${formatBytes(m.usableBytes)} is usable: ${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>`
+      : `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b> of ${formatBytes(m.usableBytes)} usable.`;
+    return `${fill} Each token: <b>${formatDuration(inputs.decode.totalMs)}</b>. Reading all ${settings.batch} prompts: <b>${formatDuration(inputs.prefill.totalMs)}</b>.`;
   }
   if (panel.id === 'distance') {
     const tier = inputs.tiers[settings.kvPlacement];
@@ -99,7 +102,12 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
 
 function jobCaption(inputs: CutawayInputs, job: 'prefill' | 'decode', settings: SimulationSettings): string {
   const a = inputs[job];
-  const title = job === 'prefill' ? `Reading the prompt · ${settings.sequenceLength.toLocaleString()} tokens at once` : 'Writing one token';
+  const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+  const title = job === 'prefill'
+    ? reused > 0
+      ? `Reading the prompt · ${(settings.sequenceLength - reused).toLocaleString()} new tokens (${reused.toLocaleString()} reused)`
+      : `Reading the prompt · ${settings.sequenceLength.toLocaleString()} tokens at once`
+    : 'Writing one token';
   const limit = a.computeMs >= a.memoryMs ? 'limited by math' : 'limited by reading memory';
   return `<b>${title}</b><span>${formatDuration(a.totalMs)} · math ${formatDuration(a.computeMs)} · reading ${formatDuration(a.memoryMs)} · ${limit}</span>`;
 }
@@ -114,6 +122,26 @@ function platesFor(panel: StoryPanelSpec, inputs: CutawayInputs): Map<string, Pl
   if (panel.plate === 'package') return new Map([['main', packagePlate(inputs)]]);
   if (panel.plate === 'die') return new Map([['main', diePlate(inputs, { job: 'decode', detail: 'full' })]]);
   return new Map([['main', serverPlate(inputs)]]);
+}
+
+function moveMarkup(move: StoryMove): string {
+  const body = `<b>${move.title}</b><p>${move.explanation}</p>`;
+  if (move.effect) return `<li><button type="button" class="move-toggle" data-move="${move.effect}" aria-pressed="false">${body}<small data-modeled="true"><span data-move-state>Try it: off</span></small></button></li>`;
+  const tag = move.viaKnob ? 'the knob above' : move.modeled ? 'shown below the plate' : 'not modeled';
+  return `<li>${body}<small data-modeled="${move.modeled}">${tag}</small></li>`;
+}
+
+/** Applies or removes a modeled move on a panel's settings. */
+function applyMove(settings: SimulationSettings, effect: MoveEffect, on: boolean): void {
+  if (effect === 'kv8') settings.kvBits = on ? 8 : 16;
+  if (effect === 'prefixReuse') {
+    settings.reusePromptPrefixes = on;
+    settings.prefixCachePercent = on ? 75 : 0;
+  }
+}
+
+function moveIsOn(settings: SimulationSettings, effect: MoveEffect): boolean {
+  return effect === 'kv8' ? settings.kvBits === 8 : settings.reusePromptPrefixes && settings.prefixCachePercent > 0;
 }
 
 function panelMarkup(panel: StoryPanelSpec): string {
@@ -139,7 +167,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
         ${LEGEND}
         <p class="panel-hint">Click any part or label to pair them.</p>
       </div>
-      <div class="panel-moves"><span>The moves</span><ul>${panel.moves.map((move) => `<li><b>${move.title}</b><p>${move.explanation}</p><small data-modeled="${move.modeled}">${move.modeled ? 'modeled here' : 'not modeled'}</small></li>`).join('')}</ul></div>
+      <div class="panel-moves"><span>The moves</span><ul>${panel.moves.map(moveMarkup).join('')}</ul></div>
     </div>
   </section>`;
 }
@@ -178,6 +206,11 @@ function renderPanel(panel: StoryPanelSpec): void {
   const numbers = section.querySelector<HTMLElement>('[data-numbers]');
   if (numbers) renderPicture(numbers, picture, new Set(panel.numbers), { footer: false });
   section.querySelector<HTMLElement>('[data-surprise]')!.textContent = surprise(panel, picture, inputs, settings);
+  for (const button of section.querySelectorAll<HTMLButtonElement>('[data-move]')) {
+    const on = moveIsOn(settings, button.dataset.move as MoveEffect);
+    button.setAttribute('aria-pressed', String(on));
+    button.querySelector('[data-move-state]')!.textContent = on ? 'Applied · click to undo' : 'Try it: off';
+  }
   const output = section.querySelector<HTMLOutputElement>('.story-knob output');
   if (output) output.value = panel.id === 'share-read' ? settings.batch.toLocaleString() : `${settings.sequenceLength.toLocaleString()} tokens`;
 }
@@ -187,6 +220,13 @@ for (const panel of STORY_PANELS) {
   const control = section.querySelector<HTMLInputElement | HTMLSelectElement>('[data-knob]')!;
   const { settings } = panelState.get(panel.id)!;
   if (control instanceof HTMLSelectElement) control.value = panel.id === 'read-model' ? String(settings.weightBits) : settings.kvPlacement;
+  section.querySelector('.panel-moves')!.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('[data-move]');
+    if (!button) return;
+    const effect = button.dataset.move as MoveEffect;
+    applyMove(settings, effect, !moveIsOn(settings, effect));
+    renderPanel(panel);
+  });
   control.addEventListener('input', () => {
     if (control.dataset.knob === 'sequenceLength') settings.sequenceLength = sequenceFromSlider(Number(control.value));
     if (control.dataset.knob === 'batch') settings.batch = batchFromSlider(Number(control.value));
