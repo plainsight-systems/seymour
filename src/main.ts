@@ -28,8 +28,7 @@ async function boot(): Promise<void> {
     await import('./underhood');
   } else if (resolved.route === 'lookup') {
     document.title = 'Concept lookup — Seymour';
-    const root = document.querySelector<HTMLElement>('#route-root')!;
-    root.innerHTML = '<section class="route-placeholder"><span>Concept lookup</span><h1>Framework names come after the idea.</h1><p>This page will map each optimization concept to documented framework terminology.</p></section>';
+    await import('./lookup/page');
   } else {
     document.title = 'Seymour — feed the machine';
     await import('./story/page');
