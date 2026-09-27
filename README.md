@@ -26,19 +26,21 @@ Old query-string share links still open Under the hood with their selected state
 
 ### The five-panel story
 
-One picture gains a layer at a time, so readers learn how to read it before the full instrument appears:
+The story shows the chip. Each panel pairs one knob with an isometric cutaway plate—server, package, die, or compute unit—drawn from published topology and driven by the same model:
 
-1. **Two different jobs** — prompt processing and token generation have different costs and bottlenecks.
-2. **Every token re-reads the model** — weight traffic often dominates one generated-token step.
-3. **Share the read** — batching lets many users share that model read while exposing more parallel work.
-4. **Memory fills up** — KV state grows with users and context, consuming capacity and read bandwidth.
-5. **Distance is speed** — active state needs to stay near the math; idle state may be worth parking farther away when restore beats recompute.
+1. **Two different jobs** — two copies of the die: prompt processing lights nearly every SM with math, while generating a token leaves almost all of them waiting on memory.
+2. **Every token re-reads the model** — the package's memory stacks fill with the model's weights, and every generated token reads all of them.
+3. **Share the read** — as users share one read, more of the die's time goes to math.
+4. **Memory fills up** — KV state fills the stacks until it hits the capacity wall and overflows off the package.
+5. **Distance is speed** — on the server plate, the KV cache's data path lights up from GPU memory out to a peer GPU, system memory, local SSD, or object storage; active state needs to stay near the math, and idle state may be worth parking farther away when restore beats recompute.
+
+Click any part to highlight its label, or any label to highlight the part. Plates are stylized and not to scale; counts and arrangement follow NVIDIA's and AMD's published documents, and every label is marked as a published figure, a representative figure, or a schematic placement.
 
 Each panel has one real knob, a computed surprise, and a list of engineering moves clearly marked as modeled or not modeled. The story deliberately introduces plain-language costs before hardware and framework vocabulary.
 
 ### Playground and challenges
 
-The playground combines the story's knobs: concurrent users, context length, model and KV precision, shared-prefix reuse, active-KV placement, and accelerator choice. Its bottleneck readout always answers one of four durable questions:
+The playground combines the story's knobs and lets the reader zoom through all four plates on either accelerator, including a follow-one-tile path from memory to the matrix units: concurrent users, context length, model and KV precision, shared-prefix reuse, active-KV placement, and accelerator choice. Its bottleneck readout always answers one of four durable questions:
 
 - **Work:** what calculation can disappear?
 - **Traffic:** what bytes can stop moving?
@@ -101,8 +103,11 @@ Core hardware, model, and memory-distance inputs are linked in the interface and
 
 - [NVIDIA H100 product specifications](https://www.nvidia.com/en-us/data-center/h100/)
 - [NVIDIA Hopper tuning guide](https://docs.nvidia.com/cuda/pdf/Hopper_Tuning_Guide.pdf)
+- [NVIDIA H100 Tensor Core GPU Architecture whitepaper](https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c) (cutaway unit, cluster, and memory-stack counts)
 - [NVIDIA HGX reference architecture](https://docs.nvidia.com/enterprise-reference-architectures/hgx-ai-factory-h100-h200-b200/latest/components.html)
 - [AMD Instinct MI300X specifications](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
+- [AMD ROCm: MI300 series microarchitecture](https://rocm.docs.amd.com/en/latest/reference/gpu-arch/mi300.html) and [GPU architecture specifications](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html) (cutaway die and cache counts)
+- [Chips and Cheese: AMD’s CDNA 3 compute architecture](https://chipsandcheese.com/p/amds-cdna-3-compute-architecture)
 - [AMD MI300X platform data sheet](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/data-sheets/amd-instinct-mi300x-platform-data-sheet.pdf)
 - [Meta Llama 3.1 8B configuration](https://huggingface.co/meta-llama/Llama-3.1-8B/blob/main/config.json)
 - [Samsung data-center SSD specifications](https://semiconductor.samsung.com/ssd/datacenter-ssd/)
@@ -117,7 +122,7 @@ The Concept lookup route cites the current documentation for each framework term
 ```text
 src/data/             cited hardware, model, and memory-tier data
 src/model/            deterministic analytical model and tests
-src/story/            concept panels, shared picture, playground, and challenges
+src/story/            concept panels, cutaway plates, playground, and challenges
 src/lookup/           cited framework-term lookup
 src/visualization/    Three.js hardware scene and camera API
 src/ui/               Under-the-hood supporting visualizations
