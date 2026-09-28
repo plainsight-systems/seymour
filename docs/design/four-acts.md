@@ -32,7 +32,7 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 | A4 | The accelerator choice is global and carries across all acts, including the playground. The workload set in Act 2 carries into Act 3 once Act 2 exists. |
 | A5 | Act 1 has an Isometric / Realistic view toggle at the top. Realistic is an interactive Three.js view with physically based materials, drawn from the same topology data as the plates. Generated imagery is not used for technical views, because it cannot guarantee published counts. |
 | A6 | Act 1 shows hardware only: no model loaded into memory, no busy shading. Those belong to Acts 2 and 3. |
-| A7 | The Act 1 challenge places package-level parts (die, memory stacks, interposer, substrate) and die-level parts (compute units, L2, memory controllers). Drag and drop has a click-to-place equivalent for keyboard users. |
+| A7 | The Act 1 challenge places package-level parts (die, memory stacks, interposer, substrate) and die-level parts (compute units, L2, memory controllers). Drag and drop has a click-to-place equivalent for keyboard users. Feedback appears where the reader is looking: the open zone under a dragged card lights up, a miss flashes the zone red and shows why just above the drawing, and finishing a round lights each part in turn before a result card with the miss count. |
 | A8 | Target: every scene fits one screen at desktop size. Content that does not fit is trimmed or split into another scene, not scrolled inside a scene. |
 
 ## 4. Phases

@@ -55,6 +55,11 @@ export function place(round: AssemblyRound, placed: ReadonlySet<string>, card: s
   return round.parts.includes(zone) && card === zone ? 'correct' : 'wrong';
 }
 
+/** A zone that still accepts a part: in this round and not yet filled. */
+export function isOpenZone(round: AssemblyRound, placed: ReadonlySet<string>, part: string): boolean {
+  return round.parts.includes(part) && !placed.has(part);
+}
+
 export function isComplete(round: AssemblyRound, placed: ReadonlySet<string>): boolean {
   return round.parts.every((part) => placed.has(part));
 }

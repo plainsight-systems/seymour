@@ -4,7 +4,7 @@ import { partEntry } from '../../data/parts';
 import { modelFor } from '../../model/strategy';
 import { buildCutawayInputs } from '../cutaway/inputs';
 import { diePlate, packagePlate, unresolvedLabels } from '../cutaway/plates';
-import { assemblyPlate, assemblyRound, isComplete, place, zoneNumber } from './assembly';
+import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber } from './assembly';
 
 function platesFor(hardwareId: string) {
   const hardware = HARDWARE_PROFILES.find((profile) => profile.id === hardwareId)!;
@@ -52,5 +52,13 @@ describe('assembly challenge', () => {
     expect(place(round, new Set(['unit']), 'l2', 'unit')).toBe('already-placed');
     expect(isComplete(round, new Set(['unit', 'l2']))).toBe(false);
     expect(isComplete(round, new Set(round.parts))).toBe(true);
+  });
+
+  it('offers only unfilled zones in the round as drop targets', () => {
+    const { die } = platesFor('mi300x');
+    const round = assemblyRound('die', die);
+    expect(isOpenZone(round, new Set(), 'l2')).toBe(true);
+    expect(isOpenZone(round, new Set(['l2']), 'l2')).toBe(false);
+    expect(isOpenZone(round, new Set(), 'cluster')).toBe(false);
   });
 });

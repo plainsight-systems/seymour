@@ -273,13 +273,57 @@
 .build-card:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
 .build-shake { animation: build-shake 0.4s ease; }
 @keyframes build-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-.build-feedback { min-height: 3.2em; font-size: 0.9rem; line-height: 1.5; }
-.build-feedback[data-tone='good'] b { color: var(--green); }
-.build-feedback[data-tone='bad'] b { color: var(--red); }
-.build-next, .build-reset { min-height: 44px; margin-top: 0.4rem; padding: 0 0.9rem; color: var(--ink); border: 1px solid var(--ink); background: var(--mustard); font: inherit; font-size: 0.85rem; font-weight: 800; cursor: pointer; }
-.build-reset { background: transparent; }
-.build-drag { position: fixed; z-index: 500; padding: 0.45rem 0.7rem; color: var(--paper, #f3ecdc); background: var(--ink, #1f2e24); font-weight: 800; font-size: 0.85rem; pointer-events: none; box-shadow: 4px 4px 0 rgba(0,0,0,0.2); }
-@media (prefers-reduced-motion: reduce) { .build-shake { animation: none; } }
+.build-next, .build-reset, .build-look { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.9rem; color: var(--ink); border: 1px solid var(--ink); background: transparent; font: inherit; font-size: 0.85rem; font-weight: 800; text-decoration: none; cursor: pointer; }
+.build-next { background: var(--mustard); }
+.build-tray .build-reset { margin-top: 0.4rem; }
+.build-pips { display: flex; gap: 0.3rem; margin: 0.45rem 0 0; padding: 0; list-style: none; }
+.build-pips li { flex: 1; height: 6px; border: 1px solid var(--ink); background: transparent; transition: background 0.25s ease; }
+.build-pips li.is-placed { background: var(--green); border-color: var(--green); }
+
+/* Dragging: the card lifts off the tray; the open zone under it lights up. */
+.build-card.is-lifted { opacity: 0.35; border-style: dashed; }
+.build-drag { position: fixed; z-index: 500; margin: 0; pointer-events: none; background: var(--paper); box-shadow: 8px 10px 0 rgba(0, 0, 0, 0.18); transform: rotate(-2.5deg) scale(1.03); transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.build-drag.is-over { border-color: var(--red); box-shadow: 4px 5px 0 var(--red); transform: rotate(0deg) scale(1); }
+.build-drag.is-returning { transition: left 0.3s ease, top 0.3s ease, opacity 0.3s ease, transform 0.3s ease; opacity: 0; transform: none; }
+.build-scene.is-dragging, .build-scene.is-dragging * { cursor: grabbing; }
+.build-stage { position: relative; }
+.build-stage .cw-box.cw-drop-target .cw-face { stroke: var(--cw-red); stroke-width: 3; stroke-dasharray: none; fill: color-mix(in oklch, var(--cw-mustard) 55%, var(--cw-fill)); fill-opacity: 1; }
+.build-stage .cw-callout.cw-drop-target .cw-marker { fill: var(--cw-mustard); stroke: var(--cw-red); stroke-width: 2.5; }
+.build-stage .cw-box.cw-drop-wrong .cw-face { animation: build-wrong 0.8s ease; }
+.build-stage .cw-callout.cw-drop-wrong .cw-marker { animation: build-wrong 0.8s ease; }
+.build-stage .cw-box.cw-landed .cw-face { animation: build-landed 0.9s ease; }
+.build-stage .cw-callout.cw-landed .cw-marker { animation: build-landed 0.9s ease; }
+@keyframes build-wrong { 0%, 60% { fill: var(--cw-red); stroke: var(--cw-red); fill-opacity: 1; } 100% { } }
+@keyframes build-landed { 0%, 25% { fill: var(--cw-leaf); stroke: var(--cw-green); stroke-width: 3; fill-opacity: 1; } 100% { } }
+
+/* Messages sit just above the drawing and the round result over it, where the reader is looking. */
+.build-bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: center; }
+.build-toast { display: flex; flex: 1 1 22rem; gap: 0.6rem; align-items: flex-start; min-height: 4rem; max-width: 44rem; padding: 0.65rem 0.85rem; color: var(--ink); border: 1.5px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.14); font-size: 0.88rem; line-height: 1.4; }
+.build-toast[hidden] { display: flex; visibility: hidden; }
+.build-toast.is-new { animation: build-toast-in 0.25s ease; }
+.build-toast[data-tone='bad'] { border-color: var(--red); box-shadow: 4px 4px 0 var(--red); }
+.build-toast[data-tone='bad'].is-new { animation: build-toast-in 0.25s ease, build-shake 0.4s ease 0.05s; }
+.build-toast[data-tone='good'] { border-color: var(--green); box-shadow: 4px 4px 0 var(--green); }
+.build-toast-mark { display: grid; flex: none; place-items: center; width: 1.6rem; height: 1.6rem; color: var(--paper); font-weight: 900; }
+.build-toast[data-tone='bad'] .build-toast-mark { background: var(--red); }
+.build-toast[data-tone='good'] .build-toast-mark { background: var(--green); }
+.build-toast[data-tone='bad'] b { color: var(--red); }
+.build-toast[data-tone='good'] b { color: var(--green); }
+@keyframes build-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.build-done { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; padding: 1rem; background: color-mix(in oklch, var(--paper) 55%, transparent); backdrop-filter: blur(1.5px); animation: build-fade 0.3s ease; }
+.build-done[hidden] { display: none; }
+.build-done-card { display: grid; gap: 0.5rem; max-width: 30rem; padding: 1.4rem 1.6rem; border: 2px solid var(--ink); background: var(--paper); box-shadow: 8px 8px 0 var(--green); text-align: center; animation: build-stamp 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.build-done-kicker { margin: 0; color: var(--green); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.build-done-card h3 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: clamp(1.8rem, 3.5vw, 2.6rem); font-weight: 800; line-height: 1; }
+.build-done-score { margin: 0; font-size: 0.95rem; }
+.build-done-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 0.4rem; }
+@keyframes build-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes build-stamp { from { opacity: 0; transform: scale(1.35) rotate(-4deg); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .build-shake, .build-toast.is-new, .build-toast[data-tone='bad'].is-new, .build-done, .build-done-card { animation: none; }
+  .build-stage .cw-face, .build-stage .cw-marker { animation: none !important; }
+  .build-drag, .build-pips li { transition: none; }
+}
 
 /* ---- Act 2: forward-pass stages ------------------------------------------ */
 .forward-tools { display: inline-flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
