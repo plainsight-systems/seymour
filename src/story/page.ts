@@ -8,6 +8,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { mountActs, type ActSpec } from './acts';
+import { FORWARD_TOOLS, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, place, zoneNumber, type AssemblyRound, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
@@ -254,8 +255,9 @@ const ACTS: ActSpec[] = [
   },
   {
     id: 'act-2', number: 2, title: 'Inference',
-    intro: 'What the model computes for every request. This act will walk the forward pass step by step; it starts with the two jobs every request performs.',
-    scenes: STORY_PANELS.filter((panel) => panel.id === 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })),
+    intro: 'What the model computes for every token, in order: from text on the CPU, through every layer on the GPU, and back to text. Each stage shows its size, where its time goes, and what grows until something runs out. Llama 3.1 8B throughout.',
+    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'Two jobs, one chip' }],
+    tools: FORWARD_TOOLS,
   },
   {
     id: 'act-3', number: 3, title: 'The throttles',
@@ -606,6 +608,18 @@ for (const panel of STORY_PANELS) {
 renderGpu();
 renderBuild();
 
+// Act 2: one forward pass, stage by stage.
+const forward = mountForwardScenes(
+  (stage) => acts.sceneHost(stage),
+  acts.sceneHost('tokenize').closest<HTMLElement>('.act')!.querySelector<HTMLElement>('.act-tools')!,
+  (link) => {
+    acts.open(`act-1/${link.scene}`, true);
+    history.replaceState(null, '', `#act-1/${link.scene}`);
+    gpuViews.get(link.scene)?.select(link.part);
+  },
+);
+forward.render(storyHardwareId);
+
 // Act 4: the playground.
 const playground = mountPlayground(acts.sceneHost('playground'));
 
@@ -621,6 +635,7 @@ root.addEventListener('click', (event) => {
   buildCard = null;
   buildFeedback('');
   renderBuild();
+  forward.render(storyHardwareId);
   for (const panel of STORY_PANELS) {
     panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
     renderPanel(panel);
