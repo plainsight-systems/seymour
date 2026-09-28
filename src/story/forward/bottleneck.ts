@@ -24,7 +24,9 @@ export const SCENARIOS: BottleneckScenario[] = [
   { id: 'busy-short', title: 'A busy service, short chats', story: '32 users with short conversations (1,024 tokens each). The model writes one token for every user in each step.', phase: 'decode', batch: 32, sequenceLength: 1024 },
   { id: 'busy-long', title: 'A busy service, long documents', story: '64 users each asking questions about a 32,768-token document. The model is writing their answers.', phase: 'decode', batch: 64, sequenceLength: 32768 },
   { id: 'short-prompts', title: 'Reading short prompts', story: '8 users send 512-token prompts at once. The model reads them before writing the first word of any answer.', phase: 'prefill', batch: 8, sequenceLength: 512 },
-  { id: 'summarize', title: 'Summarize a long document', story: 'One user pastes a 32,768-token document. The model reads all of it before the first word appears.', phase: 'prefill', batch: 1, sequenceLength: 32768 },
+  // 131,072 tokens is Llama 3.1's longest context. Causal attention only
+  // clearly outgrows the MLP's math at prompts well beyond 32K tokens.
+  { id: 'summarize', title: 'Summarize a whole book', story: 'One user pastes a 131,072-token book, the longest context this model accepts. The model reads all of it before the first word appears.', phase: 'prefill', batch: 1, sequenceLength: 131072 },
 ];
 
 export interface BottleneckAnswer {

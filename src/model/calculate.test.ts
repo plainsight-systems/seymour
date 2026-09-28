@@ -217,7 +217,7 @@ describe('calculateSimulation', () => {
     expect(object).toMatchInlineSnapshot(`
       {
         "cheaper": "restore",
-        "recomputeMs": 2001.385517793765,
+        "recomputeMs": 1484.1979818002626,
         "restoreMs": 493.59738368,
       }
     `);

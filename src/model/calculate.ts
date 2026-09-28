@@ -1,5 +1,6 @@
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../types';
 import { getMemoryTier } from '../data/memoryLadder';
+import { meanAttendedKeys } from './attention';
 import { activeParametersPerToken, expertsTouchedFraction, weightReadBytes } from './moe';
 import type { KvPlacement } from '../types';
 
@@ -56,7 +57,8 @@ export function calculateSimulation(
     kvBytes = kvFootprintBytes;
     bytes = weightPassBytes + kvBytes + batch * verifyTokens * kvBytesPerToken + materializedAttentionBytes;
   } else {
-    flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * attentionWidth * queryTokens * sequence);
+    // Causal: each prompt token is scored only against keys it can see (attention.ts).
+    flops = batch * (denseFlopsPerToken * queryTokens + 4 * model.layers * attentionWidth * queryTokens * meanAttendedKeys(settings, sequence, cachedTokens));
     kvBytes = kvFootprintBytes;
     // A prefix hit leaves only the uncached suffix to process. That suffix still
     // attends over the complete cached-plus-new context.

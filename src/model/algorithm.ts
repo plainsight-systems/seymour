@@ -1,4 +1,5 @@
 import type { AlgorithmStep, ModelProfile, SimulationSettings } from '../types';
+import { meanAttendedKeys } from './attention';
 
 export function buildAlgorithmSteps(
   settings: SimulationSettings,
@@ -12,6 +13,8 @@ export function buildAlgorithmSteps(
     : uncachedTokens;
   const tq = settings.phase === 'prefill' ? chunkTokens : 1;
   const tk = settings.sequenceLength;
+  // Keys each query is actually scored against (causal; see attention.ts).
+  const tkAttended = meanAttendedKeys(settings, tk, cachedTokens);
   const d = model.hiddenSize;
   const h = model.attentionHeads;
   const hkv = model.kvHeads;
@@ -28,7 +31,7 @@ export function buildAlgorithmSteps(
   const qBytes = b * h * tq * dh * activationBytes;
   const newKvBytes = b * hkv * tq * dh * activationBytes;
   const oneCachedTensorBytes = b * tk * dkv * activationBytes;
-  const scoreBytes = b * h * tq * tk * activationBytes;
+  const scoreBytes = b * h * tq * tkAttended * activationBytes;
   const materializeAttention = settings.attentionKernel === 'separate';
 
   return [
@@ -80,9 +83,11 @@ export function buildAlgorithmSteps(
       id: 'qk', number: '05', group: 'attention', label: 'QKᵀ',
       name: 'Score every query against cached keys',
       equation: 'S = Q′Kcacheᵀ / √dh + causal_mask',
-      description: 'Each query head dot-products against every legal key position. The causal mask makes future positions unreachable during prefill.',
+      description: settings.phase === 'prefill' && settings.attentionKernel !== 'separate'
+        ? 'Each query head dot-products against every legal key position. The causal mask makes future positions unreachable, and the fused kernel skips them, so a prompt costs about half the full grid.'
+        : 'Each query head dot-products against every legal key position. The causal mask makes future positions unreachable during prefill.',
       inputShape: `Q ${qShape} · K ${kvShape}`, outputShape: `scores [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}]`,
-      flops: 2 * b * h * tq * tk * dh,
+      flops: 2 * b * h * tq * tkAttended * dh,
       parameterBytes: 0, activationBytes: scoreBytes,
       boundaryBytes: qBytes + oneCachedTensorBytes + (materializeAttention ? scoreBytes : 0),
       writeBytes: materializeAttention ? scoreBytes : 0, spillableKvBytes: oneCachedTensorBytes,
@@ -94,7 +99,7 @@ export function buildAlgorithmSteps(
       equation: 'Pij = exp(Sij − max(Si)) / Σj exp(Sij − max(Si))',
       description: 'Subtracting the row maximum keeps the exponentials numerically stable. Each query row sums to one.',
       inputShape: `scores [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}]`, outputShape: 'same shape',
-      flops: 5 * b * h * tq * tk,
+      flops: 5 * b * h * tq * tkAttended,
       parameterBytes: 0, activationBytes: scoreBytes,
       boundaryBytes: materializeAttention ? 2 * scoreBytes : 0,
       writeBytes: materializeAttention ? scoreBytes : 0,
@@ -106,7 +111,7 @@ export function buildAlgorithmSteps(
       equation: 'A = P Vcache',
       description: 'The weighted sum pulls information from earlier token positions into each query head.',
       inputShape: `P [${b}, ${h}, ${tq.toLocaleString()}, ${tk.toLocaleString()}] · V ${kvShape}`, outputShape: qShape,
-      flops: 2 * b * h * tq * tk * dh,
+      flops: 2 * b * h * tq * tkAttended * dh,
       parameterBytes: 0, activationBytes: xBytes,
       boundaryBytes: oneCachedTensorBytes + xBytes + (materializeAttention ? scoreBytes : 0),
       writeBytes: xBytes, spillableKvBytes: oneCachedTensorBytes,
