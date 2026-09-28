@@ -167,4 +167,18 @@ describe('plates', () => {
     expect(wait.title).toBe(`Time waiting on memory · ${100 - pct}%`);
     expect(math.detail).toContain('all SMs work every step');
   });
+
+  it('draws hardware alone in hardware mode: no model, no activity, no lit path', () => {
+    const workloadParts = ['weights', 'weights-idle', 'kv', 'free', 'reserve', 'overflow', 'unit-busy', 'unit-wait'];
+    for (const hardware of HARDWARE_PROFILES) {
+      const { inputs } = inputsFor({ hardwareId: hardware.id, batch: 256 });
+      const plates = [serverPlate(inputs, 'hardware'), packagePlate(inputs, 'hardware'), diePlate(inputs, { job: 'decode', detail: 'full', activity: false })];
+      for (const plate of plates) {
+        expect(unresolvedLabels(plate.scene)).toEqual([]);
+        expect(plate.scene.boxes.some((box) => workloadParts.includes(box.part ?? ''))).toBe(false);
+        expect(plate.litPath).toBeNull();
+        expect(plate.defaultSelection).toEqual([]);
+      }
+    }
+  });
 });

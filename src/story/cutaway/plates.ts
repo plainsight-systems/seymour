@@ -7,6 +7,12 @@ import { SceneBuilder, frontFace, illustrativeDisabledUnits, type Fill, type Sce
 
 export type PlateId = 'server' | 'package' | 'die' | 'unit';
 
+/**
+ * workload: memory fill, busy shading, and the KV path come from the model.
+ * hardware: the chip alone, with no model loaded and nothing running (Act 1).
+ */
+export type PlateMode = 'workload' | 'hardware';
+
 export interface Plate {
   id: PlateId;
   scene: Scene;
@@ -32,7 +38,7 @@ export const PLACEMENT_PART: Record<KvPlacement, string> = {
 // ---------------------------------------------------------------------------
 // Plate 1 · Server
 // ---------------------------------------------------------------------------
-export function serverPlate(inputs: CutawayInputs): Plate {
+export function serverPlate(inputs: CutawayInputs, mode: PlateMode = 'workload'): Plate {
   const topology = getTopology(inputs.hardwareId);
   const b = new SceneBuilder();
   const switched = getHardware(inputs.hardwareId).peerFabric === 'switched';
@@ -90,7 +96,9 @@ export function serverPlate(inputs: CutawayInputs): Plate {
   b.label('net', 'store', 'right', 'Object storage, over the network', `~${formatBandwidth(object.bandwidthBytesPerSecond!)}, ~${object.firstByteLatencyMs} ms to first byte`, object.basis);
 
   return {
-    id: 'server', scene: b.build(), defaultSelection: [PLACEMENT_PART[inputs.placement]], litPath: inputs.placement,
+    id: 'server', scene: b.build(),
+    defaultSelection: mode === 'hardware' ? [] : [PLACEMENT_PART[inputs.placement]],
+    litPath: mode === 'hardware' ? null : inputs.placement,
     note: 'Line thickness is proportional to the square root of bandwidth. Board layout is schematic.',
     sources: topology.sources,
   };
@@ -99,11 +107,15 @@ export function serverPlate(inputs: CutawayInputs): Plate {
 // ---------------------------------------------------------------------------
 // Plate 2 · Package (exploded)
 // ---------------------------------------------------------------------------
-function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: number, d: number, h: number, active: boolean, inputs: CutawayInputs): void {
+function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: number, d: number, h: number, active: boolean, inputs: CutawayInputs, mode: PlateMode): void {
   const base = { x, y, w, d, layer: 4 };
   b.box({ ...base, id: `${id}-base`, part: 'hbm', z, h: 0.6, fill: 'slate' });
   if (!active) {
     b.box({ ...base, id, part: 'unused', z: z + 0.6, h, fill: 'paper', ghost: true });
+    return;
+  }
+  if (mode === 'hardware') {
+    b.box({ ...base, id: `${id}-dram`, part: 'hbm', z: z + 0.6, h, fill: 'paperBright' });
     return;
   }
   const m = inputs.memory;
@@ -153,12 +165,12 @@ function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string):
   b.label('reserve', `${frontStack}-reserve`, 'left', 'Held back for the runtime', `${Math.round(m.reserveFraction * 100)}% of physical memory`, 'schematic', face('reserve'));
 }
 
-export function packagePlate(inputs: CutawayInputs): Plate {
+export function packagePlate(inputs: CutawayInputs, mode: PlateMode = 'workload'): Plate {
   const topology = getTopology(inputs.hardwareId);
-  return topology.computeDies === 1 ? monolithicPackage(inputs, topology) : chipletPackage(inputs, topology);
+  return topology.computeDies === 1 ? monolithicPackage(inputs, topology, mode) : chipletPackage(inputs, topology, mode);
 }
 
-function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
+function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology, mode: PlateMode): Plate {
   const b = new SceneBuilder();
   b.box({ id: 'substrate', part: 'substrate', x: 0, y: 0, w: 60, d: 44, h: 1.4, fill: 'green' });
   const interposer = b.box({ id: 'interposer', part: 'interposer', x: 8, y: 6, w: 44, d: 32, h: 0.8, z: 5, fill: 'slate', layer: 1 });
@@ -179,7 +191,7 @@ function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate
         const [x0, x1] = side === 0 ? [x + 7, die.x] : [die.x + die.w, x];
         b.wire([x0, wy, top], [x1, wy, top]);
       }
-      stack(b, `hbm${site}`, x, y, dz, 7, 7, 5.2, active, inputs);
+      stack(b, `hbm${site}`, x, y, dz, 7, 7, 5.2, active, inputs, mode);
       site++;
     }
   }
@@ -187,7 +199,7 @@ function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate
   stackLabel(b, inputs, topology, `hbm${topology.hbmSites - 2}-base`);
   if (topology.hbmActiveStacks < topology.hbmSites) b.label('unused', `hbm${topology.hbmSites - 1}`, 'right', 'Unused site', `${topology.hbmSites} memory sites; ${topology.hbmActiveStacks} are used`, 'published');
   b.label('interposer', 'interposer', 'right', 'Silicon interposer', '1,024 wires per stack, millimeters long', 'published', [interposer.x + 4, interposer.y + interposer.d - 1.5, top]);
-  fillLabels(b, inputs, `hbm${perSide - 1}`);
+  if (mode === 'workload') fillLabels(b, inputs, `hbm${perSide - 1}`);
   b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and NVLink', 'published', [3, 44 - 2.5, 1.4]);
   return {
     id: 'package', scene: b.build(), defaultSelection: [], litPath: null,
@@ -196,7 +208,7 @@ function monolithicPackage(inputs: CutawayInputs, topology: ChipTopology): Plate
   };
 }
 
-function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
+function chipletPackage(inputs: CutawayInputs, topology: ChipTopology, mode: PlateMode): Plate {
   const b = new SceneBuilder();
   b.box({ id: 'substrate', part: 'substrate', x: 0, y: 0, w: 62, d: 46, h: 1.4, fill: 'green' });
   const interposer = b.box({ id: 'interposer', part: 'interposer', x: 5, y: 5, w: 52, d: 36, h: 0.8, z: 5, fill: 'slate', layer: 1 });
@@ -218,7 +230,7 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
   let site = 0;
   for (const side of [0, 1]) {
     for (let i = 0; i < perSide; i++) {
-      stack(b, `hbm${site}`, side === 0 ? 7.5 : 47.5, 7.5 + i * 7.6, iz, 7, 6.6, 5.2, site < topology.hbmActiveStacks, inputs);
+      stack(b, `hbm${site}`, side === 0 ? 7.5 : 47.5, 7.5 + i * 7.6, iz, 7, 6.6, 5.2, site < topology.hbmActiveStacks, inputs, mode);
       site++;
     }
   }
@@ -226,7 +238,7 @@ function chipletPackage(inputs: CutawayInputs, topology: ChipTopology): Plate {
   b.label('compute-die', `xcd${topology.ioDies - 1}-0`, 'right', `Compute dies · ${topology.computeDies}`, `${perCompute} CUs enabled on each; ${topology.enabledUnits} total`, 'published');
   b.label('io', 'io1', 'right', `I/O dies · ${topology.ioDies}`, `hold the ${getHardware(inputs.hardwareId).lastLevelCacheMB} MB Infinity Cache`, 'published');
   stackLabel(b, inputs, topology, `hbm${topology.hbmSites - 1}-base`);
-  fillLabels(b, inputs, `hbm${perSide - 1}`);
+  if (mode === 'workload') fillLabels(b, inputs, `hbm${perSide - 1}`);
   b.label('interposer', 'interposer', 'left', 'Silicon interposer', 'joins the I/O dies to each other and to their memory', 'published', [interposer.x + 3, interposer.y + interposer.d - 1.5, interposer.z + interposer.h]);
   b.label('substrate', 'substrate', 'left', 'Package substrate', 'out to the board: PCIe and Infinity Fabric', 'published', [3, 46 - 2.5, 1.4]);
   return {
@@ -243,6 +255,8 @@ export interface DieOptions {
   job: 'prefill' | 'decode';
   /** Minimal drawings carry only the busy/waiting labels (used side by side). */
   detail: 'full' | 'minimal';
+  /** false draws the die with nothing running: no busy or waiting shading. */
+  activity?: boolean;
 }
 
 export function diePlate(inputs: CutawayInputs, options: DieOptions): Plate {
@@ -254,8 +268,15 @@ function unitFill(dead: boolean, busy: boolean): Fill {
   return dead ? 'paperBright' : busy ? 'red' : 'green';
 }
 
+function unitPart(dead: boolean, busy: boolean, activity: boolean): string {
+  if (dead) return 'unit-off';
+  if (!activity) return 'unit';
+  return busy ? 'unit-busy' : 'unit-wait';
+}
+
 function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: DieOptions): Plate {
   const job = inputs[options.job];
+  const activity = options.activity ?? true;
   const b = new SceneBuilder();
   b.box({ id: 'die', x: 0, y: 0, w: 40, d: 31, h: 0.8 });
   const disabled = illustrativeDisabledUnits(topology.physicalUnits, topology.physicalUnits - topology.enabledUnits, 7);
@@ -270,9 +291,9 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
     b.box({ id: `cluster${c}`, part: 'cluster', x: gx, y: gy, w: 7.7, d: 10.8, h: 0.3, z: 0.8, fill: 'paper', layer: 1 });
     for (let i = 0; i < topology.unitsPerCluster; i++) {
       const dead = disabled.has(unit);
-      const busy = !dead && enabledSeen++ < job.busyUnits;
+      const busy = activity && !dead && enabledSeen++ < job.busyUnits;
       b.box({
-        id: `unit${unit}`, part: dead ? 'unit-off' : busy ? 'unit-busy' : 'unit-wait', layer: 2,
+        id: `unit${unit}`, part: unitPart(dead, busy, activity), layer: 2,
         x: gx + 0.35 + (i % 6) * 1.2, y: gy + 0.4 + Math.floor(i / 6) * 3.45, z: 1.1, w: 1.0, d: 3.1, h: 0.9,
         fill: unitFill(dead, busy), ghost: dead,
       });
@@ -290,7 +311,8 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
       b.box({ id: `mc${index}`, part: 'mc', x: side === 0 ? 0.6 : 37, y: 1.6 + i * 4.8, w: 2.4, d: 4.2, h: 0.9, z: 0.8, layer: 2, fill: active ? 'slate' : 'paperBright', ghost: !active });
     }
   }
-  busyLabels(b, job, topology.enabledUnits, 'SMs');
+  if (activity) busyLabels(b, job, topology.enabledUnits, 'SMs');
+  else b.label('unit', firstUnitId(b), 'left', `SM · ${topology.enabledUnits} of ${topology.physicalUnits} enabled`, 'streaming multiprocessors: the workers that run kernels', 'published');
   if (options.detail === 'full') {
     // Anchor on the last disabled unit so its marker stays clear of the busy ones.
     const lastDead = [...disabled].sort((a, z) => a - z).at(-1);
@@ -308,6 +330,7 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
 
 function computeDie(inputs: CutawayInputs, topology: ChipTopology, options: DieOptions): Plate {
   const job = inputs[options.job];
+  const activity = options.activity ?? true;
   const b = new SceneBuilder();
   const below = b.box({ id: 'io-below', part: 'io', x: -2, y: -2, w: 38, d: 26, h: 1.2, z: -5, fill: 'mustard', layer: -1 });
   b.guide([[0, 22, below.z + below.h], [0, 22, 0]]);
@@ -321,16 +344,17 @@ function computeDie(inputs: CutawayInputs, topology: ChipTopology, options: DieO
     const half = unit < perDie / 2 ? 0 : 1;
     const local = unit % (perDie / 2);
     const dead = disabled.has(unit);
-    const busy = !dead && enabledSeen++ < job.busyUnitsPerCluster;
+    const busy = activity && !dead && enabledSeen++ < job.busyUnitsPerCluster;
     b.box({
-      id: `unit${unit}`, part: dead ? 'unit-off' : busy ? 'unit-busy' : 'unit-wait', layer: 2,
+      id: `unit${unit}`, part: unitPart(dead, busy, activity), layer: 2,
       x: 1.2 + (local % 10) * 3.18, y: (half === 0 ? 1 : 13.6) + Math.floor(local / 10) * 3.8, z: 0.8, w: 2.8, d: 3.4, h: 1.0,
       fill: unitFill(dead, busy), ghost: dead,
     });
   }
   b.box({ id: 'l2', part: 'l2', x: 1.2, y: 9.1, w: 31.6, d: 3.8, h: 1.2, z: 0.8, fill: 'mustard', layer: 2 });
   const enabledPerDie = perDie - disabledCount;
-  busyLabels(b, { ...job, busyUnits: job.busyUnitsPerCluster }, enabledPerDie, 'CUs');
+  if (activity) busyLabels(b, { ...job, busyUnits: job.busyUnitsPerCluster }, enabledPerDie, 'CUs');
+  else b.label('unit', firstUnitId(b), 'left', `CU · ${enabledPerDie} of ${perDie} enabled`, 'compute units: the workers that run kernels', 'published');
   if (options.detail === 'full') {
     if (disabledCount > 0) {
       const firstDead = [...disabled].sort((a, z) => a - z)[0];
@@ -344,6 +368,10 @@ function computeDie(inputs: CutawayInputs, topology: ChipTopology, options: DieO
     note: `One of ${topology.computeDies} compute dies; all share the same work. CU arrangement is schematic; shading is a share of time.`,
     sources: topology.sources,
   };
+}
+
+function firstUnitId(b: SceneBuilder): string {
+  return b.find((box) => box.part === 'unit')!.id;
 }
 
 /**
