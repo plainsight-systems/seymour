@@ -1,0 +1,48 @@
+# Design: Four acts
+
+**Status:** Approved direction, executing in phases
+**Change class:** Architectural (information structure of the story route)
+**Supersedes:** the six-panel page layout in `concept-panels.md` and `cutaway-plates.md` (their models, plates, and decisions on honesty still apply)
+**Date:** 2026-09-28
+
+## 1. Problem
+
+The story tries to teach hardware, the algorithm, and optimization at once in every panel. Readers who have never looked at a GPU meet memory stacks, KV traffic, and speculative decoding in the same view. The page reads as dense, and the playground's challenges arrive without the vocabulary they depend on.
+
+## 2. Structure
+
+Four acts, stacked vertically. Each act is one screen tall; scrolling moves between acts. Inside an act, scenes are horizontal tabs.
+
+| Act | Purpose | Scenes |
+|---|---|---|
+| **1 · The GPU** | What the hardware is and what each part does | Server · Package · Die · Compute unit (parts and purpose at each zoom level) · Challenge: place the parts |
+| **2 · Inference** | What the model computes, in order, with sizes and complexity | Linear walk through the forward pass; grouping to be supplied by the owner |
+| **3 · The throttles** | How each Act 2 step is changed by decisions and limited by Act 1 hardware | One scene per lever (the current concept panels, re-scoped) |
+| **4 · Putting it together** | Prove it under constraints | Playground and challenges |
+
+The lookup page stays a separate route. Under the hood is absorbed into Acts 1 and 2 over time, then retired.
+
+## 3. Decisions
+
+| # | Decision |
+|---|---|
+| A1 | Acts stack vertically, each at least one screen tall (`100svh`), with loose scroll snapping (`proximity`). |
+| A2 | Scenes are horizontal tabs (`role=tablist`), arrow-key navigable, with one scene visible at a time. |
+| A3 | Every scene is addressable: `#act-1/package`. Loading or following such a link scrolls to the act and opens the scene. |
+| A4 | The accelerator choice is global and carries across all acts, including the playground. The workload set in Act 2 carries into Act 3 once Act 2 exists. |
+| A5 | Act 1 has an Isometric / Realistic view toggle at the top. Realistic is an interactive Three.js view with physically based materials, drawn from the same topology data as the plates. Generated imagery is not used for technical views, because it cannot guarantee published counts. |
+| A6 | Act 1 shows hardware only: no model loaded into memory, no busy shading. Those belong to Acts 2 and 3. |
+| A7 | The Act 1 challenge places package-level parts (die, memory stacks, interposer, substrate) and die-level parts (compute units, L2, memory controllers). Drag and drop has a click-to-place equivalent for keyboard users. |
+| A8 | Target: every scene fits one screen at desktop size. Content that does not fit is trimmed or split into another scene, not scrolled inside a scene. |
+
+## 4. Phases
+
+1. **Shell.** Acts, tabs, act indicator, scene links, global chip selector. Existing content moves in as-is: Act 1 plates (hardware-only mode), Act 2 holds the prompt-vs-token scene, Act 3 holds the remaining concept panels, Act 4 holds the playground. No new features; no placeholder tabs.
+2. **Act 1.** Parts-and-purpose panel for each part; the realistic view and its toggle; the placement challenge.
+3. **Act 2.** The forward pass, with the owner's grouping.
+4. **Act 3.** Each lever names the Act 2 steps it changes and the Act 1 part that limits it; scenes trimmed to fit one screen.
+5. **Act 4.** Challenge refinements from play-testing.
+
+## 5. Rollback
+
+Phase 1 replaces the story page's outer layout only; the model, plates, panels, and playground modules are reused unchanged. Reverting the phase 1 commit restores the six-panel page.
