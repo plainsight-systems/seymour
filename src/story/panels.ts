@@ -38,11 +38,11 @@ export interface StoryPanelSpec {
 
 export const STORY_PANELS: StoryPanelSpec[] = [
   {
-    id: 'two-jobs', number: '00', title: 'Two different jobs',
-    claim: 'Reading the prompt and writing the answer are different jobs, limited by different things.',
+    id: 'two-jobs', number: '00', title: 'First pass vs. every pass after',
+    claim: 'One wide pass for the prompt, then one thin pass per answer token: same stages, different limits.',
     knobLabel: 'Prompt length', plate: 'die-pair', numbers: [],
-    changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'unit', part: 'matrix', label: 'Matrix units (prompt work)' }, { scene: 'package', part: 'hbm', label: 'Memory stacks (token work)' }],
-    trace: 'Prompt processing appears as a few long matrix-multiply kernels running close to the math peak. Token generation appears as many short kernels per step: memory bandwidth is high while math units sit mostly idle.',
+    changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'unit', part: 'matrix', label: 'Matrix units (pass 1)' }, { scene: 'package', part: 'hbm', label: 'Memory stacks (later passes)' }],
+    trace: 'The first pass appears as a few long matrix-multiply kernels running close to the math peak. Each later pass appears as many short kernels: memory bandwidth is high while math units sit mostly idle.',
     moves: [
       { title: 'Reuse a shared prompt', explanation: 'Assume 75% of the prompt is a prefix already processed for an earlier request, and skip that work.', modeled: true, effect: 'prefixReuse' },
       { title: 'Run the math in 8 bits', explanation: 'Store weights in 8 bits and multiply in FP8, using the published FP8 ceiling. Accuracy is a tradeoff; scaling overheads are not modeled.', modeled: true, effect: 'fp8' },
@@ -55,7 +55,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
     claim: 'To produce each token, the GPU reads every weight in the model from memory.',
     knobLabel: 'Model precision', plate: 'package', numbers: [],
     changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): bandwidth' }],
-    trace: 'In one decode step, bytes read from GPU memory come out close to the model’s size, and achieved bandwidth sits near the memory peak. Halving the weight bytes should roughly halve those kernels’ time.',
+    trace: 'In one per-token pass, bytes read from GPU memory come out close to the model’s size, and achieved bandwidth sits near the memory peak. Halving the weight bytes should roughly halve those kernels’ time.',
     moves: [
       { title: 'Store weights in fewer bits', explanation: 'Move fewer bytes per token; accuracy and kernel support remain tradeoffs.', modeled: true, viaKnob: true },
       { title: 'Use a smaller model', explanation: 'Remove weights and math together.', modeled: false },

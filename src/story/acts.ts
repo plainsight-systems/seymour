@@ -17,6 +17,8 @@ export interface ActSpec {
   tools?: string;
   /** Small print shown under the act's scenes. */
   footnote?: string;
+  /** Markup shown between the act header and its scene tabs, for every scene. */
+  banner?: string;
 }
 
 export interface ActsView {
@@ -50,6 +52,7 @@ export function mountActs(root: HTMLElement, acts: ActSpec[], options: ActsOptio
         <div class="act-title"><span>Act ${act.number}</span><h2 id="${act.id}-title">${act.title}</h2><p>${act.intro}</p></div>
         <div class="act-tools">${act.tools ?? ''}${options.headerTools}</div>
       </header>
+      ${act.banner ?? ''}
       <div class="act-tabs" role="tablist" aria-label="Act ${act.number} scenes">${act.scenes.map((scene, index) => `<button type="button" role="tab" id="${tabId(act.id, scene.id)}" aria-controls="${panelId(act.id, scene.id)}" aria-selected="${index === 0}" tabindex="${index === 0 ? 0 : -1}" data-scene="${scene.id}"><span>${index + 1}</span>${scene.label}</button>`).join('')}</div>
       <div class="act-scenes">${act.scenes.map((scene, index) => `<div class="act-scene" role="tabpanel" id="${panelId(act.id, scene.id)}" aria-labelledby="${tabId(act.id, scene.id)}" data-scene-panel="${scene.id}" ${index === 0 ? '' : 'hidden'}></div>`).join('')}</div>
       ${act.footnote ? `<p class="act-footnote">${act.footnote}</p>` : ''}

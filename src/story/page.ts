@@ -8,7 +8,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { mountActs, type ActSpec } from './acts';
-import { FORWARD_TOOLS, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
+import { FORWARD_TOOLS, PASS_LOOP, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
 import { mountBottleneckChallenge } from './forward/challenge';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './challenge/assembly';
@@ -78,7 +78,7 @@ function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayI
   if (panel.id === 'two-jobs') {
     const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
     const promptPerToken = prefill.totalMs / Math.max(1, settings.sequenceLength - reused);
-    return `One generated token costs about ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× as much time as one prompt token here. The same chip is busy in one job and idle in the other.`;
+    return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
   }
   if (panel.id === 'read-model') {
     return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each token step waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
@@ -145,7 +145,7 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
     const tier = inputs.tiers[settings.kvPlacement];
     const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), modelFor(settings), settings.kvPlacement);
     const where = PLACEMENT_PHRASE[settings.kvPlacement];
-    return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): one decode step takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
+    return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): each per-token pass takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
   }
   return '';
 }
@@ -153,7 +153,7 @@ function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: Simulat
 /** The model's own busy shares, to compare against a real trace. */
 function traceSignature(panel: StoryPanelSpec, inputs: CutawayInputs): string {
   const job = panel.id === 'two-jobs' ? inputs.prefill : inputs.decode;
-  const label = panel.id === 'two-jobs' ? 'prompt step' : 'decode step';
+  const label = panel.id === 'two-jobs' ? 'first pass (the whole prompt)' : 'per-token pass';
   const pct = (share: number) => { const value = Math.min(1, share) * 100; return value < 1 ? value.toFixed(1) : Math.round(value).toString(); };
   const math = pct(job.computeMs / job.totalMs);
   const memory = pct(job.memoryMs / job.totalMs);
@@ -165,9 +165,9 @@ function jobCaption(inputs: CutawayInputs, job: 'prefill' | 'decode', settings: 
   const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
   const title = job === 'prefill'
     ? reused > 0
-      ? `Reading the prompt · ${(settings.sequenceLength - reused).toLocaleString()} new tokens (${reused.toLocaleString()} reused)`
-      : `Reading the prompt · ${settings.sequenceLength.toLocaleString()} tokens at once`
-    : 'Writing one token';
+      ? `First pass · ${(settings.sequenceLength - reused).toLocaleString()} new tokens (${reused.toLocaleString()} reused)`
+      : `First pass · ${settings.sequenceLength.toLocaleString()} prompt tokens`
+    : 'Every pass after · 1 new token';
   const limit = a.computeMs >= a.memoryMs ? 'limited by math' : 'limited by reading memory';
   return `<b>${title}</b><span>${formatDuration(a.totalMs)} · math ${formatDuration(a.computeMs)} · reading ${formatDuration(a.memoryMs)} · ${limit}</span>`;
 }
@@ -269,9 +269,10 @@ const ACTS: ActSpec[] = [
   },
   {
     id: 'act-2', number: 2, title: 'Inference',
-    intro: 'What the model computes for every token, in order: from text on the CPU, through every layer on the GPU, and back to text. Each stage shows its size, where its time goes, and what grows until something runs out. Llama 3.1 8B throughout.',
-    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'Two jobs' }, { id: 'bottleneck', label: 'Challenge' }],
+    intro: 'What the model computes, stage by stage: from text on the CPU, through every layer on the GPU, and back to text. A request runs these stages once for the whole prompt, then once more for every token of the answer. Llama 3.1 8B throughout.',
+    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'First vs. later' }, { id: 'bottleneck', label: 'Challenge' }],
     tools: FORWARD_TOOLS,
+    banner: PASS_LOOP,
   },
   {
     id: 'act-3', number: 3, title: 'The throttles',

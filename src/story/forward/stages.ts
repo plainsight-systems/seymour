@@ -50,7 +50,7 @@ export const STAGE_COPY: Record<StageId, StageCopy> = {
     title: 'Attention',
     lead: () => 'Each token looks back at every earlier token. It projects itself into a query, a key, and a value; keys and values are saved in the KV cache so later tokens can look back without recomputing them. The layer’s norm and residual add are folded in.',
     growsWith: ['context length', 'concurrent users'],
-    overflow: (facts) => `The KV cache: ${facts.kvPerToken} per token, per user. It fills GPU memory and is re-read on every step. When processing a prompt, the scores also grow with the square of its length, so long prompts pile up math too.`,
+    overflow: (facts) => `The KV cache: ${facts.kvPerToken} per token, per user. It fills GPU memory and is re-read on every step. In the first pass, the scores also grow with the square of the prompt’s length, so long prompts pile up math too.`,
     doesTheWork: [
       { scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): the KV cache' },
       { scene: 'unit', part: 'matrix', label: 'Matrix units' },
@@ -62,7 +62,7 @@ export const STAGE_COPY: Record<StageId, StageCopy> = {
     title: 'MLP (feed-forward)',
     lead: (model) => `Each token passes on its own through a wide two-layer network: expand from ${model.hiddenSize.toLocaleString()} to ${model.intermediateSize.toLocaleString()} channels, gate, and contract back. The layer’s norm and residual add are folded in.`,
     growsWith: ['tokens in this pass (not context length)'],
-    overflow: (facts) => `Weights: about ${Math.round(facts.mlpShareOfLayer * 100)}% of each layer’s weights live here, and every generated token reads all of them. Limited by memory when generating, by math when processing a prompt.`,
+    overflow: (facts) => `Weights: about ${Math.round(facts.mlpShareOfLayer * 100)}% of each layer’s weights live here, and every generated token reads all of them. Limited by math in the first pass, by memory in every pass after.`,
     doesTheWork: [
       { scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): the weights' },
       { scene: 'unit', part: 'matrix', label: 'Matrix units' },

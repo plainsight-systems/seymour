@@ -200,7 +200,7 @@
 .act-title p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; line-height: 1.5; }
 .act-tools .panel-chip { margin-left: 0; }
 .act-tabs { display: flex; gap: 0; overflow-x: auto; margin: 0 clamp(1rem, 4vw, 4rem); border-bottom: 1.5px solid var(--ink); scrollbar-width: thin; }
-.act-tabs [role='tab'] { display: inline-flex; flex: none; gap: 0.5rem; align-items: center; min-height: 48px; padding: 0 1.1rem; color: var(--ink-soft); border: 0; border-bottom: 3px solid transparent; background: none; font: inherit; font-size: 0.9rem; font-weight: 750; white-space: nowrap; cursor: pointer; }
+.act-tabs [role='tab'] { display: inline-flex; flex: none; gap: 0.5rem; align-items: center; min-height: 46px; padding: 0 0.95rem; color: var(--ink-soft); border: 0; border-bottom: 3px solid transparent; background: none; font: inherit; font-size: 0.9rem; font-weight: 750; white-space: nowrap; cursor: pointer; }
 .act-tabs [role='tab'] span { display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border: 1.5px solid currentColor; border-radius: 50%; font-size: 0.7rem; }
 .act-tabs [role='tab'][aria-selected='true'] { color: var(--ink); border-bottom-color: var(--red); }
 .act-tabs [role='tab'][aria-selected='true'] span { color: var(--paper); border-color: var(--red); background: var(--red); }
@@ -324,7 +324,7 @@
 .forward-tools { display: inline-flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
 .forward-select { display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; font-weight: 800; }
 .forward-select select { min-height: 44px; padding: 0 0.5rem; color: var(--ink); border: 1px solid var(--ink); border-radius: 0; background: var(--paper); font: inherit; font-weight: 700; }
-.stage-scene { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr); gap: 2rem; padding: 1.25rem clamp(1rem, 4vw, 4rem) 2rem; }
+.stage-scene { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr); gap: 2rem; padding: 1rem clamp(1rem, 4vw, 4rem) 1.25rem; }
 .stage-narrative { display: grid; gap: 0.9rem; align-content: start; min-width: 0; }
 .stage-kicker { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink-soft); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .runs-on { padding: 0.15rem 0.45rem; color: var(--paper); font-size: 0.7rem; }
@@ -494,3 +494,17 @@
 .bn-legend i { display: inline-block; width: 12px; height: 8px; }
 @media (max-width: 1000px) { .bn-scene { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .bn-reveal { animation: none; } }
+
+/* ---- Act 2: the pass loop --------------------------------------------------- */
+.pass-loop { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 0.75fr); gap: 0.4rem 1.5rem; align-items: center; padding: 0 clamp(1rem, 4vw, 4rem) 0.5rem; }
+.pass-loop ol { display: flex; gap: 0.3rem; align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.pass-loop li { display: grid; gap: 0; align-content: center; min-width: 0; padding: 0.25rem 0.5rem; border: 1.5px solid var(--ink); font-size: 0.72rem; line-height: 1.25; }
+.pass-loop li b { overflow: hidden; font-size: 0.74rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.pass-loop li span { overflow: hidden; color: var(--ink-soft); text-overflow: ellipsis; white-space: nowrap; }
+.pass-loop .pass-wide { flex: 3 1 0; color: var(--paper); border-color: var(--green); background: var(--green); }
+.pass-loop .pass-wide span { color: color-mix(in oklch, var(--paper) 80%, transparent); }
+.pass-loop .pass-thin { flex: 1 1 0; background: color-mix(in oklch, var(--mustard) 22%, var(--paper)); }
+.pass-loop .pass-more { flex: 0 0 auto; place-content: center; border: 0; font-size: 1.2rem; font-weight: 800; }
+.pass-loop p { margin: 0; color: var(--ink-soft); font-size: 0.76rem; line-height: 1.4; }
+@media (max-width: 1280px) { .pass-loop .pass-wide { flex-grow: 2; } .pass-loop li:nth-child(3) { display: none; } }
+@media (max-width: 1000px) { .pass-loop { grid-template-columns: 1fr; } }

@@ -61,7 +61,7 @@ export function buildPictureModel(
       ? 'Execution'
       : 'Traffic';
   const bottleneckSentence = decode.bottleneck === 'placement'
-    ? `${settings.kvPlacement === 'object' ? 'Network storage' : 'The selected KV tier'} cannot feed each decode step fast enough; move active state closer.`
+    ? `${settings.kvPlacement === 'object' ? 'Network storage' : 'The selected KV tier'} cannot feed each per-token pass fast enough; move active state closer.`
     : decode.bottleneck === 'compute'
       ? 'The batch exposes enough reuse that arithmetic is now the longest stage.'
       : decode.bottleneck === 'host'

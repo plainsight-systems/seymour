@@ -60,7 +60,7 @@ export function mountBottleneckChallenge(host: HTMLElement, openStage: (stage: S
   function render(): void {
     const scenario = SCENARIOS[index]!;
     const answer = solve(scenario, hardwareId);
-    const job = scenario.phase === 'prefill' ? 'Reading the prompt' : 'Writing the next token';
+    const job = scenario.phase === 'prefill' ? 'First pass: the whole prompt' : 'A later pass: one new token each';
     host.innerHTML = `<div class="bn-scene">
       <div class="bn-question">
         <p class="stage-kicker">Scenario ${index + 1} of ${SCENARIOS.length}</p>
