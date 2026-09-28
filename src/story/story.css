@@ -256,3 +256,27 @@
 .rl-tooltip { position: absolute; z-index: 2; padding: 0.3rem 0.5rem; color: var(--paper); background: var(--ink); font-size: 0.78rem; font-weight: 750; pointer-events: none; white-space: nowrap; }
 .rl-tooltip[hidden], .rl-note[hidden], [data-iso-legend][hidden] { display: none; }
 .rl-note { margin: 0; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.45; }
+
+/* ---- Act 1 challenge ---------------------------------------------------- */
+.build-rounds { display: inline-flex; width: fit-content; border: 1px solid var(--ink); }
+.build-rounds button { min-height: 44px; padding: 0 1rem; color: var(--ink); border: 0; background: var(--paper); font: inherit; font-size: 0.85rem; font-weight: 800; cursor: pointer; }
+.build-rounds button + button { border-left: 1px solid var(--ink); }
+.build-rounds button[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
+.build-progress { margin: 0.2rem 0 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.3rem; font-weight: 760; }
+.build-tray ul { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.build-card { display: grid; gap: 0.15rem; width: 100%; min-height: 52px; padding: 0.55rem 0.75rem; color: var(--ink); border: 1.5px solid var(--ink); background: var(--paper); font: inherit; text-align: left; cursor: grab; touch-action: none; }
+.build-card b { font-size: 0.95rem; }
+.build-card small { color: var(--ink-soft); font-size: 0.78rem; }
+.build-card i { color: var(--green); font-size: 0.75rem; font-style: normal; font-weight: 800; }
+.build-card[aria-pressed='true'] { border-color: var(--red); background: color-mix(in oklch, var(--red) 14%, var(--paper)); box-shadow: 3px 3px 0 var(--red); }
+.build-card:disabled { cursor: default; opacity: 0.6; border-style: dashed; }
+.build-card:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.build-shake { animation: build-shake 0.4s ease; }
+@keyframes build-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.build-feedback { min-height: 3.2em; font-size: 0.9rem; line-height: 1.5; }
+.build-feedback[data-tone='good'] b { color: var(--green); }
+.build-feedback[data-tone='bad'] b { color: var(--red); }
+.build-next, .build-reset { min-height: 44px; margin-top: 0.4rem; padding: 0 0.9rem; color: var(--ink); border: 1px solid var(--ink); background: var(--mustard); font: inherit; font-size: 0.85rem; font-weight: 800; cursor: pointer; }
+.build-reset { background: transparent; }
+.build-drag { position: fixed; z-index: 500; padding: 0.45rem 0.7rem; color: var(--paper, #f3ecdc); background: var(--ink, #1f2e24); font-weight: 800; font-size: 0.85rem; pointer-events: none; box-shadow: 4px 4px 0 rgba(0,0,0,0.2); }
+@media (prefers-reduced-motion: reduce) { .build-shake { animation: none; } }

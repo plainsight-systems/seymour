@@ -9,6 +9,7 @@ import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { mountActs, type ActSpec } from './acts';
 import { partEntry, type Vendor } from '../data/parts';
+import { assemblyPlate, assemblyRound, isComplete, place, zoneNumber, type AssemblyRound, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
@@ -248,7 +249,7 @@ const ACTS: ActSpec[] = [
   {
     id: 'act-1', number: 1, title: 'The GPU',
     intro: 'What the hardware is, from the whole server down to one compute unit, and what each part is for.',
-    scenes: GPU_SCENES.map(({ id, label }) => ({ id, label })),
+    scenes: [...GPU_SCENES.map(({ id, label }) => ({ id, label })), { id: 'build', label: 'Challenge: build it' }],
     tools: '<span class="view-toggle" role="group" aria-label="View"><button type="button" data-gpu-view="isometric" aria-pressed="true">Isometric</button><button type="button" data-gpu-view="realistic" aria-pressed="false">Realistic</button></span>',
   },
   {
@@ -268,7 +269,7 @@ const ACTS: ActSpec[] = [
   },
 ];
 
-const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: (sceneId) => gpuViews.get(sceneId)?.refresh() });
+const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: (sceneId) => (sceneId === 'build' ? buildView : gpuViews.get(sceneId))?.refresh() });
 
 // Act 1: the chip alone, at four zoom levels.
 const gpuViews = new Map<string, CutawayView>();
@@ -327,6 +328,161 @@ for (const scene of GPU_SCENES) {
     gpuViews.get(scene.id)?.select(gpuSelected.get(scene.id) === part ? null : part);
   });
 }
+
+// ---- Act 1 challenge: put the GPU back together ----------------------------
+acts.sceneHost('build').innerHTML = `<div class="gpu-scene build-scene">
+  <p class="gpu-scene-lead">Put the GPU back together. Drag each part from the tray onto its outline, or pick a part and then click an outline or its zone marker.</p>
+  <div class="build-rounds" role="group" aria-label="Round"><button type="button" data-round="package" aria-pressed="true">Round 1 · The package</button><button type="button" data-round="die" aria-pressed="false">Round 2 · The die</button></div>
+  <div class="gpu-scene-body">
+    <div class="gpu-scene-plate"><div data-build-plate></div><p class="rl-note">The challenge uses the isometric drawing in either view.</p></div>
+    <aside class="part-card build-tray" aria-label="Parts tray">
+      <div><p class="part-kicker">Parts tray</p><p class="build-progress" data-build-progress></p></div>
+      <ul data-build-tray></ul>
+      <div class="build-feedback" data-build-feedback aria-live="polite"></div>
+      <button type="button" class="build-reset" data-build-reset>Start this round again</button>
+    </aside>
+  </div>
+</div>`;
+
+const buildHost = acts.sceneHost('build');
+let buildRoundId: RoundId = 'package';
+const buildPlaced: Record<RoundId, Set<string>> = { package: new Set(), die: new Set() };
+let buildCard: string | null = null;
+let buildView: CutawayView | null = null;
+let buildRound: AssemblyRound = { id: 'package', parts: [] };
+
+function buildSourcePlate(): Plate {
+  const settings = { ...DEFAULT_SETTINGS, hardwareId: storyHardwareId };
+  const inputs = buildCutawayInputs(settings, getHardware(storyHardwareId), modelFor(settings));
+  return buildRoundId === 'package' ? packagePlate(inputs, 'hardware') : diePlate(inputs, { job: 'decode', detail: 'full', activity: false });
+}
+
+function buildFeedback(html: string, tone: 'neutral' | 'good' | 'bad' = 'neutral'): void {
+  const node = buildHost.querySelector<HTMLElement>('[data-build-feedback]')!;
+  node.dataset.tone = tone;
+  node.innerHTML = html;
+}
+
+function renderBuild(): void {
+  const vendor = getHardware(storyHardwareId).vendor as Vendor;
+  const source = buildSourcePlate();
+  buildRound = assemblyRound(buildRoundId, source);
+  const placed = buildPlaced[buildRoundId];
+  const plate = assemblyPlate(source, buildRound, placed);
+  if (buildView) buildView.update(plate);
+  else buildView = mountCutaway(buildHost.querySelector<HTMLElement>('[data-build-plate]')!, plate, 'Build the GPU', { onSelect: (part) => { if (part) chooseZone(part); } });
+  // The tray is sorted by name, so its order never reveals the zone numbers.
+  const cards = buildRound.parts
+    .map((part) => ({ part, entry: partEntry(part, vendor)! }))
+    .sort((a, b) => a.entry.name.localeCompare(b.entry.name));
+  buildHost.querySelector<HTMLElement>('[data-build-tray]')!.innerHTML = cards.map(({ part, entry }) => {
+    const done = placed.has(part);
+    const terms = entry.terms.slice(0, 2).map((term) => term.term).join(' · ');
+    return `<li><button type="button" class="build-card" data-card="${part}" aria-pressed="${buildCard === part}" ${done ? 'disabled' : ''}><b>${escapeHtml(entry.name)}</b><small>${escapeHtml(terms)}</small>${done ? `<i aria-hidden="true">✓ Zone ${zoneNumber(buildRound, part)}</i>` : ''}</button></li>`;
+  }).join('');
+  buildHost.querySelector<HTMLElement>('[data-build-progress]')!.textContent = `${placed.size} of ${buildRound.parts.length} placed`;
+  for (const button of buildHost.querySelectorAll<HTMLButtonElement>('[data-round]')) button.setAttribute('aria-pressed', String(button.dataset.round === buildRoundId));
+}
+
+function tryPlace(card: string, zone: string): void {
+  const vendor = getHardware(storyHardwareId).vendor as Vendor;
+  const placed = buildPlaced[buildRoundId];
+  const result = place(buildRound, placed, card, zone);
+  const cardEntry = partEntry(card, vendor)!;
+  if (result === 'already-placed') {
+    buildFeedback(`Zone ${zoneNumber(buildRound, zone)} is already filled.`);
+    return;
+  }
+  if (result === 'wrong') {
+    buildFeedback(`<b>Not there.</b> ${escapeHtml(cardEntry.name)}: ${escapeHtml(cardEntry.does)} Look for where that would sit.`, 'bad');
+    buildHost.querySelector(`[data-card="${card}"]`)?.classList.add('build-shake');
+    window.setTimeout(() => buildHost.querySelector(`[data-card="${card}"]`)?.classList.remove('build-shake'), 450);
+    return;
+  }
+  placed.add(zone);
+  buildCard = null;
+  renderBuild();
+  const terms = cardEntry.terms.slice(0, 2).map((term) => term.term).join(', ');
+  if (isComplete(buildRound, placed)) {
+    const next = buildRoundId === 'package' ? ' <button type="button" class="build-next" data-round="die">Go to round 2 · The die →</button>' : ' You have rebuilt the package and the die.';
+    buildFeedback(`<b>Round complete.</b> Every part is back where it belongs.${next}`, 'good');
+  } else {
+    buildFeedback(`<b>Correct: ${escapeHtml(cardEntry.name)}</b> (${escapeHtml(terms)}). ${escapeHtml(cardEntry.does)}`, 'good');
+  }
+}
+
+function chooseZone(zone: string): void {
+  buildView?.select(null);
+  if (!buildRound.parts.includes(zone)) return;
+  if (!buildCard) {
+    buildFeedback(buildPlaced[buildRoundId].has(zone) ? `Zone ${zoneNumber(buildRound, zone)} is already filled.` : `Pick a part from the tray first, then choose Zone ${zoneNumber(buildRound, zone)}.`);
+    return;
+  }
+  tryPlace(buildCard, zone);
+}
+
+buildHost.addEventListener('click', (event) => {
+  const target = event.target as Element;
+  const round = target.closest<HTMLButtonElement>('[data-round]');
+  if (round) {
+    buildRoundId = round.dataset.round as RoundId;
+    buildCard = null;
+    buildFeedback('');
+    renderBuild();
+    return;
+  }
+  if (target.closest('[data-build-reset]')) {
+    buildPlaced[buildRoundId].clear();
+    buildCard = null;
+    buildFeedback('');
+    renderBuild();
+  }
+});
+
+// Cards: a click selects; a drag drops onto whatever outline is under the pointer.
+let drag: { card: string; startX: number; startY: number; ghost: HTMLElement | null; pointerId: number } | null = null;
+buildHost.addEventListener('pointerdown', (event) => {
+  const button = (event.target as Element).closest<HTMLButtonElement>('[data-card]');
+  if (!button || button.disabled || event.button !== 0) return;
+  drag = { card: button.dataset.card!, startX: event.clientX, startY: event.clientY, ghost: null, pointerId: event.pointerId };
+  button.setPointerCapture(event.pointerId);
+});
+buildHost.addEventListener('pointermove', (event) => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (!drag.ghost && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6) {
+    drag.ghost = document.createElement('div');
+    drag.ghost.className = 'build-drag';
+    drag.ghost.textContent = partEntry(drag.card, getHardware(storyHardwareId).vendor as Vendor)!.name;
+    document.body.appendChild(drag.ghost);
+  }
+  if (drag.ghost) {
+    drag.ghost.style.left = `${event.clientX + 12}px`;
+    drag.ghost.style.top = `${event.clientY + 12}px`;
+  }
+});
+buildHost.addEventListener('pointerup', (event) => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const { card, ghost } = drag;
+  drag = null;
+  if (!ghost) {
+    buildCard = buildCard === card ? null : card;
+    renderBuild();
+    buildFeedback(buildCard ? 'Now choose the outline or zone where it belongs.' : '');
+    return;
+  }
+  ghost.remove();
+  const zone = document.elementFromPoint(event.clientX, event.clientY)?.closest<SVGElement>('[data-build-plate] [data-part]')?.dataset.part;
+  if (zone && buildRound.parts.includes(zone)) tryPlace(card, zone);
+});
+buildHost.addEventListener('keydown', (event) => {
+  const button = (event.target as Element).closest<HTMLButtonElement>('[data-card]');
+  if (!button || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  buildCard = buildCard === button.dataset.card ? null : button.dataset.card!;
+  renderBuild();
+  buildFeedback(buildCard ? 'Now Tab to a zone marker on the drawing and press Enter.' : '');
+  buildHost.querySelector<HTMLButtonElement>(`[data-card="${button.dataset.card}"]`)?.focus();
+});
 
 type GpuViewMode = 'isometric' | 'realistic';
 let gpuViewMode: GpuViewMode = 'isometric';
@@ -448,6 +604,7 @@ for (const panel of STORY_PANELS) {
 }
 
 renderGpu();
+renderBuild();
 
 // Act 4: the playground.
 const playground = mountPlayground(acts.sceneHost('playground'));
@@ -459,6 +616,11 @@ root.addEventListener('click', (event) => {
   storyHardwareId = button.dataset.chip!;
   for (const chip of root.querySelectorAll<HTMLButtonElement>('.act-tools [data-chip]')) chip.setAttribute('aria-pressed', String(chip.dataset.chip === storyHardwareId));
   renderGpu();
+  buildPlaced.package.clear();
+  buildPlaced.die.clear();
+  buildCard = null;
+  buildFeedback('');
+  renderBuild();
   for (const panel of STORY_PANELS) {
     panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
     renderPanel(panel);
