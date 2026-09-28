@@ -36,8 +36,13 @@ async function boot(): Promise<void> {
   }
 }
 
+/**
+ * In-page anchors go to the page first (the story resolves `act-2/two-jobs`
+ * to an act and a scene tab); if nothing handles them, scroll to the id.
+ */
 function scrollToAnchor(id: string): void {
-  document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  const handled = !window.dispatchEvent(new CustomEvent('seymour:anchor', { detail: id, cancelable: true }));
+  if (!handled) document.getElementById(id)?.scrollIntoView({ block: 'start' });
 }
 
 window.addEventListener('hashchange', (event) => {

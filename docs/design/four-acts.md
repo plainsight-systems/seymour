@@ -26,7 +26,7 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 
 | # | Decision |
 |---|---|
-| A1 | Acts stack vertically, each at least one screen tall (`100svh`), with loose scroll snapping (`proximity`). |
+| A1 | Acts stack vertically, each at least one screen tall (`100svh`). No scroll snapping: browsers re-snap to the previous act when lazily rendered scenes change the page height, which overrode both scene links and the reader's own scrolling. |
 | A2 | Scenes are horizontal tabs (`role=tablist`), arrow-key navigable, with one scene visible at a time. |
 | A3 | Every scene is addressable: `#act-1/package`. Loading or following such a link scrolls to the act and opens the scene. |
 | A4 | The accelerator choice is global and carries across all acts, including the playground. The workload set in Act 2 carries into Act 3 once Act 2 exists. |

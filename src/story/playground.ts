@@ -30,7 +30,12 @@ function nearestIndex(choices: number[], value: number): number {
   return best;
 }
 
-export function mountPlayground(root: HTMLElement): void {
+export interface PlaygroundView {
+  /** Follows the story-wide accelerator choice while in free play; challenges keep their fixed chip. */
+  setHardware(hardwareId: string): void;
+}
+
+export function mountPlayground(root: HTMLElement): PlaygroundView {
   // Open in free play: every knob is live until the reader accepts a challenge.
   let settings: SimulationSettings = { ...DEFAULT_SETTINGS };
   let selectedChallenge: Challenge | null = null;
@@ -38,7 +43,7 @@ export function mountPlayground(root: HTMLElement): void {
   let tileStep = 0;
   let cutaway: CutawayView | null = null;
 
-  root.innerHTML = `<header class="playground-heading"><div><span>Playground</span><h2>Make the bottleneck move.</h2></div><p>Every control changes the analytical model. Choose free play or accept a challenge with fixed workload constraints. Both accelerators use the same efficiency assumptions (55% of peak math, 72% of peak memory bandwidth), so comparisons reflect published peaks, not measurements.</p></header>
+  root.innerHTML = `
     <div class="playground-shell">
       <section class="challenge-board" data-challenge-board aria-live="polite"></section>
       <aside class="playground-controls">
@@ -230,4 +235,13 @@ export function mountPlayground(root: HTMLElement): void {
 
   syncControls();
   render();
+
+  return {
+    setHardware(hardwareId: string): void {
+      if (selectedChallenge) return;
+      settings.hardwareId = hardwareId;
+      syncControls();
+      render();
+    },
+  };
 }

@@ -6,7 +6,8 @@ import { modelFor, precisionLabel } from '../model/strategy';
 import { batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
-import { diePlate, formatBandwidth, packagePlate, serverPlate, type Plate } from './cutaway/plates';
+import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
+import { mountActs, type ActSpec } from './acts';
 import { mountCutaway, type CutawayView } from './cutaway/render';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
@@ -214,11 +215,9 @@ function panelMarkup(panel: StoryPanelSpec): string {
   const stage = panel.plate === 'die-pair'
     ? `<div class="panel-pair"><figure class="panel-figure"><figcaption data-job-caption="prefill"></figcaption><div data-cutaway="prefill"></div></figure><figure class="panel-figure"><figcaption data-job-caption="decode"></figcaption><div data-cutaway="decode"></div></figure></div>`
     : `<div data-cutaway="main"></div><p class="panel-caption" data-caption></p>`;
-  return `<section class="concept-panel" id="${panel.id}" data-panel="${panel.id}" aria-labelledby="title-${panel.id}">
+  return `<section class="concept-panel" data-panel="${panel.id}" aria-labelledby="title-${panel.id}">
     <div class="panel-narrative">
-      <span class="panel-number">${panel.number}</span>
-      <p class="panel-kicker">Concept ${Number(panel.number) + 1} of ${STORY_PANELS.length}</p>
-      <h2 id="title-${panel.id}">${panel.title}</h2>
+      <h3 id="title-${panel.id}">${panel.title}</h3>
       <p class="panel-claim">${panel.claim}</p>
       ${knobMarkup(panel, settings)}
       <div class="panel-surprise"><span>The surprise</span><p data-surprise></p></div>
@@ -226,7 +225,7 @@ function panelMarkup(panel: StoryPanelSpec): string {
     </div>
     <div class="panel-instrument">
       <div class="panel-stage">
-        <div class="panel-zoom"><span>Zoom</span><b data-zoom>${zoomLabel(panel.plate, settings.hardwareId)}</b>${chipToggle()}</div>
+        <div class="panel-zoom"><span>Zoom</span><b data-zoom>${zoomLabel(panel.plate, settings.hardwareId)}</b></div>
         ${stage}
         ${panel.numbers.length ? '<div class="panel-numbers" data-numbers></div>' : ''}
         ${LEGEND}
@@ -237,15 +236,62 @@ function panelMarkup(panel: StoryPanelSpec): string {
   </section>`;
 }
 
-root.innerHTML = `<div class="story-page">
-  <header class="story-hero">
-    <div><p>Inference performance, from first principles</p><h1>Before the jargon,<br><em>follow the cost.</em></h1></div>
-    <div class="story-hero-copy"><p>A GPU does not run “an AI model” as one mysterious act. It moves bytes, schedules work, and repeats a small number of expensive operations. Six knobs, and a look inside the chip, are enough to see why the bottleneck moves—on NVIDIA H100 or AMD MI300X; switch on any panel.</p><nav aria-label="Story concepts">${STORY_PANELS.map((panel) => `<a href="#${panel.id}"><span>${panel.number}</span>${panel.title}</a>`).join('')}</nav></div>
-  </header>
-  ${STORY_PANELS.map(panelMarkup).join('')}
-  <section class="story-next"><span>Now use the whole instrument</span><h2>Prove the mental model under pressure.</h2><p>The playground combines every knob, lets you zoom from the server down to one compute unit on either chip, and gives you three constraints to beat.</p><p class="story-assumption">${EFFICIENCY_NOTE}</p><div><a href="#playground">Open the playground ↓</a><a href="#/under-the-hood">Go under the hood →</a><a href="#/lookup">Find the names →</a></div></section>
-  <section id="playground" class="playground"></section>
-</div>`;
+const GPU_SCENES: { id: 'server' | 'package' | 'die' | 'unit'; label: string; lead: string }[] = [
+  { id: 'server', label: 'Server', lead: 'A GPU server: eight GPUs on one board, a host CPU with its own memory, local storage, and a network card.' },
+  { id: 'package', label: 'Package', lead: 'One GPU, taken apart: the compute silicon, the memory stacks beside it, and the layers that wire them together.' },
+  { id: 'die', label: 'Die', lead: 'Inside the compute silicon: many identical workers sharing one cache, fed by memory at the edges.' },
+  { id: 'unit', label: 'Compute unit', lead: 'One worker, enlarged: the math units and the small, fast memories right beside them.' },
+];
+
+const ACTS: ActSpec[] = [
+  {
+    id: 'act-1', number: 1, title: 'The GPU',
+    intro: 'What the hardware is, from the whole server down to one compute unit, and what each part is for.',
+    scenes: GPU_SCENES.map(({ id, label }) => ({ id, label })),
+  },
+  {
+    id: 'act-2', number: 2, title: 'Inference',
+    intro: 'What the model computes for every request. This act will walk the forward pass step by step; it starts with the two jobs every request performs.',
+    scenes: STORY_PANELS.filter((panel) => panel.id === 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })),
+  },
+  {
+    id: 'act-3', number: 3, title: 'The throttles',
+    intro: `How each step is changed by the choices you make and limited by the hardware from Act 1. ${EFFICIENCY_NOTE}`,
+    scenes: STORY_PANELS.filter((panel) => panel.id !== 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })),
+  },
+  {
+    id: 'act-4', number: 4, title: 'Putting it together',
+    intro: `Every knob at once, on any chip. Play freely, or pick a challenge with fixed constraints to beat. ${EFFICIENCY_NOTE}`,
+    scenes: [{ id: 'playground', label: 'Playground and challenges' }],
+  },
+];
+
+const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: () => {} });
+
+// Act 1: the chip alone, at four zoom levels.
+const gpuViews = new Map<string, CutawayView>();
+for (const scene of GPU_SCENES) {
+  acts.sceneHost(scene.id).innerHTML = `<div class="gpu-scene"><p class="gpu-scene-lead">${scene.lead}</p><div data-gpu-plate="${scene.id}"></div>${LEGEND}<p class="panel-hint">Click any part or label to pair them.</p></div>`;
+}
+
+function renderGpu(): void {
+  const settings = { ...DEFAULT_SETTINGS, hardwareId: storyHardwareId };
+  const inputs = buildCutawayInputs(settings, getHardware(storyHardwareId), modelFor(settings));
+  const plates: Record<string, Plate> = {
+    server: serverPlate(inputs, 'hardware'),
+    package: packagePlate(inputs, 'hardware'),
+    die: diePlate(inputs, { job: 'decode', detail: 'full', activity: false }),
+    unit: unitPlate(storyHardwareId, 0),
+  };
+  for (const scene of GPU_SCENES) {
+    const existing = gpuViews.get(scene.id);
+    if (existing) existing.update(plates[scene.id]!);
+    else gpuViews.set(scene.id, mountCutaway(acts.sceneHost(scene.id).querySelector<HTMLElement>('[data-gpu-plate]')!, plates[scene.id]!, `The GPU: ${scene.label}`));
+  }
+}
+
+// Acts 2 and 3: the concept panels, one per scene.
+for (const panel of STORY_PANELS) acts.sceneHost(panel.id).innerHTML = panelMarkup(panel);
 
 function renderPanel(panel: StoryPanelSpec): void {
   const section = root!.querySelector<HTMLElement>(`[data-panel="${panel.id}"]`)!;
@@ -263,7 +309,6 @@ function renderPanel(panel: StoryPanelSpec): void {
     else state.views.set(key, mountCutaway(section.querySelector<HTMLElement>(`[data-cutaway="${key}"]`)!, plate, `${panel.title}: ${zoomLabel(panel.plate, settings.hardwareId)}`, { labels: panel.plate === 'die-pair' ? 'chips' : 'auto' }));
   }
   section.querySelector<HTMLElement>('[data-zoom]')!.textContent = zoomLabel(panel.plate, settings.hardwareId);
-  for (const button of section.querySelectorAll<HTMLButtonElement>('[data-chip]')) button.setAttribute('aria-pressed', String(button.dataset.chip === settings.hardwareId));
   for (const job of ['prefill', 'decode'] as const) {
     const node = section.querySelector<HTMLElement>(`[data-job-caption="${job}"]`);
     if (node) node.innerHTML = jobCaption(inputs, job, settings);
@@ -295,15 +340,6 @@ for (const panel of STORY_PANELS) {
     applyMove(settings, effect, !moveIsOn(settings, effect));
     renderPanel(panel);
   });
-  section.querySelector('.panel-chip')!.addEventListener('click', (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>('[data-chip]');
-    if (!button || button.dataset.chip === storyHardwareId) return;
-    storyHardwareId = button.dataset.chip!;
-    for (const other of STORY_PANELS) {
-      panelState.get(other.id)!.settings.hardwareId = storyHardwareId;
-      renderPanel(other);
-    }
-  });
   control.addEventListener('input', () => {
     if (control.dataset.knob === 'sequenceLength') settings.sequenceLength = sequenceFromSlider(Number(control.value));
     if (control.dataset.knob === 'batch') settings.batch = batchFromSlider(Number(control.value));
@@ -314,4 +350,21 @@ for (const panel of STORY_PANELS) {
   renderPanel(panel);
 }
 
-mountPlayground(root.querySelector<HTMLElement>('#playground')!);
+renderGpu();
+
+// Act 4: the playground.
+const playground = mountPlayground(acts.sceneHost('playground'));
+
+// One accelerator for the whole story: any act's selector switches every act.
+root.addEventListener('click', (event) => {
+  const button = (event.target as Element).closest<HTMLButtonElement>('.act-tools [data-chip]');
+  if (!button || button.dataset.chip === storyHardwareId) return;
+  storyHardwareId = button.dataset.chip!;
+  for (const chip of root.querySelectorAll<HTMLButtonElement>('.act-tools [data-chip]')) chip.setAttribute('aria-pressed', String(chip.dataset.chip === storyHardwareId));
+  renderGpu();
+  for (const panel of STORY_PANELS) {
+    panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
+    renderPanel(panel);
+  }
+  playground.setHardware(storyHardwareId);
+});
