@@ -9,6 +9,7 @@ import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { mountActs, type ActSpec } from './acts';
 import { FORWARD_TOOLS, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
+import { mountBottleneckChallenge } from './forward/challenge';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
@@ -269,7 +270,7 @@ const ACTS: ActSpec[] = [
   {
     id: 'act-2', number: 2, title: 'Inference',
     intro: 'What the model computes for every token, in order: from text on the CPU, through every layer on the GPU, and back to text. Each stage shows its size, where its time goes, and what grows until something runs out. Llama 3.1 8B throughout.',
-    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'Two jobs, one chip' }],
+    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'Two jobs' }, { id: 'bottleneck', label: 'Challenge' }],
     tools: FORWARD_TOOLS,
   },
   {
@@ -784,6 +785,11 @@ const forward = mountForwardScenes(
   },
 );
 forward.render(storyHardwareId);
+const bottleneck = mountBottleneckChallenge(acts.sceneHost('bottleneck'), (stage) => {
+  acts.open(`act-2/${stage}`, true);
+  history.replaceState(null, '', `#act-2/${stage}`);
+});
+bottleneck.render(storyHardwareId);
 
 // Act 4: the playground.
 const playground = mountPlayground(acts.sceneHost('playground'));
@@ -797,6 +803,7 @@ root.addEventListener('click', (event) => {
   renderGpu();
   resetBuild(['package', 'die']);
   forward.render(storyHardwareId);
+  bottleneck.render(storyHardwareId);
   for (const panel of STORY_PANELS) {
     panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
     renderPanel(panel);

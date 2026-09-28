@@ -33,6 +33,8 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 | A5 | Act 1 uses the isometric plates only. A Three.js realistic view with physically based materials was built and removed on review: stylized boxes under realistic lighting did not read as the real hardware. A realistic view may return later; generated imagery is not used for technical views, because it cannot guarantee published counts. |
 | A6 | Act 1 shows hardware only: no model loaded into memory, no busy shading. Those belong to Acts 2 and 3. |
 | A7 | The Act 1 challenge places package-level parts (die, memory stacks, interposer, substrate) and die-level parts (compute units, L2, memory controllers). Drag and drop has a click-to-place equivalent for keyboard users. Feedback appears where the reader is looking: the open zone under a dragged card lights up, a miss flashes the zone red and shows why just above the drawing, and finishing a round lights each part in turn before a result card with the miss count. |
+| A9 | Act 2 shows both jobs side by side in every stage (reading the prompt, writing the next token) instead of a toggle, so the change in limit is visible without interaction. |
+| A10 | Act 2 ends with a challenge: for five workloads, name the slowest stage and whether math or memory limits it. Answers are computed from the forward-pass model for the chosen chip, never written by hand; a test requires every scenario's slowest stage to beat the next by at least 1.25×, so no answer is a coin flip. |
 | A8 | Target: every scene fits one screen at desktop size. Content that does not fit is trimmed or split into another scene, not scrolled inside a scene. |
 
 ## 4. Phases
@@ -49,5 +51,5 @@ Phase 1 replaces the story page's outer layout only; the model, plates, panels, 
 
 ## 6. Status (2026-09-28)
 
-Phases 1–4 are built. Scene heights measured at 1440×900 after phase 4: 15 of 20 scene states fit one screen; Act 3 "Distance is speed" and "Change what one read buys" are within 1% (910 and 903 px); Act 2 "Two jobs, one chip" is 4% over (940 px); the playground is 13–16% over (1,014 px cutaway view, 1,048 px numbers view). A8 is not yet fully met for those scenes.
+Phases 1–4 are built. Scene heights measured at 1440×900 after phase 4: 15 of 20 scene states fit one screen; Act 3 "Distance is speed" and "Change what one read buys" are within 1% (910 and 903 px); Act 2 "Two jobs" is 4% over (940 px); the playground is 13–16% over (1,014 px cutaway view, 1,048 px numbers view). A8 is not yet fully met for those scenes.
 
