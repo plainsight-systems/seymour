@@ -6,7 +6,8 @@ import type { SimulationSettings } from '../../types';
 import { STAGE_COPY, type HardwareLink, type StageFacts } from './stages';
 
 // Act 2: one forward pass, stage by stage. Renders the seven stage scenes
-// and owns the act's workload controls (job, users, context).
+// and owns the act's workload controls (users, context). Every stage shows
+// both jobs side by side: reading the prompt, and writing the next token.
 
 export const STAGE_ORDER: StageId[] = ['tokenize', 'embed', 'attention', 'mlp', 'unembed', 'sample', 'detokenize'];
 
@@ -19,13 +20,21 @@ const USERS = [1, 8, 32, 64, 128];
 const CONTEXTS = [512, 2048, 4096, 16384, 32768];
 
 export const FORWARD_TOOLS = `<span class="forward-tools">
-  <span class="view-toggle" role="group" aria-label="Which job"><button type="button" data-job="prefill" aria-pressed="true">Prompt</button><button type="button" data-job="decode" aria-pressed="false">Next token</button></span>
   <label class="forward-select"><span>Users</span><select data-forward="batch">${USERS.map((n) => `<option value="${n}">${n}</option>`).join('')}</select></label>
   <label class="forward-select"><span>Context</span><select data-forward="sequenceLength">${CONTEXTS.map((n) => `<option value="${n}" ${n === 4096 ? 'selected' : ''}>${n.toLocaleString()} tokens</option>`).join('')}</select></label>
 </span>`;
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+}
+
+function bytesMoved(stage: ForwardStage): number {
+  return stage.weightBytes + stage.kvBytes + stage.activationBytes;
+}
+
+function ratio(a: number, b: number): string {
+  const r = a / Math.max(b, Number.EPSILON);
+  return `${r >= 10 ? Math.round(r).toLocaleString() : r.toFixed(1)}×`;
 }
 
 function stageTime(stage: ForwardStage): number {
@@ -51,9 +60,12 @@ export function mountForwardScenes(
     const hardware = getHardware(hardwareId);
     const settings = { ...workload, hardwareId };
     const model = modelFor(settings);
-    const stages = buildForwardPass(settings, model, hardware);
-    const attention = stages.find((stage) => stage.id === 'attention')!;
-    const mlp = stages.find((stage) => stage.id === 'mlp')!;
+    const jobs = {
+      prefill: buildForwardPass({ ...settings, phase: 'prefill' }, model, hardware),
+      decode: buildForwardPass({ ...settings, phase: 'decode' }, model, hardware),
+    };
+    const attention = jobs.decode.find((stage) => stage.id === 'attention')!;
+    const mlp = jobs.decode.find((stage) => stage.id === 'mlp')!;
     const facts: StageFacts = {
       model,
       kvPerToken: formatBytes(model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8)),
@@ -61,31 +73,49 @@ export function mountForwardScenes(
       mlpShareOfLayer: mlp.weightBytes / (mlp.weightBytes + attention.weightBytes),
       unembedShareOfModel: embeddingTableBytes(model) / (model.parametersB * 1e9 * (model.weightBits / 8)),
     };
-    const total = stages.reduce((sum, stage) => sum + stageTime(stage), 0);
-    const job = workload.phase === 'prefill'
-      ? `processing a ${workload.sequenceLength.toLocaleString()}-token prompt`
-      : `writing one token with ${workload.sequenceLength.toLocaleString()} tokens of context`;
+    const totals = {
+      prefill: jobs.prefill.reduce((sum, stage) => sum + stageTime(stage), 0),
+      decode: jobs.decode.reduce((sum, stage) => sum + stageTime(stage), 0),
+    };
+    const context = workload.sequenceLength.toLocaleString();
     const who = workload.batch === 1 ? 'one user' : `${workload.batch} users`;
+    const perUser = workload.batch === 1 ? '' : ' each';
 
-    stages.forEach((stage, index) => {
-      const copy = STAGE_COPY[stage.id];
-      const cpu = stage.runsOn === 'cpu';
-      const numbers: [string, string][] = cpu
-        ? [['Crosses PCIe', formatBytes(stage.hostLinkBytes)], ['GPU math', 'none']]
+    STAGE_ORDER.forEach((id, index) => {
+      const copy = STAGE_COPY[id];
+      const both = { prefill: jobs.prefill[index]!, decode: jobs.decode[index]! };
+      const cpu = both.decode.runsOn === 'cpu';
+      const rows: [string, (stage: ForwardStage) => string][] = cpu
+        ? [['Crosses PCIe', (stage) => formatBytes(stage.hostLinkBytes)], ['GPU math', () => 'none']]
         : [
-          ['Math', stage.flops ? formatFlops(stage.flops) : 'none'],
-          ['Weights read', stage.weightBytes ? formatBytes(stage.weightBytes) : 'none'],
-          ['KV cache read and written', stage.kvBytes ? formatBytes(stage.kvBytes) : 'none'],
-          ['Other values moved', formatBytes(stage.activationBytes)],
+          ['Math', (stage) => (stage.flops ? formatFlops(stage.flops) : 'none')],
+          ['Weights read', (stage) => (stage.weightBytes ? formatBytes(stage.weightBytes) : 'none')],
+          ['KV cache read and written', (stage) => (stage.kvBytes ? formatBytes(stage.kvBytes) : 'none')],
+          ['Other values moved', (stage) => formatBytes(stage.activationBytes)],
         ];
-      const max = Math.max(stage.computeMs, stage.memoryMs, Number.EPSILON);
-      const limit = stage.limit === 'math' ? 'Limited by math' : stage.limit === 'memory' ? 'Limited by reading memory' : 'Limited by the host link';
-      hostFor(stage.id).innerHTML = `<div class="stage-scene">
+      const limitName = (stage: ForwardStage) => (stage.limit === 'math' ? 'Math' : stage.limit === 'memory' ? 'Memory' : 'Host link');
+      const floors = (stage: ForwardStage) => {
+        if (cpu) return `<span class="job-floor-one">${formatDuration(stage.memoryMs)} over PCIe</span>`;
+        const max = Math.max(stage.computeMs, stage.memoryMs, Number.EPSILON);
+        return `<span class="job-floor" title="math ${formatDuration(stage.computeMs)}"><i class="is-math" style="--bar:${(stage.computeMs / max) * 100}%"></i><small>math ${formatDuration(stage.computeMs)}</small></span>
+          <span class="job-floor" title="memory ${formatDuration(stage.memoryMs)}"><i class="is-memory" style="--bar:${(stage.memoryMs / max) * 100}%"></i><small>memory ${formatDuration(stage.memoryMs)}</small></span>`;
+      };
+      const share = (job: 'prefill' | 'decode') => {
+        const stage = both[job];
+        const percent = Math.round((stageTime(stage) / totals[job]) * 100);
+        return `<div class="stage-share-bar">${jobs[job].map((other) => `<i class="${other.id === id ? 'is-current' : ''}" style="flex-grow:${Math.max(stageTime(other) / totals[job], 0.004)}" title="${escapeHtml(STAGE_TAB_LABEL[other.id])}: ${formatDuration(stageTime(other))}"></i>`).join('')}</div><small>${percent || '<1'}% · ${formatDuration(stageTime(stage))} of ${formatDuration(totals[job])}</small>`;
+      };
+      const verdict = cpu
+        ? 'Both jobs: a few bytes over PCIe.'
+        : both.prefill.limit === both.decode.limit
+          ? `Same limit for both jobs: ${limitName(both.decode).toLowerCase()}.`
+          : `Same stage, different limit. Reading the prompt does ${ratio(both.prefill.flops, both.decode.flops)} the math of writing one token, but moves only ${ratio(bytesMoved(both.prefill), bytesMoved(both.decode))} the bytes.`;
+      hostFor(id).innerHTML = `<div class="stage-scene">
         <div class="stage-narrative">
-          <p class="stage-kicker">Stage ${index + 1} of ${stages.length} · <span class="runs-on runs-${stage.runsOn}">${cpu ? 'CPU' : 'GPU'}</span>${stage.repeats > 1 ? ` <span class="runs-repeat">× ${stage.repeats} layers</span>` : ''}</p>
+          <p class="stage-kicker">Stage ${index + 1} of ${STAGE_ORDER.length} · <span class="runs-on runs-${both.decode.runsOn}">${cpu ? 'CPU' : 'GPU'}</span>${both.decode.repeats > 1 ? ` <span class="runs-repeat">× ${both.decode.repeats} layers</span>` : ''}</p>
           <h3>${escapeHtml(copy.title)}</h3>
           <p class="stage-lead">${escapeHtml(copy.lead(model))}</p>
-          ${stage.operations.length ? `<details class="stage-ops-wrap"><summary>The ${stage.operations.length === 1 ? 'operation' : `${stage.operations.length} operations`} inside</summary><ol class="stage-ops">${stage.operations.map((op) => `<li><b>${escapeHtml(op.name)}</b><code>${escapeHtml(op.equation)}</code></li>`).join('')}</ol></details>` : ''}
+          ${both.decode.operations.length ? `<details class="stage-ops-wrap"><summary>The ${both.decode.operations.length === 1 ? 'operation' : `${both.decode.operations.length} operations`} inside</summary><ol class="stage-ops">${both.decode.operations.map((op) => `<li><b>${escapeHtml(op.name)}</b><code>${escapeHtml(op.equation)}</code></li>`).join('')}</ol></details>` : ''}
           <div class="stage-callouts">
             <div><span>Grows with</span><ul>${copy.growsWith.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>
             <div class="stage-overflow"><span>Where it overflows</span><p>${escapeHtml(copy.overflow(facts))}</p></div>
@@ -93,34 +123,30 @@ export function mountForwardScenes(
           ${copy.note ? `<p class="stage-note">${escapeHtml(copy.note)}</p>` : ''}
           <div class="stage-hw"><span>Does the work · see it in Act 1</span><div>${copy.doesTheWork.map((link, i) => `<button type="button" data-open-link="${i}">${escapeHtml(link.label)} ↑</button>`).join('')}</div></div>
         </div>
-        <aside class="stage-numbers" aria-label="Stage numbers">
-          <p class="stage-context">${escapeHtml(model.name.split(' · ')[0]!)} on ${escapeHtml(hardware.name)}, ${escapeHtml(job)} for ${escapeHtml(who)}</p>
-          <p class="stage-shape"><code>${escapeHtml(stage.inputShape)}</code> → <code>${escapeHtml(stage.outputShape)}</code></p>
-          <dl>${numbers.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>
-          ${cpu ? `<p class="stage-limit">${limit}: ${formatDuration(stage.memoryMs)} over PCIe</p>` : `<div class="stage-floors">
-            <label>math <i style="--bar:${(stage.computeMs / max) * 100}%"></i><b>${formatDuration(stage.computeMs)}</b></label>
-            <label>memory <i style="--bar:${(stage.memoryMs / max) * 100}%"></i><b>${formatDuration(stage.memoryMs)}</b></label>
-          </div><p class="stage-limit">${limit}</p>`}
-          <div class="stage-share"><span>Where one pass’s time goes</span>
-            <div class="stage-share-bar">${stages.map((other) => `<i data-stage="${other.id}" class="${other.id === stage.id ? 'is-current' : ''}" style="flex-grow:${Math.max(stageTime(other) / total, 0.004)}" title="${escapeHtml(STAGE_TAB_LABEL[other.id])}: ${formatDuration(stageTime(other))}"></i>`).join('')}</div>
-            <p><b>${Math.round((stageTime(stage) / total) * 100) || '<1'}%</b> of the pass is this stage (${formatDuration(stageTime(stage))} of ${formatDuration(total)}). Per-stage floors, not a stopwatch: a real step overlaps some of this work.</p>
-          </div>
+        <aside class="stage-numbers" aria-label="Stage numbers for both jobs">
+          <p class="stage-context">${escapeHtml(model.name.split(' · ')[0]!)} on ${escapeHtml(hardware.name)}, ${escapeHtml(who)}, a ${context}-token conversation. The same stage runs in two jobs:</p>
+          <table class="stage-jobs">
+            <thead><tr><td></td>
+              <th scope="col">Reading the prompt<small>all ${context} tokens at once${perUser}</small></th>
+              <th scope="col">Writing the next token<small>one token${perUser}, after ${context}</small></th></tr></thead>
+            <tbody>
+              ${rows.map(([label, value]) => `<tr><th scope="row">${label}</th><td>${value(both.prefill)}</td><td>${value(both.decode)}</td></tr>`).join('')}
+              <tr class="stage-jobs-floors"><th scope="row">Time floors</th><td>${floors(both.prefill)}</td><td>${floors(both.decode)}</td></tr>
+              <tr class="stage-jobs-limit"><th scope="row">Limited by</th><td class="limit-${both.prefill.limit}">${limitName(both.prefill)}</td><td class="limit-${both.decode.limit}">${limitName(both.decode)}</td></tr>
+              <tr class="stage-jobs-share"><th scope="row">Share of the pass</th><td>${share('prefill')}</td><td>${share('decode')}</td></tr>
+            </tbody>
+          </table>
+          <p class="stage-verdict">${escapeHtml(verdict)}</p>
+          <p class="stage-footnote">Per-stage floors from peak math and memory speed, not a stopwatch: a real step overlaps some of this work.</p>
         </aside>
       </div>`;
-      hostFor(stage.id).querySelector('.stage-hw')!.addEventListener('click', (event) => {
+      hostFor(id).querySelector('.stage-hw')!.addEventListener('click', (event) => {
         const button = (event.target as Element).closest<HTMLButtonElement>('[data-open-link]');
         if (button) openPart(copy.doesTheWork[Number(button.dataset.openLink)]!);
       });
     });
-    for (const button of toolsRoot.querySelectorAll<HTMLButtonElement>('[data-job]')) button.setAttribute('aria-pressed', String(button.dataset.job === workload.phase));
   }
 
-  toolsRoot.addEventListener('click', (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>('[data-job]');
-    if (!button) return;
-    workload.phase = button.dataset.job as SimulationSettings['phase'];
-    render();
-  });
   toolsRoot.addEventListener('change', (event) => {
     const select = (event.target as Element).closest<HTMLSelectElement>('[data-forward]');
     if (!select) return;

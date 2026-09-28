@@ -351,23 +351,28 @@
 .stage-hw button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
 .stage-numbers { position: sticky; top: 1rem; display: grid; gap: 0.9rem; align-content: start; padding: 1.1rem; border: 1.5px solid var(--ink); background: var(--paper); }
 .stage-context { margin: 0; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.4; }
-.stage-shape { margin: 0; }
-.stage-numbers dl { display: grid; gap: 0.35rem; margin: 0; }
-.stage-numbers dl > div { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); }
-.stage-numbers dt { color: var(--ink-soft); font-size: 0.82rem; }
-.stage-numbers dd { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.05rem; font-weight: 760; font-variant-numeric: tabular-nums; }
-.stage-floors { display: grid; gap: 0.35rem; }
-.stage-floors label { display: grid; grid-template-columns: 4.5rem 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.75rem; }
-.stage-floors i { height: 10px; background: linear-gradient(to right, var(--green) var(--bar), var(--paper-deep) var(--bar)); }
-.stage-floors label + label i { background: linear-gradient(to right, var(--mustard) var(--bar), var(--paper-deep) var(--bar)); }
-.stage-floors b { font-variant-numeric: tabular-nums; }
-.stage-limit { margin: 0; color: var(--red); font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
-.stage-share { display: grid; gap: 0.4rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }
+.stage-jobs { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: fixed; }
+.stage-jobs th, .stage-jobs td { padding: 0.32rem 0.4rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.stage-jobs thead th { padding-top: 0; border-bottom: 1.5px solid var(--ink); font-size: 0.78rem; font-weight: 850; line-height: 1.2; }
+.stage-jobs thead th:first-child { width: 30%; }
+.stage-jobs thead small { display: block; margin-top: 0.15rem; color: var(--ink-soft); font-size: 0.7rem; font-weight: 600; }
+.stage-jobs tbody th { color: var(--ink-soft); font-weight: 600; }
+.stage-jobs td { font-family: 'Anybody Variable', sans-serif; font-size: 0.95rem; font-weight: 760; font-variant-numeric: tabular-nums; }
+.stage-jobs-floors td, .stage-jobs-share td { font-family: inherit; font-size: 0.7rem; font-weight: 600; }
+.job-floor { display: grid; gap: 0.1rem; margin-bottom: 0.25rem; }
+.job-floor i { height: 8px; background: linear-gradient(to right, var(--green) var(--bar), var(--paper-deep) var(--bar)); }
+.job-floor i.is-memory { background: linear-gradient(to right, var(--mustard) var(--bar), var(--paper-deep) var(--bar)); }
+.job-floor small, .stage-jobs-share small { color: var(--ink-soft); font-size: 0.68rem; font-variant-numeric: tabular-nums; }
+.stage-jobs-limit td { font-family: inherit; font-size: 0.78rem; font-weight: 850; letter-spacing: 0.04em; text-transform: uppercase; }
+.stage-jobs-limit .limit-math { color: var(--green); }
+.stage-jobs-limit .limit-memory { color: var(--red); }
+.stage-jobs-limit .limit-host { color: var(--ink-soft); }
+.stage-jobs-share .stage-share-bar { height: 12px; margin-bottom: 0.2rem; }
 .stage-share-bar { display: flex; gap: 2px; height: 18px; }
 .stage-share-bar i { min-width: 3px; background: var(--paper-deep); }
 .stage-share-bar i.is-current { background: var(--red); }
-.stage-share p { margin: 0; color: var(--ink-soft); font-size: 0.78rem; line-height: 1.45; }
-.stage-share b { color: var(--ink); }
+.stage-verdict { margin: 0; font-size: 0.86rem; font-weight: 700; line-height: 1.4; }
+.stage-footnote { margin: 0; color: var(--ink-soft); font-size: 0.72rem; line-height: 1.4; }
 @media (max-width: 1000px) { .stage-scene { grid-template-columns: 1fr; } .stage-numbers { position: static; } .stage-callouts { grid-template-columns: 1fr; } }
 
 /* ---- Act 3: links back to Acts 1 and 2 ---------------------------------- */
