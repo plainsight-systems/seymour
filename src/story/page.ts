@@ -8,6 +8,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import { buildCutawayInputs, type CutawayInputs } from './cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { mountActs, type ActSpec } from './acts';
+import { partEntry, type Vendor } from '../data/parts';
 import { mountCutaway, type CutawayView } from './cutaway/render';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
@@ -271,7 +272,59 @@ const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: () => {}
 // Act 1: the chip alone, at four zoom levels.
 const gpuViews = new Map<string, CutawayView>();
 for (const scene of GPU_SCENES) {
-  acts.sceneHost(scene.id).innerHTML = `<div class="gpu-scene"><p class="gpu-scene-lead">${scene.lead}</p><div data-gpu-plate="${scene.id}"></div>${LEGEND}<p class="panel-hint">Click any part or label to pair them.</p></div>`;
+  acts.sceneHost(scene.id).innerHTML = `<div class="gpu-scene">
+    <p class="gpu-scene-lead">${scene.lead}</p>
+    <div class="gpu-scene-body">
+      <div class="gpu-scene-plate"><div data-gpu-plate="${scene.id}"></div>${LEGEND}</div>
+      <aside class="part-card" aria-label="Part details"><div class="part-detail" data-part-detail aria-live="polite"></div><div class="part-index"><span>Terms on this plate</span><ul data-part-index></ul></div></aside>
+    </div>
+  </div>`;
+}
+
+const gpuSelected = new Map<string, string | null>();
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+}
+
+/** The part card: plain name, the terms people use, what it is, does, and why it matters. */
+function renderPartCard(sceneId: string, plate: Plate): void {
+  const host = acts.sceneHost(sceneId);
+  const vendor = getHardware(storyHardwareId).vendor as Vendor;
+  const part = gpuSelected.get(sceneId) ?? null;
+  const detail = host.querySelector<HTMLElement>('[data-part-detail]')!;
+  const entry = part ? partEntry(part, vendor) : undefined;
+  detail.innerHTML = entry
+    ? `<p class="part-kicker">Selected part</p><h4>${escapeHtml(entry.name)}</h4>
+      <dl class="part-terms">${entry.terms.map((term) => `<div><dt>${escapeHtml(term.term)}</dt><dd>${escapeHtml(term.meaning)}</dd></div>`).join('')}</dl>
+      <h5>What it is</h5><p>${escapeHtml(entry.what)}</p>
+      <h5>What it does</h5><p>${escapeHtml(entry.does)}</p>
+      <h5>Why it matters for inference</h5><p>${escapeHtml(entry.inference)}</p>
+      ${entry.note ? `<p class="part-note">${escapeHtml(entry.note)}</p>` : ''}`
+    : '<p class="part-kicker">Parts and purpose</p><p class="part-empty">Click any part of the drawing, or a term below, to see what it is called, what it does, and why it matters for inference.</p>';
+  // Every term on this plate, each selecting the part it names.
+  const seen = new Set<string>();
+  const chips: string[] = [];
+  for (const label of plate.scene.labels) {
+    const labelEntry = partEntry(label.part, vendor);
+    if (!labelEntry) continue;
+    for (const term of labelEntry.terms) {
+      if (seen.has(term.term)) continue;
+      seen.add(term.term);
+      chips.push(`<li><button type="button" data-select-part="${label.part}" aria-pressed="${label.part === part}" title="${escapeHtml(labelEntry.name)}">${escapeHtml(term.term)}</button></li>`);
+    }
+  }
+  host.querySelector<HTMLElement>('[data-part-index]')!.innerHTML = chips.join('');
+}
+
+const gpuPlates = new Map<string, Plate>();
+for (const scene of GPU_SCENES) {
+  acts.sceneHost(scene.id).querySelector('.part-index')!.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('[data-select-part]');
+    if (!button) return;
+    const part = button.dataset.selectPart!;
+    gpuViews.get(scene.id)?.select(gpuSelected.get(scene.id) === part ? null : part);
+  });
 }
 
 function renderGpu(): void {
@@ -284,9 +337,17 @@ function renderGpu(): void {
     unit: unitPlate(storyHardwareId, 0),
   };
   for (const scene of GPU_SCENES) {
+    const plate = plates[scene.id]!;
+    gpuPlates.set(scene.id, plate);
     const existing = gpuViews.get(scene.id);
-    if (existing) existing.update(plates[scene.id]!);
-    else gpuViews.set(scene.id, mountCutaway(acts.sceneHost(scene.id).querySelector<HTMLElement>('[data-gpu-plate]')!, plates[scene.id]!, `The GPU: ${scene.label}`));
+    if (existing) existing.update(plate);
+    else gpuViews.set(scene.id, mountCutaway(acts.sceneHost(scene.id).querySelector<HTMLElement>('[data-gpu-plate]')!, plate, `The GPU: ${scene.label}`, {
+      onSelect: (part) => {
+        gpuSelected.set(scene.id, part);
+        renderPartCard(scene.id, gpuPlates.get(scene.id)!);
+      },
+    }));
+    renderPartCard(scene.id, plate);
   }
 }
 

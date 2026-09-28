@@ -37,3 +37,36 @@ describe('chip topology', () => {
     expect(() => getTopology('nope')).toThrow(/No cutaway topology/);
   });
 });
+
+describe('part glossary', () => {
+  it('names and explains every part drawn in Act 1, for every accelerator', async () => {
+    const { partEntry } = await import('./parts');
+    const { modelFor } = await import('../model/strategy');
+    const { DEFAULT_SETTINGS } = await import('./profiles');
+    const { buildCutawayInputs } = await import('../story/cutaway/inputs');
+    const { serverPlate, packagePlate, diePlate, unitPlate } = await import('../story/cutaway/plates');
+    for (const hardware of HARDWARE_PROFILES) {
+      const settings = { ...DEFAULT_SETTINGS, hardwareId: hardware.id };
+      const inputs = buildCutawayInputs(settings, hardware, modelFor(settings));
+      const plates = [serverPlate(inputs, 'hardware'), packagePlate(inputs, 'hardware'), diePlate(inputs, { job: 'decode', detail: 'full', activity: false }), unitPlate(hardware.id, 0)];
+      for (const plate of plates) {
+        for (const label of plate.scene.labels) {
+          const entry = partEntry(label.part, hardware.vendor);
+          expect(entry, `${hardware.id}: ${label.part}`).toBeDefined();
+          expect(entry!.terms.length).toBeGreaterThan(0);
+          expect([entry!.what, entry!.does, entry!.inference].every((text) => text.length > 20)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('uses each vendor’s own names where they differ', async () => {
+    const { partEntry } = await import('./parts');
+    const terms = (part: string, vendor: 'NVIDIA' | 'AMD') => partEntry(part, vendor)!.terms.map((term) => term.term);
+    expect(terms('unit', 'NVIDIA')).toContain('SM');
+    expect(terms('unit', 'AMD')).toContain('CU');
+    expect(terms('smem', 'AMD')).toContain('LDS');
+    expect(terms('matrix', 'NVIDIA')).toContain('Tensor Core');
+    expect(terms('hbm', 'AMD')).toContain('HBM');
+  });
+});

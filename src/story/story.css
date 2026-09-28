@@ -221,3 +221,25 @@
 @media (min-width: 901px) { .acts { padding-right: 3.25rem; } }
 @media (max-width: 900px) { .act-rail { display: none; } }
 @media (prefers-reduced-motion: reduce) { .act-rail b { transition: none; } }
+
+/* ---- Act 1: parts and purpose ------------------------------------------ */
+.gpu-scene-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.5rem; align-items: start; }
+.gpu-scene-plate { display: grid; gap: 0.75rem; min-width: 0; }
+.part-card { position: sticky; top: 1rem; display: grid; gap: 1rem; padding: 1.1rem; border: 1.5px solid var(--ink); background: var(--paper); }
+.part-kicker { margin: 0; color: var(--red); font-size: 0.66rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.part-detail h4 { margin: 0.25rem 0 0.75rem; font-family: 'Anybody Variable', sans-serif; font-size: 1.6rem; line-height: 1; }
+.part-detail h5 { margin: 0.8rem 0 0.2rem; color: var(--ink-soft); font-size: 0.66rem; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.part-detail p { margin: 0; font-size: 0.92rem; line-height: 1.5; }
+.part-empty { color: var(--ink-soft); }
+.part-terms { display: grid; gap: 0.45rem; margin: 0; }
+.part-terms > div { display: grid; grid-template-columns: auto 1fr; gap: 0.6rem; align-items: baseline; }
+.part-terms dt { padding: 0.15rem 0.45rem; color: var(--paper); background: var(--ink); font-size: 0.8rem; font-weight: 800; white-space: nowrap; }
+.part-terms dd { margin: 0; color: var(--ink-soft); font-size: 0.84rem; line-height: 1.4; }
+.part-note { margin-top: 0.8rem !important; padding: 0.6rem 0.7rem; border-left: 3px solid var(--mustard); background: color-mix(in oklch, var(--mustard) 18%, var(--paper)); }
+.part-index { display: grid; gap: 0.5rem; padding-top: 0.9rem; border-top: 1px solid var(--line); }
+.part-index > span { color: var(--ink-soft); font-size: 0.66rem; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.part-index ul { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.part-index button { min-height: 44px; padding: 0 0.6rem; color: var(--ink); border: 1px solid var(--ink); background: var(--paper); font: inherit; font-size: 0.78rem; font-weight: 750; cursor: pointer; }
+.part-index button[aria-pressed='true'] { color: var(--paper); border-color: var(--red); background: var(--red); }
+.part-index button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+@media (max-width: 1000px) { .gpu-scene-body { grid-template-columns: 1fr; } .part-card { position: static; } }

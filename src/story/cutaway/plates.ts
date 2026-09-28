@@ -139,7 +139,7 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
 /** Labels the fill on the front-most left stack, aiming at each segment's visible face. */
 function stackLabel(b: SceneBuilder, inputs: CutawayInputs, topology: ChipTopology, anchor: string): void {
   const count = topology.stackCountBasis === 'derived' && topology.stackCountNote ? topology.stackCountNote : `${topology.hbmActiveStacks} × ${topology.hbmGBPerStack} GB`;
-  b.label('hbm', anchor, 'right', `Memory stack · ${topology.hbmGBPerStack} GB`, `${count}, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, topology.stackCountBasis === 'derived' ? 'schematic' : 'published');
+  b.label('hbm', anchor, 'right', `Memory stack (HBM) · ${topology.hbmGBPerStack} GB`, `${count}, ${formatBandwidth(inputs.hbmPeakBytesPerSecond)} combined`, topology.stackCountBasis === 'derived' ? 'schematic' : 'published');
 }
 
 function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string): void {

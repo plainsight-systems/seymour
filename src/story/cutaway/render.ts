@@ -142,6 +142,8 @@ function callout(layer: SVGGElement, label: SceneLabel): SVGGElement {
 
 export interface CutawayView {
   update(plate: Plate): void;
+  /** Selects a part (or clears with null), exactly as a click would. */
+  select(part: string | null): void;
   destroy(): void;
 }
 
@@ -152,6 +154,8 @@ export interface CutawayOptions {
    * the drawing, so side-by-side plates keep identical geometry and scale.
    */
   labels?: 'auto' | 'chips';
+  /** Called whenever the reader's picked part changes. */
+  onSelect?: (part: string | null) => void;
 }
 
 export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: string, options: CutawayOptions = {}): CutawayView {
@@ -236,6 +240,7 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
     const labeled = part !== undefined && plate.scene.labels.some((label) => label.part === part);
     picked = labeled && picked !== part ? part! : null;
     applySelection();
+    options.onSelect?.(picked);
   }
 
   const onClick = (event: Event) => {
@@ -264,8 +269,16 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
   return {
     update(next: Plate): void {
       plate = next;
-      if (picked && !plate.scene.labels.some((label) => label.part === picked)) picked = null;
+      if (picked && !plate.scene.labels.some((label) => label.part === picked)) {
+        picked = null;
+        options.onSelect?.(null);
+      }
       render();
+    },
+    select(part: string | null): void {
+      picked = part && plate.scene.labels.some((label) => label.part === part) ? part : null;
+      applySelection();
+      options.onSelect?.(picked);
     },
     destroy(): void {
       observer.disconnect();
