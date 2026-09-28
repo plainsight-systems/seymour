@@ -48,28 +48,29 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
       <section class="challenge-board" data-challenge-board aria-live="polite"></section>
       <aside class="playground-controls">
         <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">Challenge: ${challenge.title}</option>`).join('')}</select><small class="playground-lock" data-lock-note hidden></small></label>
-        <fieldset><legend>Workload</legend>
+        <details class="playground-group" open><summary>Workload</summary>
           <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
           <label><span>Answer length <output data-output="outputLength"></output></span><input aria-label="Answer length" data-control="outputLength" type="range" min="0" max="${ANSWER_LENGTHS.length - 1}" step="1"></label>
-        </fieldset>
-        <fieldset><legend>Model + decoding</legend>
+        </details>
+        <details class="playground-group"><summary>Model + decoding</summary>
           <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.name.split(' · ')[0]}</option>`).join('')}</select></label>
           <label><span>Speculative decoding</span><select aria-label="Speculative decoding" data-control="speculativeTokens"><option value="0">Off</option><option value="2">Guess 2 tokens ahead</option><option value="4">Guess 4 tokens ahead</option></select></label>
-        </fieldset>
-        <fieldset><legend>Bytes</legend>
+        </details>
+        <details class="playground-group"><summary>Bytes</summary>
           <label><span>Model precision</span><select aria-label="Model precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
           <label><span>Math precision</span><select aria-label="Math precision" data-control="mathBits"><option value="16">FP16</option><option value="8">FP8 (needs 8- or 4-bit weights)</option></select></label>
           <label><span>KV precision</span><select aria-label="KV precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
           <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt prefix</span></label>
           <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input aria-label="Prefix already available" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
-        </fieldset>
-        <fieldset><legend>Placement + target</legend>
+        </details>
+        <details class="playground-group"><summary>Placement + target</summary>
           <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
           <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
-        </fieldset>
+        </details>
       </aside>
-      <div class="playground-workbench">
+      <div class="playground-workbench" data-bench-view="cutaway">
+        <div class="view-toggle playground-bench-toggle" role="group" aria-label="Workbench view"><button type="button" data-bench="cutaway" aria-pressed="true">Cutaway</button><button type="button" data-bench="numbers" aria-pressed="false">Numbers</button></div>
         <section class="playground-cutaway" aria-label="Cutaway view">
           <div class="playground-plate-tabs" role="group" aria-label="Zoom level">${PLATE_TABS.map(([id, label]) => `<button type="button" data-plate="${id}" aria-pressed="${id === 'package'}">${label}</button>`).join('')}</div>
           <div class="playground-tile" data-tile-steps hidden></div>
@@ -194,6 +195,14 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     if (cutaway) cutaway.update(plate);
     else cutaway = mountCutaway(host, plate, 'Playground cutaway');
   }
+
+  root.querySelector<HTMLElement>('.playground-bench-toggle')!.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('[data-bench]');
+    if (!button) return;
+    root.querySelector<HTMLElement>('.playground-workbench')!.dataset.benchView = button.dataset.bench;
+    for (const toggle of button.parentElement!.querySelectorAll<HTMLButtonElement>('[data-bench]')) toggle.setAttribute('aria-pressed', String(toggle === button));
+    if (button.dataset.bench === 'cutaway') cutaway?.refresh();
+  });
 
   root.querySelector<HTMLElement>('.playground-cutaway')!.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('button[data-plate], button[data-tile]');

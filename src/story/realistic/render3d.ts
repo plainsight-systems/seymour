@@ -146,7 +146,7 @@ export function mountRealistic(host: HTMLElement, initial: Plate, ariaLabel: str
   function resize(): void {
     const width = host.clientWidth;
     if (width === 0) return;
-    const height = Math.max(340, Math.min(640, Math.round(width * 0.62)));
+    const height = Math.max(300, Math.min(640, Math.round(width * 0.62), Math.round(window.innerHeight * 0.58)));
     renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();

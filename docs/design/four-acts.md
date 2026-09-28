@@ -46,3 +46,8 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 ## 5. Rollback
 
 Phase 1 replaces the story page's outer layout only; the model, plates, panels, and playground modules are reused unchanged. Reverting the phase 1 commit restores the six-panel page.
+
+## 6. Status (2026-09-28)
+
+Phases 1–4 are built. Scene heights measured at 1440×900 after phase 4: 15 of 20 scene states fit one screen; Act 3 "Distance is speed" and "Change what one read buys" are within 1% (910 and 903 px); Act 2 "Two jobs, one chip" is 4% over (940 px); the playground is 13–16% over (1,014 px cutaway view, 1,048 px numbers view). A8 is not yet fully met for those scenes.
+

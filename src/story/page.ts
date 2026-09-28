@@ -183,6 +183,16 @@ function platesFor(panel: StoryPanelSpec, inputs: CutawayInputs): Map<string, Pl
   return new Map([['main', serverPlate(inputs)]]);
 }
 
+/** Switchable moves up front; the rest (knob-driven or not modeled) fold away. */
+function movesMarkup(panel: StoryPanelSpec): string {
+  const switches = panel.moves.filter((move) => move.effect);
+  const others = panel.moves.filter((move) => !move.effect);
+  return `<div class="panel-moves">
+    ${switches.length ? `<span>Try a move<small>Switch one on to apply it to the plate</small></span><ul>${switches.map(moveMarkup).join('')}</ul>` : ''}
+    ${others.length ? `<details class="panel-other-moves"><summary>Other moves (${others.length})</summary><ul>${others.map(moveMarkup).join('')}</ul></details>` : ''}
+  </div>`;
+}
+
 function moveMarkup(move: StoryMove): string {
   const body = `<b>${move.title}</b><p>${move.explanation}</p>`;
   // A real on/off switch: the state reads Off or On, never an instruction.
@@ -222,6 +232,11 @@ function panelMarkup(panel: StoryPanelSpec): string {
     <div class="panel-narrative">
       <h3 id="title-${panel.id}">${panel.title}</h3>
       <p class="panel-claim">${panel.claim}</p>
+      <div class="panel-links">
+        <div><span>Changes in Act 2</span>${panel.changes.map((stage) => `<button type="button" data-open-stage="${stage}">${STAGE_TAB_LABEL[stage]} ↑</button>`).join('')}</div>
+        <div><span>Limited by, from Act 1</span>${panel.limitedBy.map((link, index) => `<button type="button" data-open-limit="${index}">${link.label} ↑</button>`).join('')}</div>
+      </div>
+      <p class="panel-workload" data-workload></p>
       ${knobMarkup(panel, settings)}
       <div class="panel-surprise"><span>The surprise</span><p data-surprise></p></div>
       <details class="panel-trace"><summary>In a profiler trace</summary><p>${panel.trace}</p><p class="panel-trace-model" data-trace-model></p><small>What to look for in a GPU timeline, for example from rocprofv3 or Nsight Systems. Qualitative expectations, not measured traces.</small></details>
@@ -231,10 +246,9 @@ function panelMarkup(panel: StoryPanelSpec): string {
         <div class="panel-zoom"><span>Zoom</span><b data-zoom>${zoomLabel(panel.plate, settings.hardwareId)}</b></div>
         ${stage}
         ${panel.numbers.length ? '<div class="panel-numbers" data-numbers></div>' : ''}
+        ${movesMarkup(panel)}
         ${LEGEND}
-        <p class="panel-hint">Click any part or label to pair them.</p>
       </div>
-      <div class="panel-moves"><span>The moves${panel.moves.some((move) => move.effect) ? '<small>Switch one on to apply it to the plate</small>' : ''}</span><ul>${panel.moves.map(moveMarkup).join('')}</ul></div>
     </div>
   </section>`;
 }
@@ -261,17 +275,39 @@ const ACTS: ActSpec[] = [
   },
   {
     id: 'act-3', number: 3, title: 'The throttles',
-    intro: `How each step is changed by the choices you make and limited by the hardware from Act 1. ${EFFICIENCY_NOTE}`,
+    intro: 'How each stage from Act 2 changes with the choices you make, and which part from Act 1 it runs into.',
+    footnote: EFFICIENCY_NOTE,
     scenes: STORY_PANELS.filter((panel) => panel.id !== 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })),
   },
   {
     id: 'act-4', number: 4, title: 'Putting it together',
-    intro: `Every knob at once, on any chip. Play freely, or pick a challenge with fixed constraints to beat. ${EFFICIENCY_NOTE}`,
+    intro: 'Every knob at once, on any chip. Play freely, or pick a challenge with fixed constraints to beat.',
+    footnote: EFFICIENCY_NOTE,
     scenes: [{ id: 'playground', label: 'Playground and challenges' }],
   },
 ];
 
 const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: (sceneId) => (sceneId === 'build' ? buildView : gpuViews.get(sceneId))?.refresh() });
+
+/** The workload dimension each panel's own knob controls, which Act 2 must not override. */
+const KNOB_OWNS: Record<string, ('batch' | 'sequenceLength')[]> = {
+  'two-jobs': ['sequenceLength'], 'share-read': ['batch'], 'memory-wall': ['sequenceLength'], 'heavier-tokens': ['batch'],
+};
+
+/** Moves a panel's slider to match its settings after they change from outside. */
+function syncKnob(panel: StoryPanelSpec): void {
+  const control = root!.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-panel="${panel.id}"] [data-knob]`);
+  if (!control || control instanceof HTMLSelectElement) return;
+  const { settings } = panelState.get(panel.id)!;
+  control.value = String(control.dataset.knob === 'batch' ? batchToSlider(settings.batch) : sequenceToSlider(settings.sequenceLength));
+}
+
+/** Opens an Act 1 scene and selects the named part on it. */
+function openHardwarePart(link: { scene: string; part: string }): void {
+  acts.open(`act-1/${link.scene}`, true);
+  history.replaceState(null, '', `#act-1/${link.scene}`);
+  gpuViews.get(link.scene)?.select(link.part);
+}
 
 // Act 1: the chip alone, at four zoom levels.
 const gpuViews = new Map<string, CutawayView>();
@@ -372,7 +408,7 @@ function renderBuild(): void {
   const placed = buildPlaced[buildRoundId];
   const plate = assemblyPlate(source, buildRound, placed);
   if (buildView) buildView.update(plate);
-  else buildView = mountCutaway(buildHost.querySelector<HTMLElement>('[data-build-plate]')!, plate, 'Build the GPU', { onSelect: (part) => { if (part) chooseZone(part); } });
+  else buildView = mountCutaway(buildHost.querySelector<HTMLElement>('[data-build-plate]')!, plate, 'Build the GPU', { labels: 'markers', onSelect: (part) => { if (part) chooseZone(part); } });
   // The tray is sorted by name, so its order never reveals the zone numbers.
   const cards = buildRound.parts
     .map((part) => ({ part, entry: partEntry(part, vendor)! }))
@@ -512,7 +548,8 @@ async function mountGpuView(sceneId: string): Promise<void> {
     mountRealistic ??= (await import('./realistic/render3d')).mountRealistic;
     if (gpuViewMode !== 'realistic') return;
   }
-  const view = realistic ? mountRealistic!(target, gpuPlates.get(sceneId)!, label, options) : mountCutaway(target, gpuPlates.get(sceneId)!, label, options);
+  // The part card and term index list the parts, so the drawing needs only markers.
+  const view = realistic ? mountRealistic!(target, gpuPlates.get(sceneId)!, label, options) : mountCutaway(target, gpuPlates.get(sceneId)!, label, { ...options, labels: 'markers' });
   gpuViews.set(sceneId, view);
   const keep = gpuSelected.get(sceneId);
   if (keep) view.select(keep);
@@ -564,6 +601,7 @@ function renderPanel(panel: StoryPanelSpec): void {
     else state.views.set(key, mountCutaway(section.querySelector<HTMLElement>(`[data-cutaway="${key}"]`)!, plate, `${panel.title}: ${zoomLabel(panel.plate, settings.hardwareId)}`, { labels: panel.plate === 'die-pair' ? 'chips' : 'auto' }));
   }
   section.querySelector<HTMLElement>('[data-zoom]')!.textContent = zoomLabel(panel.plate, settings.hardwareId);
+  section.querySelector<HTMLElement>('[data-workload]')!.textContent = `Workload: ${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'} × ${settings.sequenceLength.toLocaleString()} tokens of context · ${modelFor(settings).name.split(' · ')[0]}`;
   for (const job of ['prefill', 'decode'] as const) {
     const node = section.querySelector<HTMLElement>(`[data-job-caption="${job}"]`);
     if (node) node.innerHTML = jobCaption(inputs, job, settings);
@@ -588,6 +626,17 @@ for (const panel of STORY_PANELS) {
   const control = section.querySelector<HTMLInputElement | HTMLSelectElement>('[data-knob]')!;
   const { settings } = panelState.get(panel.id)!;
   if (control instanceof HTMLSelectElement) control.value = panel.id === 'read-model' ? String(settings.weightBits) : settings.kvPlacement;
+  section.querySelector('.panel-links')!.addEventListener('click', (event) => {
+    const target = event.target as Element;
+    const stage = target.closest<HTMLButtonElement>('[data-open-stage]');
+    if (stage) {
+      acts.open(`act-2/${stage.dataset.openStage}`, true);
+      history.replaceState(null, '', `#act-2/${stage.dataset.openStage}`);
+      return;
+    }
+    const limit = target.closest<HTMLButtonElement>('[data-open-limit]');
+    if (limit) openHardwarePart(panel.limitedBy[Number(limit.dataset.openLimit)]!);
+  });
   section.querySelector('.panel-moves')!.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('[data-move]');
     if (!button) return;
@@ -612,10 +661,17 @@ renderBuild();
 const forward = mountForwardScenes(
   (stage) => acts.sceneHost(stage),
   acts.sceneHost('tokenize').closest<HTMLElement>('.act')!.querySelector<HTMLElement>('.act-tools')!,
-  (link) => {
-    acts.open(`act-1/${link.scene}`, true);
-    history.replaceState(null, '', `#act-1/${link.scene}`);
-    gpuViews.get(link.scene)?.select(link.part);
+  openHardwarePart,
+  (workload) => {
+    // Act 2's users and context carry into Act 3, except the setting each
+    // panel's own knob controls.
+    for (const panel of STORY_PANELS) {
+      const { settings } = panelState.get(panel.id)!;
+      if (!KNOB_OWNS[panel.id]?.includes('batch')) settings.batch = workload.batch;
+      if (!KNOB_OWNS[panel.id]?.includes('sequenceLength')) settings.sequenceLength = workload.sequenceLength;
+      syncKnob(panel);
+      renderPanel(panel);
+    }
   },
 );
 forward.render(storyHardwareId);

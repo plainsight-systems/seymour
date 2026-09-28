@@ -42,6 +42,7 @@ export function mountForwardScenes(
   hostFor: (stage: StageId) => HTMLElement,
   toolsRoot: HTMLElement,
   openPart: (link: HardwareLink) => void,
+  onWorkloadChange: (settings: SimulationSettings) => void = () => {},
 ): ForwardScenesView {
   let hardwareId = DEFAULT_SETTINGS.hardwareId as string;
   const workload: SimulationSettings = { ...DEFAULT_SETTINGS, phase: 'prefill', batch: 1, sequenceLength: 4096, reusePromptPrefixes: false, prefixCachePercent: 0 };
@@ -84,7 +85,7 @@ export function mountForwardScenes(
           <p class="stage-kicker">Stage ${index + 1} of ${stages.length} · <span class="runs-on runs-${stage.runsOn}">${cpu ? 'CPU' : 'GPU'}</span>${stage.repeats > 1 ? ` <span class="runs-repeat">× ${stage.repeats} layers</span>` : ''}</p>
           <h3>${escapeHtml(copy.title)}</h3>
           <p class="stage-lead">${escapeHtml(copy.lead(model))}</p>
-          ${stage.operations.length ? `<ol class="stage-ops">${stage.operations.map((op) => `<li><b>${escapeHtml(op.name)}</b><code>${escapeHtml(op.equation)}</code></li>`).join('')}</ol>` : ''}
+          ${stage.operations.length ? `<details class="stage-ops-wrap"><summary>The ${stage.operations.length === 1 ? 'operation' : `${stage.operations.length} operations`} inside</summary><ol class="stage-ops">${stage.operations.map((op) => `<li><b>${escapeHtml(op.name)}</b><code>${escapeHtml(op.equation)}</code></li>`).join('')}</ol></details>` : ''}
           <div class="stage-callouts">
             <div><span>Grows with</span><ul>${copy.growsWith.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>
             <div class="stage-overflow"><span>Where it overflows</span><p>${escapeHtml(copy.overflow(facts))}</p></div>
@@ -126,6 +127,7 @@ export function mountForwardScenes(
     if (select.dataset.forward === 'batch') workload.batch = Number(select.value);
     if (select.dataset.forward === 'sequenceLength') workload.sequenceLength = Number(select.value);
     render();
+    onWorkloadChange({ ...workload, hardwareId });
   });
 
   return {

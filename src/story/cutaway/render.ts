@@ -155,13 +155,15 @@ export interface CutawayOptions {
    * a list on narrow containers. `chips`: labels as a row of buttons under
    * the drawing, so side-by-side plates keep identical geometry and scale.
    */
-  labels?: 'auto' | 'chips';
+  labels?: 'auto' | 'chips' | 'markers';
   /** Called whenever the reader's picked part changes. */
   onSelect?: (part: string | null) => void;
 }
 
 export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: string, options: CutawayOptions = {}): CutawayView {
   const chips = options.labels === 'chips';
+  // 'markers': numbered markers only; the page lists the parts elsewhere.
+  const markersOnly = options.labels === 'markers';
   let plate = initial;
   let picked: string | null = null;
   let scale = 1;
@@ -198,7 +200,8 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
     let share = 1;
     for (let i = 0; i < 4; i++) {
       share = draw(k, useMarkers);
-      const next = svg.viewBox.baseVal.width / Math.max(1, svg.clientWidth);
+      // A height cap letterboxes the drawing, so scale by whichever side binds.
+      const next = Math.max(svg.viewBox.baseVal.width / Math.max(1, svg.clientWidth), svg.viewBox.baseVal.height / Math.max(1, svg.clientHeight || Infinity));
       if (Math.abs(next - k) / k < 0.03) break;
       k = Math.min(6, Math.max(0.5, next));
     }
@@ -208,18 +211,20 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
 
   function render(): void {
     if (host.clientWidth === 0) return;
-    markers = false;
-    const share = fit(false);
-    if (!chips && share < MIN_DRAWING_SHARE) {
+    markers = markersOnly;
+    renderList();
+    const share = fit(markersOnly);
+    if (!chips && !markersOnly && share < MIN_DRAWING_SHARE) {
       markers = true;
+      // Show the list before measuring: pages may lay it out beside the drawing.
+      renderList();
       fit(true);
     }
-    renderList();
     applySelection();
   }
 
   function renderList(): void {
-    list.hidden = !chips && !markers;
+    list.hidden = markersOnly || (!chips && !markers);
     if (list.hidden) { list.innerHTML = ''; return; }
     list.innerHTML = plate.scene.labels.map((label, index) => `<li><button type="button" data-part="${label.part}" aria-pressed="false">${chips ? '' : `<span class="cw-list-no">${index + 1}</span>`}<span class="cw-basis-swatch cw-basis-${label.basis}" aria-hidden="true"></span><span><b>${label.title}</b><small>${label.detail}</small></span></button></li>`).join('');
   }
