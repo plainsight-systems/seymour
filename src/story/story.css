@@ -243,3 +243,16 @@
 .part-index button[aria-pressed='true'] { color: var(--paper); border-color: var(--red); background: var(--red); }
 .part-index button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
 @media (max-width: 1000px) { .gpu-scene-body { grid-template-columns: 1fr; } .part-card { position: static; } }
+
+/* ---- Act 1: view toggle and realistic view ------------------------------- */
+.act-tools { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.view-toggle { display: inline-flex; border: 1px solid var(--ink); }
+.view-toggle button { min-height: 44px; padding: 0 0.9rem; color: var(--ink); border: 0; background: var(--paper); font: inherit; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
+.view-toggle button + button { border-left: 1px solid var(--ink); }
+.view-toggle button[aria-pressed='true'] { color: var(--paper); background: var(--red); }
+.view-toggle button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.rl-root { position: relative; width: 100%; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 40%, #fbf7ee, #e4dcc8); }
+.rl-root canvas { display: block; width: 100%; touch-action: none; }
+.rl-tooltip { position: absolute; z-index: 2; padding: 0.3rem 0.5rem; color: var(--paper); background: var(--ink); font-size: 0.78rem; font-weight: 750; pointer-events: none; white-space: nowrap; }
+.rl-tooltip[hidden], .rl-note[hidden], [data-iso-legend][hidden] { display: none; }
+.rl-note { margin: 0; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.45; }

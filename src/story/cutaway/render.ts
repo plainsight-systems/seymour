@@ -144,6 +144,8 @@ export interface CutawayView {
   update(plate: Plate): void;
   /** Selects a part (or clears with null), exactly as a click would. */
   select(part: string | null): void;
+  /** Re-measures after the view becomes visible (e.g. its tab opened). */
+  refresh(): void;
   destroy(): void;
 }
 
@@ -279,6 +281,10 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
       picked = part && plate.scene.labels.some((label) => label.part === part) ? part : null;
       applySelection();
       options.onSelect?.(picked);
+    },
+    refresh(): void {
+      lastWidth = host.clientWidth;
+      render();
     },
     destroy(): void {
       observer.disconnect();
