@@ -265,7 +265,6 @@ const ACTS: ActSpec[] = [
     id: 'act-1', number: 1, title: 'The GPU',
     intro: 'What the hardware is, from the whole server down to one compute unit, and what each part is for.',
     scenes: [...GPU_SCENES.map(({ id, label }) => ({ id, label })), { id: 'build', label: 'Challenge: build it' }],
-    tools: '<span class="view-toggle" role="group" aria-label="View"><button type="button" data-gpu-view="isometric" aria-pressed="true">Isometric</button><button type="button" data-gpu-view="realistic" aria-pressed="false">Realistic</button></span>',
   },
   {
     id: 'act-2', number: 2, title: 'Inference',
@@ -315,7 +314,7 @@ for (const scene of GPU_SCENES) {
   acts.sceneHost(scene.id).innerHTML = `<div class="gpu-scene">
     <p class="gpu-scene-lead">${scene.lead}</p>
     <div class="gpu-scene-body">
-      <div class="gpu-scene-plate"><div data-gpu-plate="${scene.id}"></div><div data-iso-legend>${LEGEND}</div><p class="rl-note" data-rl-note hidden>Realistic rendering of the same layout as the isometric plate: materials are illustrative, positions stylized, and counts published. Drag to orbit, scroll to zoom, click a part.</p></div>
+      <div class="gpu-scene-plate"><div data-gpu-plate="${scene.id}"></div><div data-iso-legend>${LEGEND}</div></div>
       <aside class="part-card" aria-label="Part details"><div class="part-detail" data-part-detail aria-live="polite"></div><div class="part-index"><span>Terms on this plate</span><ul data-part-index></ul></div></aside>
     </div>
   </div>`;
@@ -378,7 +377,6 @@ acts.sceneHost('build').innerHTML = `<div class="gpu-scene build-scene">
     <div class="gpu-scene-plate build-stage">
       <div data-build-plate></div>
       <div class="build-done" data-build-done hidden></div>
-      <p class="rl-note">The challenge uses the isometric drawing in either view.</p>
     </div>
     <aside class="part-card build-tray" aria-label="Parts tray">
       <div><p class="part-kicker">Parts tray</p><p class="build-progress" data-build-progress></p><ol class="build-pips" data-build-pips aria-hidden="true"></ol></div>
@@ -658,46 +656,21 @@ buildHost.addEventListener('keydown', (event) => {
   buildHost.querySelector<HTMLButtonElement>(`[data-card="${button.dataset.card}"]`)?.focus();
 });
 
-type GpuViewMode = 'isometric' | 'realistic';
-let gpuViewMode: GpuViewMode = 'isometric';
-type MountRealistic = typeof import('./realistic/render3d')['mountRealistic'];
-let mountRealistic: MountRealistic | null = null;
-
-/** Mounts the current view (isometric SVG or realistic 3D) for one Act 1 scene. */
-async function mountGpuView(sceneId: string): Promise<void> {
+/** Mounts the drawing for one Act 1 scene. */
+function mountGpuView(sceneId: string): void {
   const host = acts.sceneHost(sceneId);
   const target = host.querySelector<HTMLElement>('[data-gpu-plate]')!;
   const label = `The GPU: ${GPU_SCENES.find((scene) => scene.id === sceneId)!.label}`;
-  const options = {
+  // The part card and term index list the parts, so the drawing needs only markers.
+  const view = mountCutaway(target, gpuPlates.get(sceneId)!, label, {
+    labels: 'markers',
     onSelect: (part: string | null) => {
       gpuSelected.set(sceneId, part);
       renderPartCard(sceneId, gpuPlates.get(sceneId)!);
     },
-  };
-  gpuViews.get(sceneId)?.destroy();
-  gpuViews.delete(sceneId);
-  const realistic = gpuViewMode === 'realistic';
-  host.querySelector<HTMLElement>('[data-iso-legend]')!.hidden = realistic;
-  host.querySelector<HTMLElement>('[data-rl-note]')!.hidden = !realistic;
-  if (realistic) {
-    // Three.js loads only when the realistic view is first requested.
-    mountRealistic ??= (await import('./realistic/render3d')).mountRealistic;
-    if (gpuViewMode !== 'realistic') return;
-  }
-  // The part card and term index list the parts, so the drawing needs only markers.
-  const view = realistic ? mountRealistic!(target, gpuPlates.get(sceneId)!, label, options) : mountCutaway(target, gpuPlates.get(sceneId)!, label, { ...options, labels: 'markers' });
+  });
   gpuViews.set(sceneId, view);
-  const keep = gpuSelected.get(sceneId);
-  if (keep) view.select(keep);
 }
-
-acts.sceneHost('server').closest('.act')!.querySelector('.view-toggle')!.addEventListener('click', (event) => {
-  const button = (event.target as Element).closest<HTMLButtonElement>('[data-gpu-view]');
-  if (!button || button.dataset.gpuView === gpuViewMode) return;
-  gpuViewMode = button.dataset.gpuView as GpuViewMode;
-  for (const toggle of button.parentElement!.querySelectorAll<HTMLButtonElement>('[data-gpu-view]')) toggle.setAttribute('aria-pressed', String(toggle === button));
-  for (const scene of GPU_SCENES) void mountGpuView(scene.id);
-});
 
 function renderGpu(): void {
   const settings = { ...DEFAULT_SETTINGS, hardwareId: storyHardwareId };
@@ -713,7 +686,7 @@ function renderGpu(): void {
     gpuPlates.set(scene.id, plate);
     const existing = gpuViews.get(scene.id);
     if (existing) existing.update(plate);
-    else void mountGpuView(scene.id);
+    else mountGpuView(scene.id);
     renderPartCard(scene.id, plate);
   }
 }

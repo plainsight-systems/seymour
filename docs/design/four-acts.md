@@ -30,7 +30,7 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 | A2 | Scenes are horizontal tabs (`role=tablist`), arrow-key navigable, with one scene visible at a time. |
 | A3 | Every scene is addressable: `#act-1/package`. Loading or following such a link scrolls to the act and opens the scene. |
 | A4 | The accelerator choice is global and carries across all acts, including the playground. The workload set in Act 2 carries into Act 3 once Act 2 exists. |
-| A5 | Act 1 has an Isometric / Realistic view toggle at the top. Realistic is an interactive Three.js view with physically based materials, drawn from the same topology data as the plates. Generated imagery is not used for technical views, because it cannot guarantee published counts. |
+| A5 | Act 1 uses the isometric plates only. A Three.js realistic view with physically based materials was built and removed on review: stylized boxes under realistic lighting did not read as the real hardware. A realistic view may return later; generated imagery is not used for technical views, because it cannot guarantee published counts. |
 | A6 | Act 1 shows hardware only: no model loaded into memory, no busy shading. Those belong to Acts 2 and 3. |
 | A7 | The Act 1 challenge places package-level parts (die, memory stacks, interposer, substrate) and die-level parts (compute units, L2, memory controllers). Drag and drop has a click-to-place equivalent for keyboard users. Feedback appears where the reader is looking: the open zone under a dragged card lights up, a miss flashes the zone red and shows why just above the drawing, and finishing a round lights each part in turn before a result card with the miss count. |
 | A8 | Target: every scene fits one screen at desktop size. Content that does not fit is trimmed or split into another scene, not scrolled inside a scene. |
@@ -38,7 +38,7 @@ The lookup page stays a separate route. Under the hood is absorbed into Acts 1 a
 ## 4. Phases
 
 1. **Shell.** Acts, tabs, act indicator, scene links, global chip selector. Existing content moves in as-is: Act 1 plates (hardware-only mode), Act 2 holds the prompt-vs-token scene, Act 3 holds the remaining concept panels, Act 4 holds the playground. No new features; no placeholder tabs.
-2. **Act 1.** Parts-and-purpose panel for each part; the realistic view and its toggle; the placement challenge.
+2. **Act 1.** Parts-and-purpose panel for each part; the placement challenge.
 3. **Act 2.** The forward pass, with the owner's grouping.
 4. **Act 3.** Each lever names the Act 2 steps it changes and the Act 1 part that limits it; scenes trimmed to fit one screen.
 5. **Act 4.** Challenge refinements from play-testing.
