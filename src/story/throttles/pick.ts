@@ -25,6 +25,9 @@ export const MOVES: ThrottleMove[] = [
   { id: 'users2', label: 'Serve twice the users', detail: 'Put twice as many users into each pass.' },
 ];
 
+/** The pass a goal is measured on: time per token on later passes, time to first token on the first pass. */
+const GOAL_PHASE: Record<Goal, SimulationSettings['phase']> = { token: 'decode', first: 'prefill' };
+
 export const GOAL_LABEL: Record<Goal, string> = {
   token: 'Time per token for each user',
   first: 'Time to the first token',
@@ -35,7 +38,6 @@ export interface PickScenario {
   title: string;
   story: string;
   goal: Goal;
-  phase: SimulationSettings['phase'];
   batch: number;
   sequenceLength: number;
   /** Share of guessed tokens accepted: high when the output copies the prompt, low for open-ended text. */
@@ -45,16 +47,16 @@ export interface PickScenario {
 }
 
 export const PICK_SCENARIOS: PickScenario[] = [
-  { id: 'code-edit', title: 'A code-editing assistant', story: 'One developer asks for edits to a 4,096-token file. The answer copies most of the file back with small changes, so guesses copied from the prompt usually land (80%). Replies stream too slowly.', goal: 'token', phase: 'decode', batch: 1, sequenceLength: 4096, acceptance: 0.8, sharedPrefixPercent: 0 },
-  { id: 'team-chat', title: 'A team assistant with long histories', story: '24 users, each 16,384 tokens into an open-ended conversation. Guesses copied from the prompt rarely land (20%). Everyone’s replies stream too slowly.', goal: 'token', phase: 'decode', batch: 24, sequenceLength: 16384, acceptance: 0.2, sharedPrefixPercent: 0 },
-  { id: 'solo-chat', title: 'One user, open-ended chat', story: 'A single user in a short (2,048-token) open-ended chat. Guesses rarely land (20%). The reply streams too slowly.', goal: 'token', phase: 'decode', batch: 1, sequenceLength: 2048, acceptance: 0.2, sharedPrefixPercent: 0 },
-  { id: 'support-bot', title: 'A support bot with a long system prompt', story: '8 users at a time send 4,096-token prompts. Three quarters of every prompt is the same system prompt and product manual. The first word takes too long to appear.', goal: 'first', phase: 'prefill', batch: 8, sequenceLength: 4096, acceptance: 0.2, sharedPrefixPercent: 75 },
-  { id: 'unique-docs', title: 'Reading unique documents', story: 'One user uploads a different 32,768-token contract each time; nothing is shared between requests. The first word takes too long to appear.', goal: 'first', phase: 'prefill', batch: 1, sequenceLength: 32768, acceptance: 0.2, sharedPrefixPercent: 0 },
+  { id: 'code-edit', title: 'A code-editing assistant', story: 'One developer asks for edits to a 4,096-token file. The answer copies most of the file back with small changes, so guesses copied from the prompt usually land (80%). Replies stream too slowly.', goal: 'token', batch: 1, sequenceLength: 4096, acceptance: 0.8, sharedPrefixPercent: 0 },
+  { id: 'team-chat', title: 'A team assistant with long histories', story: '24 users, each 16,384 tokens into an open-ended conversation. Guesses copied from the prompt rarely land (20%). Everyone’s replies stream too slowly.', goal: 'token', batch: 24, sequenceLength: 16384, acceptance: 0.2, sharedPrefixPercent: 0 },
+  { id: 'solo-chat', title: 'One user, open-ended chat', story: 'A single user in a short (2,048-token) open-ended chat. Guesses rarely land (20%). The reply streams too slowly.', goal: 'token', batch: 1, sequenceLength: 2048, acceptance: 0.2, sharedPrefixPercent: 0 },
+  { id: 'support-bot', title: 'A support bot with a long system prompt', story: '8 users at a time send 4,096-token prompts. Three quarters of every prompt is the same system prompt and product manual. The first word takes too long to appear.', goal: 'first', batch: 8, sequenceLength: 4096, acceptance: 0.2, sharedPrefixPercent: 75 },
+  { id: 'unique-docs', title: 'Reading unique documents', story: 'One user uploads a different 32,768-token contract each time; nothing is shared between requests. The first word takes too long to appear.', goal: 'first', batch: 1, sequenceLength: 32768, acceptance: 0.2, sharedPrefixPercent: 0 },
 ];
 
 export function scenarioSettings(scenario: PickScenario, hardwareId: string): SimulationSettings {
   return {
-    ...DEFAULT_SETTINGS, hardwareId, phase: scenario.phase, batch: scenario.batch, sequenceLength: scenario.sequenceLength,
+    ...DEFAULT_SETTINGS, hardwareId, phase: GOAL_PHASE[scenario.goal], batch: scenario.batch, sequenceLength: scenario.sequenceLength,
     draftAcceptanceRate: scenario.acceptance, reusePromptPrefixes: false, prefixCachePercent: 0, speculativeTokens: 0,
   };
 }

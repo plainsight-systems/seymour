@@ -1,16 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { HARDWARE_PROFILES } from '../../data/profiles';
+import { HARDWARE_PROFILES, getHardware } from '../../data/profiles';
+import { calculateSimulation } from '../../model/calculate';
+import { modelFor } from '../../model/strategy';
 import { challengesFor, getChallenge } from './data';
 import { evaluateChallenge, everyAttempt, validateChallenge } from './engine';
 
 const CHIPS = HARDWARE_PROFILES.map((hardware) => hardware.id);
 
 describe('challenge engine', () => {
-  it('evaluates every constraint with its actual value', () => {
-    const challenge = challengesFor('h100-sxm')[0]!;
-    const evaluation = evaluateChallenge(challenge, challenge.solution);
-    expect(evaluation.results).toHaveLength(challenge.constraints.length);
-    expect(evaluation.results.every((result) => typeof result.actual === 'number' || typeof result.actual === 'boolean')).toBe(true);
+  it('reports each target with the model\'s own numbers', () => {
+    for (const challenge of challengesFor('h100-sxm')) {
+      for (const settings of [challenge.naive, challenge.solution]) {
+        const decode = calculateSimulation({ ...settings, phase: 'decode' }, getHardware(settings.hardwareId), modelFor(settings));
+        const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, getHardware(settings.hardwareId), modelFor(settings));
+        const expected: Partial<Record<string, number | boolean>> = {
+          msPerToken: decode.msPerToken,
+          timeToFirstTokenMs: prefill.totalMs,
+          totalTokensPerSec: decode.tokenRate,
+          concurrentUsers: settings.batch,
+          weightBits: settings.weightBits,
+          kvBits: settings.kvBits,
+        };
+        const results = evaluateChallenge(challenge, settings).results;
+        expect(results).toHaveLength(challenge.constraints.length);
+        for (const result of results) {
+          if (result.constraint.metric in expected) expect(result.actual, `${challenge.id} ${result.constraint.metric}`).toBe(expected[result.constraint.metric]);
+        }
+      }
+    }
+  });
+
+  it('counts KV outside GPU memory as not fitting in GPU memory, however much room it frees', () => {
+    const challenge = challengesFor('h100-sxm').find((candidate) => candidate.id === 'long-document')!;
+    const inHost = { ...challenge.naive, kvPlacement: 'host' as const };
+    expect(evaluateChallenge(challenge, inHost).results.find((result) => result.constraint.metric === 'fitsInGpuMemory')!.actual).toBe(false);
   });
 
   it('builds every challenge for every chip, and enforces the challenge rules on each', () => {
