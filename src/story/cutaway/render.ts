@@ -161,6 +161,8 @@ export interface CutawayOptions {
    * `auto`: leader-line callouts beside the drawing, or numbered markers plus
    * a list on narrow containers. `chips`: labels as a row of buttons under
    * the drawing, so side-by-side plates keep identical geometry and scale.
+   * `markers`: numbered markers only, for pages that list the parts
+   * elsewhere (Act 1's part card, the build challenge's tray).
    */
   labels?: 'auto' | 'chips' | 'markers';
   /** Called whenever the reader's picked part changes. */
@@ -192,9 +194,11 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
     svg.textContent = '';
     svg.style.setProperty('--cw-k', String(k));
     const { root, labelsLayer, bounds } = drawGeometry(svg, plate.scene);
-    if (chips) { /* labels live in the chip row */ }
-    else if (useMarkers) narrowMarkers(labelsLayer, plate.scene, k);
-    else wideCallouts(labelsLayer, plate.scene, bounds, k);
+    // Chip labels live in the row under the drawing, so the drawing itself carries none.
+    if (!chips) {
+      if (useMarkers) narrowMarkers(labelsLayer, plate.scene, k);
+      else wideCallouts(labelsLayer, plate.scene, bounds, k);
+    }
     const pad = 20 * k;
     const box = root.getBBox();
     svg.setAttribute('viewBox', `${(box.x - pad).toFixed(0)} ${(box.y - pad).toFixed(0)} ${(box.width + 2 * pad).toFixed(0)} ${(box.height + 2 * pad).toFixed(0)}`);

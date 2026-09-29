@@ -15,7 +15,7 @@ export interface PickChallengeView {
 const MOVE_SCENE: Record<MoveId, { scene: string; title: string }> = {
   fp8: { scene: 'act-3/read-model', title: 'Every token re-reads the model' },
   kv8: { scene: 'act-3/memory-wall', title: 'Memory fills up' },
-  reuse: { scene: 'act-2/two-jobs', title: 'First pass vs. every pass after' },
+  reuse: { scene: 'act-2/first-vs-later', title: 'First pass vs. every pass after' },
   speculate: { scene: 'act-3/heavier-tokens', title: 'Change what one read buys' },
   users2: { scene: 'act-3/share-read', title: 'Share the read' },
 };

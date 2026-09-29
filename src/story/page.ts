@@ -36,7 +36,7 @@ const ACTS: ActSpec[] = [
   {
     id: 'act-2', number: 2, title: 'Inference',
     intro: 'What the model computes, stage by stage: from text on the CPU, through every layer on the GPU, and back to text. A request runs these stages once for the whole prompt, then once more for every token of the answer. Llama 3.1 8B throughout.',
-    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'two-jobs', label: 'First vs. later' }, { id: 'bottleneck', label: 'Challenge' }],
+    scenes: [...STAGE_ORDER.map((id) => ({ id, label: STAGE_TAB_LABEL[id] })), { id: 'first-vs-later', label: 'First vs. later' }, { id: 'bottleneck', label: 'Challenge' }],
     tools: FORWARD_TOOLS,
     banner: PASS_LOOP,
   },
@@ -44,7 +44,7 @@ const ACTS: ActSpec[] = [
     id: 'act-3', number: 3, title: 'The throttles',
     intro: 'How each stage from Act 2 changes with the choices you make, and which part from Act 1 it runs into.',
     footnote: EFFICIENCY_NOTE,
-    scenes: [...STORY_PANELS.filter((panel) => panel.id !== 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })), { id: 'pick', label: 'Challenge' }],
+    scenes: [...STORY_PANELS.filter((panel) => panel.id !== 'first-vs-later').map((panel) => ({ id: panel.id, label: panel.title })), { id: 'pick', label: 'Challenge' }],
   },
   {
     id: 'act-4', number: 4, title: 'Putting it together',

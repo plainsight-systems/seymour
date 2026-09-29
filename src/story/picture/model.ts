@@ -10,7 +10,7 @@ export interface StepCostPicture {
   readMs: number;
   mathMs: number;
   totalMs: number;
-  limit: string;
+  limit: 'math' | 'reading' | 'distance';
   unit: string;
 }
 

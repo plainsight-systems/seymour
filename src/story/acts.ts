@@ -134,7 +134,7 @@ export function mountActs(root: HTMLElement, acts: ActSpec[], options: ActsOptio
       return root.querySelector<HTMLElement>(`#${panelId(act.id, sceneId)}`)!;
     },
     open(target: string, scroll: boolean): boolean {
-      // Accepts `act-2/two-jobs`, `act-2`, or a bare scene id such as `playground`.
+      // Accepts `act-2/first-vs-later`, `act-2`, or a bare scene id such as `playground`.
       const [first, second] = target.split('/');
       const act = acts.find((candidate) => candidate.id === first) ?? actOf.get(first!);
       if (!act) return false;

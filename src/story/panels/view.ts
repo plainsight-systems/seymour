@@ -1,14 +1,14 @@
 import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/profiles';
 import { tierBandwidth } from '../../data/memoryLadder';
 import { getTopology } from '../../data/topology';
-import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
+import { calculateSimulation, formatBandwidth, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
 import { cachedPromptTokens, newPromptTokens } from '../../model/prompt';
 import { modelFor, precisionLabel } from '../../model/strategy';
 import { BATCHES, SEQUENCES, batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../../state';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { buildCutawayInputs, type CutawayInputs } from '../cutaway/inputs';
-import { diePlate, formatBandwidth, packagePlate, serverPlate, type Plate } from '../cutaway/plates';
+import { diePlate, packagePlate, serverPlate, type Plate } from '../cutaway/plates';
 import { CUTAWAY_LEGEND as LEGEND, mountCutaway, type CutawayView } from '../cutaway/render';
 import { STAGE_TAB_LABEL } from '../forward/scenes';
 import type { HardwareLink } from '../forward/stages';
@@ -64,7 +64,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
       case 'memory-wall':
       case 'distance': return { ...base, batch: 64, sequenceLength: 4096 };
       case 'heavier-tokens': return { ...base, modelId: 'qwen3-30b-a3b', batch: 1, sequenceLength: 2048 };
-      case 'two-jobs':
+      case 'first-vs-later':
       case 'read-model':
       case 'share-read': return base;
     }
@@ -104,7 +104,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     const prefill = picture.steps[0]!;
     const decode = picture.steps[1]!;
     switch (panel.id) {
-      case 'two-jobs': {
+      case 'first-vs-later': {
         const promptPerToken = prefill.totalMs / Math.max(1, newPromptTokens(settings));
         return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
       }
@@ -152,7 +152,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     const m = inputs.memory;
     switch (panel.id) {
       // Act 2's panel captions each of its two plates instead (jobCaption).
-      case 'two-jobs': return '';
+      case 'first-vs-later': return '';
       case 'read-model':
         return `Each generated token reads <b>${formatBytes(m.weightBytes + m.kvBytes)}</b> from these stacks: reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math takes <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
       case 'share-read': {
@@ -183,8 +183,8 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
   /** The model's own busy shares, to compare against a real trace. */
   function traceSignature(panel: StoryPanelSpec, inputs: CutawayInputs): string {
-    const job = panel.id === 'two-jobs' ? inputs.prefill : inputs.decode;
-    const label = panel.id === 'two-jobs' ? 'first pass (the whole prompt)' : 'later passes';
+    const job = panel.id === 'first-vs-later' ? inputs.prefill : inputs.decode;
+    const label = panel.id === 'first-vs-later' ? 'first pass (the whole prompt)' : 'later passes';
     const pct = (share: number) => { const value = Math.min(1, share) * 100; return value < 1 ? value.toFixed(1) : Math.round(value).toString(); };
     const math = pct(job.computeMs / job.totalMs);
     const memory = pct(job.memoryMs / job.totalMs);

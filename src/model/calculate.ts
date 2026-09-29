@@ -261,6 +261,12 @@ export function formatFlops(flops: number): string {
   return `${formatNumber(flops / unit.value)} ${unit.label}`;
 }
 
+export function formatBandwidth(bytesPerSecond: number): string {
+  return bytesPerSecond >= 1e12
+    ? `${formatNumber(bytesPerSecond / 1e12)} TB/s`
+    : `${formatNumber(bytesPerSecond / 1e9)} GB/s`;
+}
+
 export function formatDuration(ms: number): string {
   if (ms < 1) return `${formatNumber(ms * 1000)} µs`;
   if (ms < 1000) return `${formatNumber(ms)} ms`;

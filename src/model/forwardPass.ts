@@ -55,6 +55,7 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
   // A first pass still runs the newest token, even on a full prefix hit.
   const tokensThisPass = settings.batch * (settings.phase === 'prefill' ? Math.max(1, newPromptTokens(settings)) : 1);
   const weightBytesPerParam = model.weightBits / 8;
+  // Activations are assumed to share the KV cache's precision, so 8-bit KV also halves them.
   const activationBytesPerValue = model.kvBits / 8;
   const effectiveFlops = matrixPeakTflops(hardware, settings, model) * 1e12 * hardware.computeEfficiency;
   const effectiveBandwidth = hardware.hbmBandwidthTBs * 1e12 * hardware.memoryEfficiency;

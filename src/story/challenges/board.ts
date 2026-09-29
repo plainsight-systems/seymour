@@ -38,7 +38,7 @@ const METRIC_HINT: Record<ConstraintMetric, { scene: string; label: string } | n
   weightBits: null,
   kvBits: null,
   msPerToken: { scene: 'act-3/read-model', label: 'Every token re-reads the model' },
-  timeToFirstTokenMs: { scene: 'act-2/two-jobs', label: 'First pass vs. every pass after' },
+  timeToFirstTokenMs: { scene: 'act-2/first-vs-later', label: 'First pass vs. every pass after' },
   totalTokensPerSec: { scene: 'act-3/share-read', label: 'Share the read' },
   fitsInGpuMemory: { scene: 'act-3/memory-wall', label: 'Memory fills up' },
   restoreBeatsRecompute: { scene: 'act-3/distance', label: 'Distance is speed' },

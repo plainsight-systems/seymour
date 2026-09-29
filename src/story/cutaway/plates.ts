@@ -1,7 +1,7 @@
 import { getHardware } from '../../data/profiles';
 import { tierBandwidth } from '../../data/memoryLadder';
 import { getTopology, type ChipTopology, type TopologySource } from '../../data/topology';
-import { formatBytes, formatNumber } from '../../model/calculate';
+import { formatBandwidth, formatBytes } from '../../model/calculate';
 import type { KvPlacement } from '../../types';
 import type { CutawayInputs } from './inputs';
 import { SceneBuilder, frontFace, illustrativeDisabledUnits, type Fill, type Scene, type SceneBox } from './scene';
@@ -25,11 +25,6 @@ export interface Plate {
   sources: TopologySource[];
 }
 
-export function formatBandwidth(bytesPerSecond: number): string {
-  return bytesPerSecond >= 1e12
-    ? `${formatNumber(bytesPerSecond / 1e12)} TB/s`
-    : `${formatNumber(bytesPerSecond / 1e9)} GB/s`;
-}
 
 /** The part a KV placement lights up on the server plate. */
 export const PLACEMENT_PART: Record<KvPlacement, string> = {
@@ -391,7 +386,7 @@ function firstUnitId(b: SceneBuilder): string {
  */
 function busyLabels(b: SceneBuilder, job: { busyUnits: number; mathShare: number }, enabled: number, unitName: string): void {
   const busy = b.find((box) => box.part === 'unit-busy');
-  const waiting = [...b.build().boxes].reverse().find((box) => box.part === 'unit-wait');
+  const waiting = b.findLast((box) => box.part === 'unit-wait');
   const math = job.mathShare * 100;
   const mathPct = math < 1 ? math.toFixed(1) : Math.round(math).toString();
   const waitPct = math < 1 ? (100 - math).toFixed(1) : Math.round(100 - math).toString();

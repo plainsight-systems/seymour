@@ -17,7 +17,7 @@ export interface StoryMove {
 
 export type PanelPlate = 'die-pair' | 'package' | 'die' | 'server';
 
-export type PanelId = 'two-jobs' | 'read-model' | 'share-read' | 'memory-wall' | 'distance' | 'heavier-tokens';
+export type PanelId = 'first-vs-later' | 'read-model' | 'share-read' | 'memory-wall' | 'distance' | 'heavier-tokens';
 
 /** The one setting a panel's knob moves; it also decides which of Act 2's workload the panel keeps. */
 export type PanelKnob = 'sequenceLength' | 'weightBits' | 'batch' | 'kvPlacement';
@@ -44,7 +44,7 @@ export interface StoryPanelSpec {
 
 export const STORY_PANELS: StoryPanelSpec[] = [
   {
-    id: 'two-jobs', number: '00', title: 'First pass vs. every pass after',
+    id: 'first-vs-later', number: '00', title: 'First pass vs. every pass after',
     claim: 'One wide pass for the prompt, then one thin pass per answer token: same stages, different limits.',
     knob: 'sequenceLength', knobLabel: 'Prompt length', plate: 'die-pair', numbers: [],
     changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'unit', part: 'matrix', label: 'Matrix units (pass 1)' }, { scene: 'package', part: 'hbm', label: 'Memory stacks (later passes)' }],
@@ -59,7 +59,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
   {
     id: 'read-model', number: '01', title: 'Every token re-reads the model',
     claim: 'To produce each token, the GPU reads every weight in the model from memory.',
-    knob: 'weightBits', knobLabel: 'Model precision', plate: 'package', numbers: [],
+    knob: 'weightBits', knobLabel: 'Weight precision', plate: 'package', numbers: [],
     changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): bandwidth' }],
     trace: 'In one later pass, bytes read from GPU memory come out close to the model’s size, and achieved bandwidth sits near the memory peak. Halving the weight bytes should roughly halve those kernels’ time.',
     moves: [
@@ -71,7 +71,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
   {
     id: 'share-read', number: '02', title: 'Share the read',
     claim: 'If many users take a step together, one read of the model serves all of them.',
-    knob: 'batch', knobLabel: 'Concurrent users', plate: 'die', numbers: ['throughput'],
+    knob: 'batch', knobLabel: 'Users per pass', plate: 'die', numbers: ['throughput'],
     changes: ['attention', 'mlp'], limitedBy: [{ scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): bandwidth' }, { scene: 'die', part: 'unit', label: 'Compute units, once math catches up' }],
     trace: 'Add users and the same kernels take nearly the same time while each processes more rows, until math utilization starts to climb and step time grows with the batch.',
     moves: [
@@ -107,7 +107,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
   {
     id: 'heavier-tokens', number: '05', title: 'Change what one read buys',
     claim: 'A mixture-of-experts model reads only the experts each token needs, and speculative decoding turns one read into several tokens. Both change how much useful work comes back from one trip through memory.',
-    knob: 'batch', knobLabel: 'Concurrent users', plate: 'package', numbers: ['throughput'],
+    knob: 'batch', knobLabel: 'Users per pass', plate: 'package', numbers: ['throughput'],
     changes: ['mlp', 'attention'], limitedBy: [{ scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): bandwidth' }],
     trace: 'Expert kernels grow in count and duration with the experts touched each step. A speculative verify step processes several rows per sequence in one pass, so its kernels look like a small batch even for one user.',
     moves: [

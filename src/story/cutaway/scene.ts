@@ -91,6 +91,11 @@ export class SceneBuilder {
     return this.scene.boxes.find(predicate);
   }
 
+  /** The most recently added box that matches, while the scene is still being built. */
+  findLast(predicate: (box: SceneBox) => boolean): SceneBox | undefined {
+    return [...this.scene.boxes].reverse().find(predicate);
+  }
+
   build(): Scene {
     return this.scene;
   }

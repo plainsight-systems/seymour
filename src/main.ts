@@ -29,7 +29,7 @@ async function boot(): Promise<void> {
 }
 
 /**
- * In-page anchors go to the page first (the story resolves `act-2/two-jobs`
+ * In-page anchors go to the page first (the story resolves `act-2/first-vs-later`
  * to an act and a scene tab); if nothing handles them, scroll to the id.
  */
 function scrollToAnchor(id: string): void {
