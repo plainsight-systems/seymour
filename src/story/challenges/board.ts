@@ -2,10 +2,10 @@ import { getHardware } from '../../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
-import { finishSchedule, placeCard, playFinale, prefersReducedMotion, quizBar, quizCard, quizFrame } from '../quiz/quiz';
+import { prefersReducedMotion, quizBar, quizCard, quizNavigation } from '../quiz/quiz';
 import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
-import { escapeHtml, keepFocus } from '../html';
+import { escapeHtml } from '../html';
 import { placementOptions } from '../placement';
 
 // Act 4 challenges: each fixes a workload and some targets; the reader moves
@@ -137,7 +137,6 @@ function applyKnob(settings: SimulationSettings, knob: KnobId, raw: string): Sim
 }
 
 export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openScene: (target: string) => void, onChipChange: () => void): ChallengeBoardView {
-  let index = 0;
   /** Built for the chip picked above: workloads and targets come from its numbers. */
   let challenges = challengesFor(hardwareId);
   const attempts = new Map<string, SimulationSettings>(challenges.map((challenge) => [challenge.id, { ...challenge.naive }]));
@@ -145,13 +144,19 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
   const cleared = new Set<string>();
   /** The challenge whose "cleared" moment should animate on the next render. */
   let justCleared: string | null = null;
-  let showCard = false;
-  let celebrate = false;
-  const finish = finishSchedule();
-  /** Set when the last item is done; the finale plays once, the next time the results card opens. */
-  let finaleOwed = false;
 
-  const current = (): Challenge => challenges[index]!;
+  const nav = quizNavigation(host, {
+    count: () => challenges.length,
+    draw,
+    onRestart: () => {
+      for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
+      cleared.clear();
+    },
+    // Each challenge has its own chip (fixed, or picked in it), so the header re-syncs on every move.
+    onMove: onChipChange,
+  });
+
+  const current = (): Challenge => challenges[nav.index]!;
 
   /** The key numbers the targets do not already show, so nothing is said twice. */
   function numbers(challenge: Challenge, settings: SimulationSettings): string {
@@ -174,10 +179,10 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
   function barHtml(): string {
     const done = cleared.size === challenges.length;
     return quizBar({
-      items: challenges, index, itemNoun: 'Challenge', doneWord: 'cleared', rightWord: 'cleared',
+      items: challenges, index: nav.index, itemNoun: 'Challenge', doneWord: 'cleared', rightWord: 'cleared',
       states: challenges.map((item) => (cleared.has(item.id) ? 'right' : 'open')),
       right: cleared.size, answered: cleared.size, total: challenges.length,
-      offerResults: done && !showCard,
+      offerResults: done && !nav.cardOpen,
       canReset: cleared.size > 0 || challenges.some((item) => JSON.stringify(attempts.get(item.id)) !== JSON.stringify(item.naive)),
     });
   }
@@ -187,7 +192,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     const settings = attempts.get(challenge.id)!;
     const evaluation = evaluateChallenge(challenge, settings);
     const done = cleared.size === challenges.length;
-    const nextOpen = challenges.findIndex((other, i) => i !== index && !cleared.has(other.id));
+    const nextOpen = challenges.findIndex((other, i) => i !== nav.index && !cleared.has(other.id));
     const meters = evaluation.results.map((result) => {
       const hint = METRIC_HINT[result.constraint.metric];
       const pct = Math.round(progress(result) * 100);
@@ -210,8 +215,6 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     return `<p class="ch-knobs-title">Throttles</p><div class="ch-knob-grid">${current().adjustable.map((knob) => knobControl(knob, settings, current())).join('')}</div>`;
   }
 
-  const frame = quizFrame(host);
-  let cardWasOpen = false;
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Tells screen readers how the targets stand; slider drags settle before speaking. */
@@ -221,27 +224,19 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
       const challenge = current();
       const results = evaluateChallenge(challenge, attempts.get(challenge.id)!).results;
       const met = results.filter((result) => result.met).length;
-      frame.announce(met === results.length ? `Cleared: ${challenge.title}.` : `${met} of ${results.length} targets met.`);
+      nav.announce(met === results.length ? `Cleared: ${challenge.title}.` : `${met} of ${results.length} targets met.`);
     };
     if (settled) speak();
     else announceTimer = setTimeout(speak, 600);
   }
 
-  function render(): void {
-    keepFocus(frame.body, draw);
-    // A results card that just opened takes focus, so keyboard and screen-reader users land on it.
-    if (showCard && !cardWasOpen) host.querySelector<HTMLElement>('[data-quiz-card-title]')?.focus({ preventScroll: true });
-    cardWasOpen = showCard;
-  }
-
-  function draw(): void {
+  function draw(body: HTMLElement): void {
     const challenge = current();
     const hardware = getHardware(attempts.get(challenge.id)!.hardwareId);
-    const play = showCard && celebrate && !prefersReducedMotion();
-    frame.body.innerHTML = `<div class="quiz-scene ch-scene">
+    body.innerHTML = `<div class="quiz-scene ch-scene">
       <div data-ch-bar>${barHtml()}</div>
       <div class="quiz-question">
-        <p class="stage-kicker">Challenge ${index + 1} of ${challenges.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, the chip picked above`}</p>
+        <p class="stage-kicker">Challenge ${nav.index + 1} of ${challenges.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, the chip picked above`}</p>
         <h3>${escapeHtml(challenge.title)}</h3>
         <p class="stage-lead">${escapeHtml(challenge.brief)}</p>
         <p class="quiz-workload">${workloadFacts(challenge, attempts.get(challenge.id)!)}</p>
@@ -249,11 +244,8 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
         <button type="button" class="quiz-small ch-start-over" data-ch-start-over>Start this challenge over</button>
       </div>
       <div class="quiz-answer ch-answer" data-ch-answer>${answerHtml()}</div>
-      ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, reviewLabel: 'Review challenges', titleId: 'ch-done-title' }) : ''}
+      ${nav.cardOpen ? quizCard({ play: nav.finalePlaying, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, reviewLabel: 'Review challenges', titleId: 'ch-done-title' }) : ''}
     </div>`;
-    placeCard(host);
-    if (play) playFinale(host, finish);
-    celebrate = false;
     justCleared = null;
   }
 
@@ -272,23 +264,11 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     if (!cleared.has(challenge.id) && evaluateChallenge(challenge, settings).passed) {
       cleared.add(challenge.id);
       justCleared = challenge.id;
-      if (cleared.size === challenges.length) {
-        finaleOwed = true;
-        finish.after(prefersReducedMotion() ? 0 : 1200, () => { showCard = true; celebrate = finaleOwed; finaleOwed = false; render(); });
-      }
+      if (cleared.size === challenges.length) nav.complete(1200);
     }
     announceProgress(whole);
-    if (whole) { render(); return; }
+    if (whole) { nav.render(); return; }
     refreshLive();
-  }
-
-  function go(next: number): void {
-    finish.cancel();
-    showCard = false;
-    index = Math.max(0, Math.min(challenges.length - 1, next));
-    render();
-    // Each challenge has its own chip (fixed, or picked in it), so the header re-syncs on every move.
-    onChipChange();
   }
 
   host.addEventListener('input', (event) => {
@@ -309,47 +289,24 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     const target = event.target as Element;
     const seg = target.closest<HTMLButtonElement>('button[data-ch-knob]');
     if (seg) { update(applyKnob(attempts.get(current().id)!, seg.dataset.chKnob as KnobId, seg.dataset.value!), true); return; }
-    const goTo = target.closest<HTMLButtonElement>('[data-quiz-go]');
-    if (goTo) { go(Number(goTo.dataset.quizGo)); return; }
-    if (target.closest('[data-quiz-prev]')) { go(index - 1); return; }
-    if (target.closest('[data-quiz-next]')) { go(index + 1); return; }
-    if (target.closest('[data-quiz-card]')) {
-      // Opened before the finale played (early, or after moving away): play it now, once.
-      celebrate = finaleOwed;
-      finaleOwed = false;
-      finish.cancel();
-      showCard = true;
-      render();
-      return;
-    }
-    if (target.closest('[data-quiz-review]')) { finish.cancel(); showCard = false; render(); return; }
-    if (target.closest('[data-ch-start-over]')) { attempts.set(current().id, { ...current().naive }); render(); return; }
-    if (target.closest('[data-quiz-restart]')) {
-      finish.cancel();
-      for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
-      cleared.clear();
-      finaleOwed = false;
-      showCard = false;
-      go(0);
-      return;
-    }
+    if (nav.handleClick(target)) return;
+    if (target.closest('[data-ch-start-over]')) { attempts.set(current().id, { ...current().naive }); nav.render(); return; }
     const open = target.closest<HTMLButtonElement>('[data-ch-open]');
     if (open) openScene(open.dataset.chOpen!);
   });
 
-  render();
+  nav.render();
   return {
     setHardware(next: string): void {
       if (next === hardwareId) return;
       hardwareId = next;
-      finish.cancel();
       challenges = challengesFor(hardwareId);
       attempts.clear();
       for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
       cleared.clear();
-      finaleOwed = false;
-      showCard = false;
-      render();
+      // The reader stays on the same challenge; only its targets change.
+      nav.reset(nav.index);
+      nav.render();
     },
     currentChip: () => attempts.get(current().id)!.hardwareId,
     chipIsAKnob: () => current().adjustable.includes('hardwareId'),

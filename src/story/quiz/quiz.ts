@@ -190,52 +190,155 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+export interface QuizNavigationOptions {
+  /** How many items the bar steps through (may change, e.g. with the chip). */
+  count(): number;
+  /** Writes the whole scene into the frame's body. Reads `index`, `cardOpen`, and `finalePlaying`. */
+  draw(body: HTMLElement): void;
+  /** Clears the caller's own answers or attempts when the reader restarts. */
+  onRestart(): void;
+  /** Called after every move between items. */
+  onMove?(): void;
+}
+
+/**
+ * The navigation both quizzes and the Act 4 board share: the current item,
+ * the results card and its once-only finale, the finish timers, redrawing
+ * with focus kept, and the bar's actions (previous, next, jump, see results,
+ * review, restart). Callers own their content and call `complete` when the
+ * last item is done.
+ */
+export interface QuizNavigation {
+  readonly index: number;
+  readonly cardOpen: boolean;
+  /** True only while drawing the render in which the finale plays. */
+  readonly finalePlaying: boolean;
+  announce(text: string): void;
+  render(): void;
+  go(index: number): void;
+  /** The last item is done: after `delayMs`, open the results card with the finale. */
+  complete(delayMs: number): void;
+  /** Back to item `index` (the first by default) with the card closed and nothing pending; does not redraw. */
+  reset(index?: number): void;
+  /** Handles the bar's and card's actions; returns false for any other click. */
+  handleClick(target: Element): boolean;
+}
+
+export function quizNavigation(host: HTMLElement, options: QuizNavigationOptions): QuizNavigation {
+  const frame = quizFrame(host);
+  const finish = finishSchedule();
+  let index = 0;
+  let cardOpen = false;
+  let cardWasOpen = false;
+  /** Set when the last item is done; the finale plays once, the next time the results card opens. */
+  let finaleOwed = false;
+  let celebrate = false;
+  let finalePlaying = false;
+
+  function render(): void {
+    finalePlaying = cardOpen && celebrate && !prefersReducedMotion();
+    keepFocus(frame.body, () => options.draw(frame.body));
+    placeCard(host);
+    if (finalePlaying) playFinale(host, finish);
+    celebrate = false;
+    finalePlaying = false;
+    // A results card that just opened takes focus, so keyboard and screen-reader users land on it.
+    if (cardOpen && !cardWasOpen) host.querySelector<HTMLElement>('[data-quiz-card-title]')?.focus({ preventScroll: true });
+    cardWasOpen = cardOpen;
+  }
+
+  function go(next: number): void {
+    finish.cancel();
+    // Moving to an item means reviewing it, so the results card steps aside.
+    cardOpen = false;
+    index = Math.max(0, Math.min(options.count() - 1, next));
+    render();
+    options.onMove?.();
+  }
+
+  function reset(to = 0): void {
+    finish.cancel();
+    index = Math.max(0, Math.min(options.count() - 1, to));
+    cardOpen = false;
+    finaleOwed = false;
+    celebrate = false;
+  }
+
+  return {
+    get index() { return index; },
+    get cardOpen() { return cardOpen; },
+    get finalePlaying() { return finalePlaying; },
+    announce: frame.announce,
+    render,
+    go,
+    complete(delayMs) {
+      finaleOwed = true;
+      finish.after(prefersReducedMotion() ? 0 : delayMs, () => { cardOpen = true; celebrate = finaleOwed; finaleOwed = false; render(); });
+    },
+    reset,
+    handleClick(target) {
+      const goTo = target.closest<HTMLButtonElement>('[data-quiz-go]');
+      if (goTo) { go(Number(goTo.dataset.quizGo)); return true; }
+      if (target.closest('[data-quiz-prev]')) { go(index - 1); return true; }
+      if (target.closest('[data-quiz-next]')) { go(index + 1); return true; }
+      if (target.closest('[data-quiz-card]')) {
+        // Opened before the finale played (early, or after moving away): play it now, once.
+        celebrate = finaleOwed;
+        finaleOwed = false;
+        finish.cancel();
+        cardOpen = true;
+        render();
+        return true;
+      }
+      if (target.closest('[data-quiz-review]')) { finish.cancel(); cardOpen = false; render(); return true; }
+      if (target.closest('[data-quiz-restart]')) {
+        options.onRestart();
+        reset();
+        render();
+        options.onMove?.();
+        return true;
+      }
+      return false;
+    },
+  };
+}
+
 export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
   const ids = spec.items.map((item) => item.id);
-  let index = 0;
   const picks = new Map<string, P>();
   /** Item id → answered right, once checked. Checked items are locked. */
   const results = new Map<string, boolean>();
-  let showCard = false;
-  let celebrate = false;
-  const finish = finishSchedule();
-  /** Set when the last item is done; the finale plays once, the next time the results card opens. */
-  let finaleOwed = false;
 
   const pickFor = (id: string): P => picks.get(id) ?? spec.emptyPick();
+
+  const nav = quizNavigation(host, {
+    count: () => spec.items.length,
+    draw,
+    onRestart: () => { picks.clear(); results.clear(); },
+  });
 
   function bar(): string {
     const score = tally(ids, results);
     return quizBar({
-      items: spec.items, index, itemNoun: spec.itemNoun, doneWord: 'answered', rightWord: 'right',
+      items: spec.items, index: nav.index, itemNoun: spec.itemNoun, doneWord: 'answered', rightWord: 'right',
       states: spec.items.map((item) => { const result = results.get(item.id); return result === undefined ? 'open' : result ? 'right' : 'wrong'; }),
       right: score.right, answered: score.answered, total: score.total,
-      offerResults: score.complete && !showCard, canReset: score.answered > 0 || picks.size > 0,
+      offerResults: score.complete && !nav.cardOpen, canReset: score.answered > 0 || picks.size > 0,
     });
   }
 
-  function card(play: boolean): string {
+  function card(): string {
     const score = tally(ids, results);
-    return quizCard({ play, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, reviewLabel: 'Review answers', titleId: `${host.id || 'quiz'}-done-title` });
+    return quizCard({ play: nav.finalePlaying, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, reviewLabel: 'Review answers', titleId: `${host.id || 'quiz'}-done-title` });
   }
 
-  const frame = quizFrame(host);
-  let cardWasOpen = false;
-
-  function render(): void {
-    keepFocus(frame.body, draw);
-    // A results card that just opened takes focus, so keyboard and screen-reader users land on it.
-    if (showCard && !cardWasOpen) host.querySelector<HTMLElement>('[data-quiz-card-title]')?.focus({ preventScroll: true });
-    cardWasOpen = showCard;
-  }
-
-  function draw(): void {
+  function draw(body: HTMLElement): void {
+    const index = nav.index;
     const item = spec.items[index]!;
     const pick = pickFor(item.id);
     const checked = results.has(item.id);
     const nextOpen = spec.items.findIndex((other, i) => i !== index && !results.has(other.id));
-    const play = showCard && celebrate && !prefersReducedMotion();
-    frame.body.innerHTML = `<div class="quiz-scene">
+    body.innerHTML = `<div class="quiz-scene">
       ${bar()}
       <div class="quiz-question">
         ${spec.question(index, pick, checked)}
@@ -247,78 +350,43 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
         </div>
       </div>
       <div class="quiz-answer">${checked ? spec.reveal(index, pick) : `<p class="quiz-waiting">${escapeHtml(spec.waiting)}</p>`}</div>
-      ${showCard ? card(play) : ''}
+      ${nav.cardOpen ? card() : ''}
     </div>`;
-    placeCard(host);
-    if (play) playFinale(host, finish);
-    celebrate = false;
-  }
-
-  function go(next: number): void {
-    finish.cancel();
-    // Moving to a question means reviewing it, so the results card steps aside.
-    showCard = false;
-    index = Math.max(0, Math.min(spec.items.length - 1, next));
-    render();
-  }
-
-  function clear(): void {
-    finish.cancel();
-    index = 0;
-    picks.clear();
-    results.clear();
-    finaleOwed = false;
-    showCard = false;
-    celebrate = false;
   }
 
   host.addEventListener('click', (event) => {
     const target = event.target as Element;
-    const id = spec.items[index]!.id;
+    const id = spec.items[nav.index]!.id;
     if (!results.has(id)) {
       const next = spec.pickFrom(target, pickFor(id));
-      if (next) { picks.set(id, next); render(); return; }
+      if (next) { picks.set(id, next); nav.render(); return; }
     }
     const pick = pickFor(id);
     if (target.closest('[data-quiz-check]') && spec.ready(pick)) {
-      results.set(id, spec.isRight(index, pick));
-      render();
-      // The Check button is gone after checking; announce the result and put focus on it.
-      // Announce the result sentence without the decorative check or cross.
+      results.set(id, spec.isRight(nav.index, pick));
+      nav.render();
+      // The Check button is gone after checking: announce the result sentence (without the
+      // decorative check or cross) and put focus on it.
       const headline = host.querySelector<HTMLElement>('.quiz-headline > span:not([aria-hidden])');
-      frame.announce(headline?.textContent?.trim() ?? '');
-      host.querySelector<HTMLElement>('.quiz-reveal')?.setAttribute('tabindex', '-1');
-      host.querySelector<HTMLElement>('.quiz-reveal')?.focus({ preventScroll: true });
-      if (tally(ids, results).complete) {
-        // Let the last reveal land before the finish plays over it.
-        finaleOwed = true;
-        finish.after(prefersReducedMotion() ? 0 : 900, () => { showCard = true; celebrate = finaleOwed; finaleOwed = false; render(); });
-      }
+      nav.announce(headline?.textContent?.trim() ?? '');
+      const reveal = host.querySelector<HTMLElement>('.quiz-reveal');
+      reveal?.setAttribute('tabindex', '-1');
+      reveal?.focus({ preventScroll: true });
+      // Let the last reveal land before the finish plays over it.
+      if (tally(ids, results).complete) nav.complete(900);
       return;
     }
-    const goTo = target.closest<HTMLButtonElement>('[data-quiz-go]');
-    if (goTo) { go(Number(goTo.dataset.quizGo)); return; }
-    if (target.closest('[data-quiz-prev]')) { go(index - 1); return; }
-    if (target.closest('[data-quiz-next]')) { go(index + 1); return; }
-    if (target.closest('[data-quiz-card]')) {
-      // Opened before the finale played (early, or after moving away): play it now, once.
-      celebrate = finaleOwed;
-      finaleOwed = false;
-      finish.cancel();
-      showCard = true;
-      render();
-      return;
-    }
-    if (target.closest('[data-quiz-review]')) { finish.cancel(); showCard = false; render(); return; }
-    if (target.closest('[data-quiz-restart]')) { clear(); render(); return; }
+    if (nav.handleClick(target)) return;
     spec.onOtherClick?.(target);
   });
 
   return {
-    render,
+    render: nav.render,
     reset(): void {
-      clear();
-      render();
+      picks.clear();
+      results.clear();
+      nav.reset();
+      nav.render();
     },
   };
 }
