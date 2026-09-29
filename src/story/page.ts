@@ -10,6 +10,7 @@ import { diePlate, formatBandwidth, packagePlate, serverPlate, unitPlate, type P
 import { mountActs, type ActSpec } from './acts';
 import { FORWARD_TOOLS, PASS_LOOP, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
 import { mountBottleneckChallenge } from './forward/challenge';
+import { mountPickChallenge } from './throttles/challenge';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
@@ -278,7 +279,7 @@ const ACTS: ActSpec[] = [
     id: 'act-3', number: 3, title: 'The throttles',
     intro: 'How each stage from Act 2 changes with the choices you make, and which part from Act 1 it runs into.',
     footnote: EFFICIENCY_NOTE,
-    scenes: STORY_PANELS.filter((panel) => panel.id !== 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })),
+    scenes: [...STORY_PANELS.filter((panel) => panel.id !== 'two-jobs').map((panel) => ({ id: panel.id, label: panel.title })), { id: 'pick', label: 'Challenge' }],
   },
   {
     id: 'act-4', number: 4, title: 'Putting it together',
@@ -791,6 +792,11 @@ const bottleneck = mountBottleneckChallenge(acts.sceneHost('bottleneck'), (stage
   history.replaceState(null, '', `#act-2/${stage}`);
 });
 bottleneck.render(storyHardwareId);
+const pickChallenge = mountPickChallenge(acts.sceneHost('pick'), (target) => {
+  acts.open(target, true);
+  history.replaceState(null, '', `#${target}`);
+});
+pickChallenge.render(storyHardwareId);
 
 // Act 4: the playground.
 const playground = mountPlayground(acts.sceneHost('playground'));
@@ -805,6 +811,7 @@ root.addEventListener('click', (event) => {
   resetBuild(['package', 'die']);
   forward.render(storyHardwareId);
   bottleneck.render(storyHardwareId);
+  pickChallenge.render(storyHardwareId);
   for (const panel of STORY_PANELS) {
     panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
     renderPanel(panel);

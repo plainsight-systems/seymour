@@ -537,3 +537,13 @@
 .pass-loop p { margin: 0; color: var(--ink-soft); font-size: 0.76rem; line-height: 1.4; }
 @media (max-width: 1280px) { .pass-loop .pass-wide { flex-grow: 2; } .pass-loop li:nth-child(3) { display: none; } }
 @media (max-width: 1000px) { .pass-loop { grid-template-columns: 1fr; } }
+
+/* ---- Act 3 challenge: pick the throttle ----------------------------------- */
+.quiz-pick-list div { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.4rem; }
+.quiz-pick-list button { display: grid; gap: 0.1rem; min-height: 52px; padding: 0.45rem 0.8rem; text-align: left; }
+.quiz-pick-list button b { font-size: 0.9rem; }
+.quiz-pick-list button small { color: var(--ink-soft); font-size: 0.76rem; font-weight: 600; }
+.quiz-chart-moves li { grid-template-columns: 11rem 1fr 9rem; }
+.quiz-bar .is-better { background: var(--green); }
+.quiz-bar .is-same { background: var(--ink-soft); }
+.quiz-bar .is-worse { background: var(--red); }
