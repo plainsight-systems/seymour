@@ -2,6 +2,7 @@ import '@fontsource-variable/anybody';
 import '@fontsource-variable/public-sans';
 import './tokens.css';
 import './router.css';
+import { greetTheConsole } from './namesake';
 import { isRouteChange, resolveRoute } from './router';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -48,4 +49,5 @@ window.addEventListener('hashchange', (event) => {
   const { anchor } = resolveRoute(toHash);
   if (anchor) scrollToAnchor(anchor);
 });
+greetTheConsole(console);
 void boot();
