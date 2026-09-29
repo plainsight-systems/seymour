@@ -17,6 +17,11 @@ describe('resolveRoute', () => {
     expect(resolveRoute('#act-2/attention')).toEqual({ route: 'story', anchor: 'act-2/attention' });
   });
 
+  it('opens the story at the top for a malformed anchor instead of throwing', () => {
+    expect(resolveRoute('#100%')).toEqual({ route: 'story' });
+    expect(resolveRoute('#act-2%2Fattention')).toEqual({ route: 'story', anchor: 'act-2/attention' });
+  });
+
   it('only reloads when the route itself changes', () => {
     expect(isRouteChange('#/', '#act-4/playground')).toBe(false);
     expect(isRouteChange('#act-2/two-jobs', '#act-3/distance')).toBe(false);

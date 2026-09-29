@@ -10,8 +10,20 @@ export interface ResolvedRoute {
 // anchor on the story and must scroll, not navigate.
 export function resolveRoute(hash: string): ResolvedRoute {
   if (hash === '#/lookup') return { route: 'lookup' };
-  if (hash.length > 1 && !hash.startsWith('#/')) return { route: 'story', anchor: decodeURIComponent(hash.slice(1)) };
+  if (hash.length > 1 && !hash.startsWith('#/')) {
+    const anchor = decodeAnchor(hash.slice(1));
+    return anchor === null ? { route: 'story' } : { route: 'story', anchor };
+  }
   return { route: 'story' };
+}
+
+/** A hash that is not valid percent-encoding (e.g. `#100%`) names no anchor; the story opens at the top. */
+function decodeAnchor(encoded: string): string | null {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return null;
+  }
 }
 
 /** Whether moving between two hashes needs a full route change. */
