@@ -4,7 +4,7 @@ import { modelFor } from '../model/strategy';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { diePlate, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
 import { CUTAWAY_LEGEND as LEGEND, mountCutaway, type CutawayView } from './cutaway/render';
-import { escapeHtml } from './html';
+import { escapeHtml, keepFocus } from './html';
 
 // Act 1: the chip alone, at four zoom levels. Each scene pairs the drawing
 // with a part card (plain name, the terms people use, what it is and does,
@@ -70,7 +70,8 @@ export function mountGpuScenes(hostFor: (sceneId: GpuSceneId) => HTMLElement, in
         chips.push(`<li><button type="button" data-select-part="${label.part}" aria-pressed="${label.part === part}" title="${escapeHtml(labelEntry.name)}">${escapeHtml(term.term)}</button></li>`);
       }
     }
-    host.querySelector<HTMLElement>('[data-part-index]')!.innerHTML = chips.join('');
+    const index = host.querySelector<HTMLElement>('[data-part-index]')!;
+    keepFocus(index, () => { index.innerHTML = chips.join(''); });
   }
 
   const gpuPlates = new Map<string, Plate>();

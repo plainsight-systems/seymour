@@ -23,7 +23,7 @@ const USERS = [1, 8, 32, 64, 128];
 const CONTEXTS = [512, 2048, 4096, 16384, 32768];
 
 /** The loop strip under the act header; filled in by render(). */
-export const PASS_LOOP = '<div class="pass-loop" data-pass-loop aria-label="How a request runs the stages"></div>';
+export const PASS_LOOP = '<div class="pass-loop" data-pass-loop role="group" aria-label="How a request runs the stages"></div>';
 
 export const FORWARD_TOOLS = `<span class="forward-tools">
   <label class="forward-select"><span>Users</span><select data-forward="batch">${USERS.map((n) => `<option value="${n}">${n}</option>`).join('')}</select></label>

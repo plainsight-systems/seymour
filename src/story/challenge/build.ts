@@ -4,7 +4,7 @@ import { modelFor } from '../../model/strategy';
 import { buildCutawayInputs } from '../cutaway/inputs';
 import { diePlate, packagePlate, type Plate } from '../cutaway/plates';
 import { mountCutaway, type CutawayView } from '../cutaway/render';
-import { escapeHtml } from '../html';
+import { escapeHtml, keepFocus } from '../html';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './assembly';
 
 // The Act 1 challenge UI: put the GPU back together by dragging parts onto
@@ -24,7 +24,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     <p class="gpu-scene-lead">Put the GPU back together. Drag each part from the tray onto its outline, or pick a part and then click an outline or its zone marker.</p>
     <div class="build-bar">
       <div class="build-rounds" role="group" aria-label="Round"><button type="button" data-round="package" aria-pressed="true">Round 1 · The package</button><button type="button" data-round="die" aria-pressed="false">Round 2 · The die</button></div>
-      <div class="build-toast" data-build-feedback role="status" aria-live="polite" hidden></div>
+      <div class="build-toast is-empty" data-build-feedback role="status" aria-live="polite"></div>
     </div>
     <div class="gpu-scene-body">
       <div class="gpu-scene-plate build-stage">
@@ -70,13 +70,15 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   function buildFeedback(html: string, tone: 'neutral' | 'good' | 'bad' = 'neutral'): void {
     const node = buildHost.querySelector<HTMLElement>('[data-build-feedback]')!;
     window.clearTimeout(toastTimer);
-    node.hidden = html === '';
+    // The status line stays in the page (a live region that is unhidden with its message is often
+    // not announced); an empty one is simply invisible.
+    node.classList.toggle('is-empty', html === '');
     node.dataset.tone = tone;
     node.innerHTML = html;
     node.classList.remove('is-new');
     void node.offsetWidth;
     node.classList.add('is-new');
-    if (html && tone !== 'bad') toastTimer = window.setTimeout(() => { node.hidden = true; }, 6000);
+    if (html && tone !== 'bad') toastTimer = window.setTimeout(() => { node.innerHTML = ''; node.classList.add('is-empty'); }, 6000);
   }
 
   /** The drawing's nodes (box and zone marker) for one part. */
@@ -125,7 +127,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
         ? '<a class="build-next" href="#act-2/tokenize">On to Act 2 · Inference ↓</a>'
         : '<button type="button" class="build-next" data-round="package">Back to round 1 · The package</button>';
     const node = buildHost.querySelector<HTMLElement>('[data-build-done]')!;
-    node.innerHTML = `<div class="build-done-card" role="dialog" aria-labelledby="build-done-title">
+    node.innerHTML = `<div class="build-done-card" role="region" aria-labelledby="build-done-title">
       <p class="build-done-kicker">Round ${title.number} of 2 complete${both ? ' · GPU rebuilt' : ''}</p>
       <h3 id="build-done-title">${both && buildRoundId === 'die' ? 'You rebuilt the GPU' : title.done}</h3>
       <p class="build-done-score"><b>${buildRound.parts.length} of ${buildRound.parts.length}</b> parts placed · ${verdict}</p>
@@ -135,7 +137,12 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     node.querySelector<HTMLElement>('.build-next')?.focus({ preventScroll: true });
   }
 
+  /** Redraws the plate and tray, keeping keyboard focus on the same card or zone marker. */
   function renderBuild(): void {
+    keepFocus(buildHost, drawBuild);
+  }
+
+  function drawBuild(): void {
     const vendor = getHardware(hardwareId).vendor as Vendor;
     const source = buildSourcePlate();
     buildRound = assemblyRound(buildRoundId, source);
@@ -225,8 +232,22 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     renderBuild();
   }
 
+  /** Set after a real drag, so the click that follows the drop does not also pick the card. */
+  let suppressCardClick = false;
+
   buildHost.addEventListener('click', (event) => {
     const target = event.target as Element;
+    // Picking a card is a plain click (Enter and Space on a button are clicks too), which is also
+    // what screen readers send; pointer events only handle dragging.
+    const card = target.closest<HTMLButtonElement>('[data-card]');
+    if (card) {
+      // Keyboard clicks (detail 0) are never the tail of a drag.
+      if (suppressCardClick && event.detail !== 0) { suppressCardClick = false; return; }
+      buildCard = buildCard === card.dataset.card ? null : card.dataset.card!;
+      renderBuild();
+      buildFeedback(buildCard ? 'Now drop it on its outline, or choose its zone marker (click it, or Tab to it and press Enter).' : '');
+      return;
+    }
     const round = target.closest<HTMLButtonElement>('[data-round]');
     if (round) {
       buildRoundId = round.dataset.round as RoundId;
@@ -255,6 +276,8 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
 
   buildHost.addEventListener('pointerdown', (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('[data-card]');
+    // A new press starts fresh, in case the browser sent no click after the last drag.
+    suppressCardClick = false;
     if (!button || button.disabled || event.button !== 0) return;
     const rect = button.getBoundingClientRect();
     drag = { card: button.dataset.card!, button, startX: event.clientX, startY: event.clientY, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top, ghost: null, pointerId: event.pointerId };
@@ -292,13 +315,9 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     buildHost.classList.remove('is-dragging');
     button.classList.remove('is-lifted');
     setDropTarget(null);
-    if (!ghost) {
-      if (!drop) return;
-      buildCard = buildCard === card ? null : card;
-      renderBuild();
-      buildFeedback(buildCard ? 'Now drop it on the outline or zone where it belongs.' : '');
-      return;
-    }
+    // No drag happened: the click that follows picks the card.
+    if (!ghost) return;
+    suppressCardClick = true;
     const zone = drop ? document.elementFromPoint(event.clientX, event.clientY)?.closest<SVGElement>('[data-build-plate] [data-part]')?.dataset.part : undefined;
     const result = zone && buildRound.parts.includes(zone) ? tryPlace(card, zone) : null;
     if (result === 'correct') ghost.remove();
@@ -306,15 +325,6 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   }
   buildHost.addEventListener('pointerup', (event) => endDrag(event, true));
   buildHost.addEventListener('pointercancel', (event) => endDrag(event, false));
-  buildHost.addEventListener('keydown', (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>('[data-card]');
-    if (!button || (event.key !== 'Enter' && event.key !== ' ')) return;
-    event.preventDefault();
-    buildCard = buildCard === button.dataset.card ? null : button.dataset.card!;
-    renderBuild();
-    buildFeedback(buildCard ? 'Now Tab to a zone marker on the drawing and press Enter.' : '');
-    buildHost.querySelector<HTMLButtonElement>(`[data-card="${button.dataset.card}"]`)?.focus();
-  });
 
   renderBuild();
   return {

@@ -9,14 +9,14 @@ function costRow(step: PictureModel['steps'][number]): string {
   const max = Math.max(step.readMs, step.mathMs, Number.EPSILON);
   return `<article class="picture-cost" data-step="${step.id}">
     <header><span>${step.label}</span><strong>${formatDuration(step.totalMs)}</strong><small>${step.unit}</small></header>
-    <div><label>reading <i style="--bar:${pct(step.readMs / max)}"></i><b>${formatDuration(step.readMs)}</b></label><label>math <i style="--bar:${pct(step.mathMs / max)}"></i><b>${formatDuration(step.mathMs)}</b></label></div>
+    <div><span class="picture-bar">reading <i style="--bar:${pct(step.readMs / max)}"></i><b>${formatDuration(step.readMs)}</b></span><span class="picture-bar">math <i style="--bar:${pct(step.mathMs / max)}"></i><b>${formatDuration(step.mathMs)}</b></span></div>
     <p>Limited by <strong>${step.limit}</strong></p>
   </article>`;
 }
 
 export function renderPictureMarkup(picture: PictureModel, layers: ReadonlySet<PictureLayer>, options: { footer?: boolean } = {}): string {
   const memoryLayers = layers.has('modelBlock') || layers.has('kvBlock');
-  return `<div class="concept-picture" aria-label="Computed inference cost picture">
+  return `<div class="concept-picture" role="group" aria-label="Computed inference cost picture">
     ${layers.has('stepCost') ? `<section class="picture-layer picture-costs" data-picture-layer="stepCost"><h3>One request: the first pass, then every pass after</h3><div>${picture.steps.map(costRow).join('')}</div></section>` : ''}
     ${memoryLayers ? `<section class="picture-layer picture-memory" data-picture-layer="memory"><header><span>${picture.hardwareName} serving memory</span><strong>${formatBytes(picture.capacityBytes)}</strong></header><div class="memory-vessel" data-overflow="${picture.overflowBytes > 0}">
       ${layers.has('modelBlock') ? `<i class="memory-model" style="--share:${pct(picture.modelFraction)}"><b>${picture.modelLabel}</b></i>` : ''}

@@ -1,5 +1,5 @@
 import { tally } from './tally';
-import { escapeHtml } from '../html';
+import { escapeHtml, keepFocus } from '../html';
 
 // A quiz shell shared by the act challenges: a bar with previous / next,
 // one marker per item, the running score, and Reset; a question column and
@@ -89,7 +89,7 @@ export function quizBar(options: BarOptions): string {
         <ol class="quiz-pips">${pips}</ol>
         <button type="button" class="quiz-step" data-quiz-next ${options.index === options.items.length - 1 ? 'disabled' : ''} aria-label="Next">›</button>
       </nav>
-      <p class="quiz-tally" aria-live="polite"><b>${options.right}</b> of ${options.answered} ${options.rightWord}<span>${left ? ` · ${left} to go` : ` · all ${options.doneWord}`}</span></p>
+      <p class="quiz-tally"><b>${options.right}</b> of ${options.answered} ${options.rightWord}<span>${left ? ` · ${left} to go` : ` · all ${options.doneWord}`}</span></p>
       <span class="quiz-top-actions">
         ${options.offerResults ? '<button type="button" class="quiz-small" data-quiz-card>See results</button>' : ''}
         <button type="button" class="quiz-small" data-quiz-restart ${options.canReset ? '' : 'disabled'}>Reset</button>
@@ -118,12 +118,28 @@ export function quizCard(options: CardOptions): string {
         return `<i style="--x:${Math.round(Math.cos(angle) * distance)}px;--y:${Math.round(Math.sin(angle) * distance * 0.7 - 60)}px;--r:${Math.round(spread(i, 3) * 720 - 360)}deg;--d:${(0.35 + spread(i, 4) * 0.25).toFixed(2)}s;--c:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--w:${6 + Math.round(spread(i, 5) * 6)}px"></i>`;
       }).join('')}</div>`
     : '';
-  return `<div class="build-done quiz-done${options.play ? ' is-celebrating' : ''}">${confetti}<div class="build-done-card" role="dialog" aria-labelledby="${options.titleId}">
+  return `<div class="build-done quiz-done${options.play ? ' is-celebrating' : ''}">${confetti}<div class="build-done-card" role="region" aria-labelledby="${options.titleId}">
       <p class="build-done-kicker">Challenge complete</p>
-      <h3 id="${options.titleId}"><span data-quiz-count="${options.right}">${options.play ? 0 : options.right}</span> of ${options.total} ${escapeHtml(options.noun)}</h3>
+      <h3 id="${options.titleId}" tabindex="-1" data-quiz-card-title><span data-quiz-count="${options.right}">${options.play ? 0 : options.right}</span> of ${options.total} ${escapeHtml(options.noun)}</h3>
       <p class="build-done-score">${escapeHtml(options.verdict)}</p>
       <div class="build-done-actions"><a class="build-next" href="${options.next.href}">${escapeHtml(options.next.label)}</a><button type="button" class="build-look" data-quiz-review>${escapeHtml(options.reviewLabel)}</button><button type="button" class="build-reset" data-quiz-restart>Play again</button></div>
     </div></div>`;
+}
+
+/**
+ * The quiz's frame: a body that is redrawn, and a status line that is not,
+ * so screen readers announce what changed (a live region replaced with its
+ * content is not announced).
+ */
+export function quizFrame(host: HTMLElement): { body: HTMLElement; announce(text: string): void } {
+  host.innerHTML = '<div data-quiz-body></div><p class="sr-only" role="status" data-quiz-status></p>';
+  const status = host.querySelector<HTMLElement>('[data-quiz-status]')!;
+  return {
+    body: host.querySelector<HTMLElement>('[data-quiz-body]')!,
+    announce(text) {
+      status.textContent = text;
+    },
+  };
 }
 
 /** After a render: keep the results card below the bar, which stays usable. */
@@ -203,13 +219,23 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
     return quizCard({ play, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, reviewLabel: 'Review answers', titleId: `${host.id || 'quiz'}-done-title` });
   }
 
+  const frame = quizFrame(host);
+  let cardWasOpen = false;
+
   function render(): void {
+    keepFocus(frame.body, draw);
+    // A results card that just opened takes focus, so keyboard and screen-reader users land on it.
+    if (showCard && !cardWasOpen) host.querySelector<HTMLElement>('[data-quiz-card-title]')?.focus({ preventScroll: true });
+    cardWasOpen = showCard;
+  }
+
+  function draw(): void {
     const item = spec.items[index]!;
     const pick = pickFor(item.id);
     const checked = results.has(item.id);
     const nextOpen = spec.items.findIndex((other, i) => i !== index && !results.has(other.id));
     const play = showCard && celebrate && !prefersReducedMotion();
-    host.innerHTML = `<div class="quiz-scene">
+    frame.body.innerHTML = `<div class="quiz-scene">
       ${bar()}
       <div class="quiz-question">
         ${spec.question(index, pick, checked)}
@@ -220,7 +246,7 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
           <span class="quiz-note">${escapeHtml(spec.note)}</span>
         </div>
       </div>
-      <div class="quiz-answer" aria-live="polite">${checked ? spec.reveal(index, pick) : `<p class="quiz-waiting">${escapeHtml(spec.waiting)}</p>`}</div>
+      <div class="quiz-answer">${checked ? spec.reveal(index, pick) : `<p class="quiz-waiting">${escapeHtml(spec.waiting)}</p>`}</div>
       ${showCard ? card(play) : ''}
     </div>`;
     placeCard(host);
@@ -257,6 +283,12 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
     if (target.closest('[data-quiz-check]') && spec.ready(pick)) {
       results.set(id, spec.isRight(index, pick));
       render();
+      // The Check button is gone after checking; announce the result and put focus on it.
+      // Announce the result sentence without the decorative check or cross.
+      const headline = host.querySelector<HTMLElement>('.quiz-headline > span:not([aria-hidden])');
+      frame.announce(headline?.textContent?.trim() ?? '');
+      host.querySelector<HTMLElement>('.quiz-reveal')?.setAttribute('tabindex', '-1');
+      host.querySelector<HTMLElement>('.quiz-reveal')?.focus({ preventScroll: true });
       if (tally(ids, results).complete) {
         // Let the last reveal land before the finish plays over it.
         finaleOwed = true;

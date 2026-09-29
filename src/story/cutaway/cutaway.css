@@ -39,6 +39,7 @@
 .cw-label-detail { fill: var(--cw-ink-soft); font-size: calc(13px * var(--cw-k, 1)); }
 .cw-callout:hover .cw-label-title, .cw-callout:focus-visible .cw-label-title { text-decoration: underline; }
 .cw-callout:focus-visible .cw-hit { stroke: var(--cw-red); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.cw-callout:focus-visible .cw-marker { stroke: var(--cw-red); stroke-width: 3; }
 .cw-has-selection .cw-callout:not(.cw-selected) { opacity: 0.35; }
 .cw-callout.cw-selected .cw-label-title { fill: var(--cw-red); }
 .cw-callout.cw-selected .cw-leader { stroke: var(--cw-red); stroke-width: 2.4; }

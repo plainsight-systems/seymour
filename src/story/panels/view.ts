@@ -12,6 +12,7 @@ import { STAGE_TAB_LABEL } from '../forward/scenes';
 import type { HardwareLink } from '../forward/stages';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from '../panels';
 import { buildPictureModel, type PictureModel } from '../picture/model';
+import { escapeHtml } from '../html';
 import { renderPicture } from '../picture/render';
 import { PLACEMENT_PHRASE, placementOptions } from '../placement';
 
@@ -207,10 +208,15 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     </div>`;
   }
 
+  let moveIds = 0;
   function moveMarkup(move: StoryMove): string {
-    const body = `<b>${move.title}</b><p>${move.explanation}</p>`;
-    // A real on/off switch: the state reads Off or On, never an instruction.
-    if (move.effect) return `<li><button type="button" class="move-toggle" role="switch" data-move="${move.effect}" aria-checked="false">${body}<span class="move-switch"><i aria-hidden="true"></i><span data-move-state>Off</span></span></button></li>`;
+    const body = `<b>${escapeHtml(move.title)}</b><p>${escapeHtml(move.explanation)}</p>`;
+    // A real on/off switch: the state reads Off or On, never an instruction. Its name is the
+    // title alone; the explanation describes it.
+    if (move.effect) {
+      const id = `move-${move.effect}-${++moveIds}`;
+      return `<li><button type="button" class="move-toggle" role="switch" data-move="${move.effect}" aria-checked="false" aria-labelledby="${id}-title" aria-describedby="${id}-text"><b id="${id}-title">${escapeHtml(move.title)}</b><span class="move-text" id="${id}-text">${escapeHtml(move.explanation)}</span><span class="move-switch" aria-hidden="true"><i></i><span data-move-state>Off</span></span></button></li>`;
+    }
     const tag = move.viaKnob ? 'the knob above' : move.modeled ? 'shown below the plate' : 'not modeled';
     return `<li>${body}<small data-modeled="${move.modeled}">${tag}</small></li>`;
   }

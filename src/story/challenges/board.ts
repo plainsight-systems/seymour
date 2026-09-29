@@ -2,10 +2,10 @@ import { HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../../data/profi
 import { calculateSimulation, formatDuration, formatNumber } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
-import { finishSchedule, placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
+import { finishSchedule, placeCard, playFinale, prefersReducedMotion, quizBar, quizCard, quizFrame } from '../quiz/quiz';
 import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
-import { escapeHtml } from '../html';
+import { escapeHtml, keepFocus } from '../html';
 import { placementOptions } from '../placement';
 
 // Act 4 challenges: each fixes a workload and some targets; the reader moves
@@ -195,8 +195,8 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     const meters = evaluation.results.map((result) => {
       const hint = METRIC_HINT[result.constraint.metric];
       const pct = Math.round(progress(result) * 100);
-      // A quality rule is met or not: it gets no progress bar.
-      const rule = result.constraint.metric === 'weightBits' || result.constraint.metric === 'kvBits';
+      // A yes/no target or a quality rule is met or not: it gets no progress bar.
+      const rule = typeof result.constraint.value === 'boolean' || result.constraint.op === '==';
       return `<li class="ch-meter" data-met="${result.met}">
         <p class="ch-meter-head"><span class="ch-meter-mark" aria-hidden="true">${result.met ? '✓' : '✗'}</span><b>${METRIC_LABEL[result.constraint.metric]}</b><strong>${valueText(result.constraint.metric, result.actual)}</strong></p>
         ${rule ? '' : `<span class="ch-meter-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${escapeHtml(METRIC_LABEL[result.constraint.metric])}: ${pct}% of the way to the target"><i style="width:${pct}%"></i></span>`}
@@ -214,11 +214,35 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     return `<p class="ch-knobs-title">Throttles</p><div class="ch-knob-grid">${current().adjustable.map((knob) => knobControl(knob, settings, current())).join('')}</div>`;
   }
 
+  const frame = quizFrame(host);
+  let cardWasOpen = false;
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Tells screen readers how the targets stand; slider drags settle before speaking. */
+  function announceProgress(settled: boolean): void {
+    clearTimeout(announceTimer);
+    const speak = () => {
+      const challenge = current();
+      const results = evaluateChallenge(challenge, attempts.get(challenge.id)!).results;
+      const met = results.filter((result) => result.met).length;
+      frame.announce(met === results.length ? `Cleared: ${challenge.title}.` : `${met} of ${results.length} targets met.`);
+    };
+    if (settled) speak();
+    else announceTimer = setTimeout(speak, 600);
+  }
+
   function render(): void {
+    keepFocus(frame.body, draw);
+    // A results card that just opened takes focus, so keyboard and screen-reader users land on it.
+    if (showCard && !cardWasOpen) host.querySelector<HTMLElement>('[data-quiz-card-title]')?.focus({ preventScroll: true });
+    cardWasOpen = showCard;
+  }
+
+  function draw(): void {
     const challenge = current();
     const hardware = getHardware(attempts.get(challenge.id)!.hardwareId);
     const play = showCard && celebrate && !prefersReducedMotion();
-    host.innerHTML = `<div class="quiz-scene ch-scene">
+    frame.body.innerHTML = `<div class="quiz-scene ch-scene">
       <div data-ch-bar>${barHtml()}</div>
       <div class="quiz-question">
         <p class="stage-kicker">Challenge ${index + 1} of ${challenges.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, the chip picked above`}</p>
@@ -228,7 +252,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
         <div class="ch-knobs" data-ch-knobs>${knobsHtml()}</div>
         <button type="button" class="quiz-small ch-start-over" data-ch-start-over>Start this challenge over</button>
       </div>
-      <div class="quiz-answer ch-answer" aria-live="polite" data-ch-answer>${answerHtml()}</div>
+      <div class="quiz-answer ch-answer" data-ch-answer>${answerHtml()}</div>
       ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, reviewLabel: 'Review challenges', titleId: 'ch-done-title' }) : ''}
     </div>`;
     placeCard(host);
@@ -257,6 +281,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
         finish.after(prefersReducedMotion() ? 0 : 1200, () => { showCard = true; celebrate = finaleOwed; finaleOwed = false; render(); });
       }
     }
+    announceProgress(whole);
     if (whole) { render(); return; }
     refreshLive();
   }
