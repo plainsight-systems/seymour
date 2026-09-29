@@ -86,7 +86,7 @@ const PARTS: Record<string, EntrySource> = {
     terms: [{ term: 'NVMe SSD', meaning: 'a flash drive on the PCIe bus' }],
     what: 'Flash drives inside the server.',
     does: 'Holds model files and anything too large or too idle to keep in memory.',
-    inference: 'Useful for parking idle conversations; far too slow to feed a token step directly.',
+    inference: 'Useful for parking idle conversations; far too slow to feed each later pass directly.',
   },
   net: {
     name: 'Network and object storage',
@@ -252,7 +252,7 @@ const PARTS: Record<string, EntrySource> = {
       ],
     what: 'Hardware that multiplies small blocks of matrices in one instruction.',
     does: 'Does nearly all of a transformer’s arithmetic.',
-    inference: 'They are fast enough to sit idle most of each token step, waiting for data.',
+    inference: 'They are fast enough to sit idle through most of each later pass, waiting for data.',
   }),
   registers: (vendor) => ({
     name: 'Register file',

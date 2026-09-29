@@ -55,7 +55,7 @@ export const STORY_PANELS: StoryPanelSpec[] = [
     claim: 'To produce each token, the GPU reads every weight in the model from memory.',
     knobLabel: 'Model precision', plate: 'package', numbers: [],
     changes: ['attention', 'mlp', 'unembed'], limitedBy: [{ scene: 'package', part: 'hbm', label: 'Memory stacks (HBM): bandwidth' }],
-    trace: 'In one per-token pass, bytes read from GPU memory come out close to the model’s size, and achieved bandwidth sits near the memory peak. Halving the weight bytes should roughly halve those kernels’ time.',
+    trace: 'In one later pass, bytes read from GPU memory come out close to the model’s size, and achieved bandwidth sits near the memory peak. Halving the weight bytes should roughly halve those kernels’ time.',
     moves: [
       { title: 'Store weights in fewer bits', explanation: 'Move fewer bytes per token; accuracy and kernel support remain tradeoffs.', modeled: true, viaKnob: true },
       { title: 'Use a smaller model', explanation: 'Remove weights and math together.', modeled: false },

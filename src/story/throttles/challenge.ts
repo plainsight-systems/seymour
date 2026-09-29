@@ -11,11 +11,11 @@ export interface PickChallengeView {
   render(hardwareId: string): void;
 }
 
-/** The Act 3 scene that teaches each move. */
+/** The scene that teaches each move (Act 3's throttles, or Act 2's first pass for prompt reuse). */
 const MOVE_SCENE: Record<MoveId, { scene: string; title: string }> = {
   fp8: { scene: 'act-3/read-model', title: 'Every token re-reads the model' },
   kv8: { scene: 'act-3/memory-wall', title: 'Memory fills up' },
-  reuse: { scene: 'act-3/memory-wall', title: 'Memory fills up' },
+  reuse: { scene: 'act-2/two-jobs', title: 'First pass vs. every pass after' },
   speculate: { scene: 'act-3/heavier-tokens', title: 'Change what one read buys' },
   users2: { scene: 'act-3/share-read', title: 'Share the read' },
 };
@@ -34,6 +34,7 @@ export function mountPickChallenge(host: HTMLElement, openScene: (target: string
 
   const quiz = mountQuiz<MoveId | null>(host, {
     items: PICK_SCENARIOS.map(({ id, title }) => ({ id, title })),
+    itemNoun: 'Workload',
     emptyPick: () => null,
     ready: (pick) => pick !== null,
     pickFrom(target) {
@@ -65,9 +66,9 @@ export function mountPickChallenge(host: HTMLElement, openScene: (target: string
         <ol class="quiz-chart quiz-chart-moves">${answer.ranked.map((result) => {
           const cls = [result.move === answer.best ? 'is-answer' : '', result.move === pick && result.move !== answer.best ? 'is-pick' : ''].join(' ');
           const tone = Math.abs(result.speedup - 1) < 0.005 ? 'same' : result.speedup > 1 ? 'better' : 'worse';
-          return `<li class="${cls}"><button type="button" data-pick-open="${result.move}" title="Open “${escapeHtml(MOVE_SCENE[result.move].title)}” in Act 3">${escapeHtml(label(result.move))}</button><span class="quiz-bar"><i class="is-${tone}" style="width:${Math.max((result.speedup / max) * 100, 1.5)}%"></i></span><small>${effect(result.speedup)}${result.spills ? ' · overflows GPU memory' : ''}</small></li>`;
+          return `<li class="${cls}"><button type="button" data-pick-open="${result.move}" title="Open “${escapeHtml(MOVE_SCENE[result.move].title)}” in Act ${MOVE_SCENE[result.move].scene.charAt(4)}">${escapeHtml(label(result.move))}</button><span class="quiz-bar"><i class="is-${tone}" style="width:${Math.max((result.speedup / max) * 100, 1.5)}%"></i></span><small>${effect(result.speedup)}${result.spills ? ' · overflows GPU memory' : ''}</small></li>`;
         }).join('')}</ol>
-        <p class="quiz-legend">Bars are speed relative to the best move. Click a move to open the throttle that teaches it.</p>
+        <p class="quiz-legend">Bars are speed relative to the best move. Click a move to open the scene that teaches it.</p>
       </div>`;
     },
     waiting: 'Pick one move, then Check. Every move is run through the same model as the throttles above, for the chip picked above.',

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
+import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/profiles';
 import { getTopology } from '../../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
@@ -13,13 +13,27 @@ import type { HardwareLink } from '../forward/stages';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from '../panels';
 import { buildPictureModel, type PictureModel } from '../picture/model';
 import { renderPicture } from '../picture/render';
+import { PLACEMENT_PHRASE, placementOptions } from '../placement';
 
 // The concept panels (Act 2's "first vs. later" and every Act 3 throttle):
 // one knob, a cutaway plate, a computed surprise, and the moves that change
 // it. Each panel keeps its own settings; Act 2's workload flows in except
 // the dimension the panel's own knob controls.
 
-export const EFFICIENCY_NOTE = 'Both accelerators use the same efficiency assumptions—55% of peak math and 72% of peak memory bandwidth—so comparisons reflect published peaks, not measured results on either vendor.';
+const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+/** The one efficiency assumption every chip shares; throws if the profiles ever disagree, since the note would then be false. */
+function sharedEfficiency(): { compute: number; memory: number } {
+  const [first, ...rest] = HARDWARE_PROFILES;
+  if (rest.some((profile) => profile.computeEfficiency !== first!.computeEfficiency || profile.memoryEfficiency !== first!.memoryEfficiency)) {
+    throw new Error('Accelerator profiles use different efficiency assumptions; the efficiency note must change.');
+  }
+  return { compute: first!.computeEfficiency, memory: first!.memoryEfficiency };
+}
+
+const EFFICIENCY = sharedEfficiency();
+
+export const EFFICIENCY_NOTE = `Every accelerator uses the same efficiency assumptions—${percent(EFFICIENCY.compute)} of peak math and ${percent(EFFICIENCY.memory)} of peak memory bandwidth—so comparisons reflect published peaks, not measured results on any vendor.`;
 
 export interface PanelsView {
   setHardware(hardwareId: string): void;
@@ -50,15 +64,12 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
   function zoomLabel(plate: StoryPanelSpec['plate'], hardwareId: string): string {
     const chiplets = getTopology(hardwareId).computeDies > 1;
-    if (plate === 'die-pair') return chiplets ? 'One of eight compute dies, twice' : 'Inside the GPU die, twice';
-    if (plate === 'die') return chiplets ? 'One of eight compute dies' : 'Inside the GPU die';
+    const dies = getTopology(hardwareId).computeDies;
+    if (plate === 'die-pair') return chiplets ? `One of ${dies} compute dies, twice` : 'Inside the GPU die, twice';
+    if (plate === 'die') return chiplets ? `One of ${dies} compute dies` : 'Inside the GPU die';
     if (plate === 'package') return 'The GPU package, exploded';
     return 'The whole server';
   }
-
-  const PLACEMENT_PHRASE: Record<KvPlacement, string> = {
-    hbm: 'GPU memory', peer: 'one other GPU', peers: 'all seven other GPUs', host: 'system memory', ssd: 'local SSD', object: 'network object storage',
-  };
 
 
   function knobMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string {
@@ -71,7 +82,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     if (panel.id === 'share-read' || panel.id === 'heavier-tokens') {
       return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="10" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
     }
-    return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="kvPlacement"><option value="hbm">GPU memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="host">System memory</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select><small>The model prices this read on every generated token.</small></label>`;
+    return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="kvPlacement">${placementOptions()}</select><small>The model prices this read on every generated token.</small></label>`;
   }
 
   function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayInputs, settings: SimulationSettings): string {
@@ -83,7 +94,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
       return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
     }
     if (panel.id === 'read-model') {
-      return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each token step waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
+      return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each later pass waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
     }
     if (panel.id === 'share-read') {
       const solo = buildPictureModel(
@@ -147,7 +158,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
       const tier = inputs.tiers[settings.kvPlacement];
       const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), modelFor(settings), settings.kvPlacement);
       const where = PLACEMENT_PHRASE[settings.kvPlacement];
-      return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): each per-token pass takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
+      return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): each later pass takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
     }
     return '';
   }
@@ -155,11 +166,11 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
   /** The model's own busy shares, to compare against a real trace. */
   function traceSignature(panel: StoryPanelSpec, inputs: CutawayInputs): string {
     const job = panel.id === 'two-jobs' ? inputs.prefill : inputs.decode;
-    const label = panel.id === 'two-jobs' ? 'first pass (the whole prompt)' : 'per-token pass';
+    const label = panel.id === 'two-jobs' ? 'first pass (the whole prompt)' : 'later passes';
     const pct = (share: number) => { const value = Math.min(1, share) * 100; return value < 1 ? value.toFixed(1) : Math.round(value).toString(); };
     const math = pct(job.computeMs / job.totalMs);
     const memory = pct(job.memoryMs / job.totalMs);
-    return `This model’s ${label}: math busy ${math}% of the time, memory traffic busy ${memory}%. It assumes 55% of peak math and 72% of peak bandwidth; a trace far below those points to another limit, such as launch overhead or small kernels.`;
+    return `This model’s ${label}: math busy ${math}% of the time, memory traffic busy ${memory}%. It assumes ${percent(EFFICIENCY.compute)} of peak math and ${percent(EFFICIENCY.memory)} of peak bandwidth; a trace far below those points to another limit, such as launch overhead or small kernels.`;
   }
 
   function jobCaption(inputs: CutawayInputs, job: 'prefill' | 'decode', settings: SimulationSettings): string {

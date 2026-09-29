@@ -1,11 +1,12 @@
 import { HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../../data/profiles';
-import { calculateSimulation, formatDuration, formatNumber, responseTiming } from '../../model/calculate';
+import { calculateSimulation, formatDuration, formatNumber } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { finishSchedule, placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
 import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
 import { escapeHtml } from '../html';
+import { placementOptions } from '../placement';
 
 // Act 4 challenges: each fixes a workload and some targets; the reader moves
 // only the knobs the challenge allows until every target is met. Progress,
@@ -19,10 +20,6 @@ export interface ChallengeBoardView {
   /** Whether that chip is chosen inside the challenge (a knob) rather than fixed by it. */
   chipIsAKnob(): boolean;
 }
-
-const PLACEMENT_LABEL: Record<KvPlacement, string> = {
-  hbm: 'GPU memory', host: 'System memory', peer: 'One other GPU', peers: 'Spread across all seven other GPUs', ssd: 'Local solid-state storage', object: 'Network object storage',
-};
 
 const METRIC_LABEL: Record<ConstraintMetric, string> = {
   msPerToken: 'Time per token for each user',
@@ -94,7 +91,7 @@ function segmented(knob: KnobId, options: [string, string][], current: string, d
   return `<span class="view-toggle ch-seg" role="group" aria-label="${escapeHtml(KNOB_LABEL[knob])}">${options.map(([value, label]) => `<button type="button" data-ch-knob="${knob}" data-value="${value}" aria-pressed="${value === current}" ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</button>`).join('')}</span>`;
 }
 
-function knobControl(knob: KnobId, settings: SimulationSettings): string {
+function knobControl(knob: KnobId, settings: SimulationSettings, challenge: Challenge): string {
   const label = `<span class="ch-knob-label">${escapeHtml(KNOB_LABEL[knob])}</span>`;
   switch (knob) {
     case 'batch':
@@ -105,15 +102,19 @@ function knobControl(knob: KnobId, settings: SimulationSettings): string {
     }
     case 'weightBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit'], ['4', '4-bit']], String(settings.weightBits))}</div>`;
     case 'kvBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit']], String(settings.kvBits))}</div>`;
-    case 'mathBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit (needs 8-bit weights)']], String(settings.mathBits), settings.weightBits === 16)}</div>`;
+    case 'mathBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit (needs 8- or 4-bit weights)']], String(settings.mathBits), settings.weightBits === 16)}</div>`;
     case 'speculativeTokens': return `<div class="ch-knob">${label}${segmented(knob, [['0', 'Off'], ['2', '2 ahead'], ['4', '4 ahead']], String(settings.speculativeTokens))}</div>`;
     case 'reusePromptPrefixes': return `<div class="ch-knob">${label}${segmented(knob, [['false', 'Off'], ['true', settings.prefixCachePercent ? `On (${settings.prefixCachePercent}% shared)` : 'On (nothing shared)']], String(settings.reusePromptPrefixes))}</div>`;
     case 'prefixCachePercent': {
       const values = KNOB_VALUES.prefixCachePercent;
       return `<label class="ch-knob">${label}<output>${settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'reuse is off'}</output><input type="range" data-ch-knob="prefixCachePercent" min="0" max="${values.length - 1}" step="1" value="${Math.max(0, values.indexOf(settings.prefixCachePercent))}" ${settings.reusePromptPrefixes ? '' : 'disabled'} aria-label="${escapeHtml(KNOB_LABEL[knob])}"></label>`;
     }
-    case 'kvPlacement':
-    case 'idleKvPlacement': return `<label class="ch-knob">${label}<select data-ch-knob="${knob}" aria-label="${escapeHtml(KNOB_LABEL[knob])}">${(KNOB_VALUES[knob] as KvPlacement[]).map((tier) => `<option value="${tier}" ${tier === settings[knob] ? 'selected' : ''}>${PLACEMENT_LABEL[tier]}</option>`).join('')}</select></label>`;
+    case 'kvPlacement': return `<label class="ch-knob">${label}<select data-ch-knob="${knob}" aria-label="${escapeHtml(KNOB_LABEL[knob])}">${placementOptions(KNOB_VALUES[knob] as KvPlacement[], settings[knob])}</select></label>`;
+    case 'idleKvPlacement': {
+      // Only a challenge that asks about bringing sessions back has idle sessions; elsewhere the control would do nothing.
+      const matters = challenge.constraints.some((constraint) => constraint.metric === 'restoreBeatsRecompute');
+      return `<label class="ch-knob">${label}${matters ? '' : '<output>no idle sessions here</output>'}<select data-ch-knob="${knob}" aria-label="${escapeHtml(KNOB_LABEL[knob])}" ${matters ? '' : 'disabled'}>${placementOptions(KNOB_VALUES[knob] as KvPlacement[], settings[knob])}</select></label>`;
+    }
     case 'modelId': return `<label class="ch-knob">${label}<select data-ch-knob="modelId" aria-label="Model">${MODEL_PROFILES.map((model) => `<option value="${model.id}" ${model.id === settings.modelId ? 'selected' : ''}>${escapeHtml(model.name.split(' · ')[0]!)}</option>`).join('')}</select></label>`;
     case 'hardwareId': return `<div class="ch-knob">${label}${segmented(knob, HARDWARE_PROFILES.map((hardware) => [hardware.id, hardware.name.replace(' SXM', '')]), settings.hardwareId)}</div>`;
   }
@@ -160,17 +161,18 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
   function numbers(challenge: Challenge, settings: SimulationSettings): string {
     const hardware = getHardware(settings.hardwareId);
     const model = modelFor(settings);
-    const timing = responseTiming(settings, hardware, model);
+    // The same calculations, and the same names, as the targets.
     const decode = calculateSimulation({ ...settings, phase: 'decode' }, hardware, model);
+    const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, model);
     const targeted = new Set(challenge.constraints.map((constraint) => constraint.metric));
-    const cells: [ConstraintMetric, string, string][] = [
-      ['timeToFirstTokenMs', 'First token', formatDuration(timing.firstTokenMs)],
-      ['msPerToken', 'Each token after', formatDuration(decode.msPerToken)],
-      ['totalTokensPerSec', 'Tokens/s, all users', formatNumber(decode.tokenRate)],
+    const cells: [ConstraintMetric, string][] = [
+      ['timeToFirstTokenMs', formatDuration(prefill.totalMs)],
+      ['msPerToken', formatDuration(decode.msPerToken)],
+      ['totalTokensPerSec', `${formatNumber(decode.tokenRate)} tok/s`],
     ];
     const shown = cells.filter(([metric]) => !targeted.has(metric));
     if (shown.length === 0) return '';
-    return `<p class="quiz-chart-title">Also</p><div class="ch-numbers" aria-label="Other key numbers">${shown.map(([, label, value]) => `<p><span>${label}</span><strong>${value}</strong></p>`).join('')}</div>`;
+    return `<p class="quiz-chart-title">Also</p><div class="ch-numbers" aria-label="Other key numbers">${shown.map(([metric, value]) => `<p><span>${METRIC_LABEL[metric]}</span><strong>${value}</strong></p>`).join('')}</div>`;
   }
 
   function barHtml(): string {
@@ -209,7 +211,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
 
   function knobsHtml(): string {
     const settings = attempts.get(current().id)!;
-    return `<p class="ch-knobs-title">Throttles</p><div class="ch-knob-grid">${current().adjustable.map((knob) => knobControl(knob, settings)).join('')}</div>`;
+    return `<p class="ch-knobs-title">Throttles</p><div class="ch-knob-grid">${current().adjustable.map((knob) => knobControl(knob, settings, current())).join('')}</div>`;
   }
 
   function render(): void {
@@ -227,7 +229,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
         <button type="button" class="quiz-small ch-start-over" data-ch-start-over>Start this challenge over</button>
       </div>
       <div class="quiz-answer ch-answer" aria-live="polite" data-ch-answer>${answerHtml()}</div>
-      ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, titleId: 'ch-done-title' }) : ''}
+      ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, reviewLabel: 'Review challenges', titleId: 'ch-done-title' }) : ''}
     </div>`;
     placeCard(host);
     if (play) playFinale(host, finish);

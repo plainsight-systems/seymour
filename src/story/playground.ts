@@ -4,6 +4,7 @@ import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
 import type { KnobId } from './challenges/engine';
+import { placementOptions } from './placement';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { tileSteps, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
 import { CUTAWAY_LEGEND, mountCutaway, type CutawayView } from './cutaway/render';
@@ -58,7 +59,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
           <label><span>Share already processed <output data-output="prefixCachePercent"></output></span><input aria-label="Share of the prompt already processed" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
         </details>
         <details class="playground-group"><summary>Where the KV cache lives</summary>
-          <label><span>Active KV lives in</span><select aria-label="Active KV lives in" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
+          <label><span>Active KV lives in</span><select aria-label="Active KV lives in" data-control="kvPlacement">${placementOptions()}</select></label>
         </details>
       </aside>
       <div class="playground-workbench" data-bench-view="cutaway">
@@ -119,7 +120,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     const metric = (label: string, value: string, note: string) => `<p><span>${label}</span><strong>${value}</strong><small>${note}</small></p>`;
     node.innerHTML = `<h3>One answer of ${settings.outputLength.toLocaleString()} tokens</h3><div>${[
       metric('First token', formatDuration(timing.firstTokenMs), 'the first pass, over the whole prompt'),
-      metric('Each token after', formatDuration(timing.msPerToken), 'one per-token pass, at the answer’s middle'),
+      metric('Each token after', formatDuration(timing.msPerToken), 'one later pass, at the answer’s middle'),
       metric('Full answer', formatDuration(timing.fullAnswerMs), `first token + ${Math.max(0, settings.outputLength - 1).toLocaleString()} more`),
       metric('GPU time per 1K tokens', `${formatNumber(timing.gpuSecondsPer1kTokens)} s`, settings.batch === 1 ? 'for one user' : `across all ${settings.batch.toLocaleString()} users`),
     ].join('')}</div>`;

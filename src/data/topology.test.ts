@@ -70,3 +70,19 @@ describe('part glossary', () => {
     expect(terms('hbm', 'AMD')).toContain('HBM');
   });
 });
+
+describe('facts the prose relies on', () => {
+  // Some sentences state these as plain words ("eight GPUs on one board",
+  // "all seven other GPUs", "eight compute chiplets"). If a chip breaks one,
+  // this fails, and the wording must change with the data.
+  it('every server holds eight GPUs, so each GPU has seven peers', () => {
+    for (const { id } of HARDWARE_PROFILES) expect(getTopology(id).peerCount, id).toBe(7);
+  });
+
+  it('every chiplet design has eight compute dies', () => {
+    for (const { id } of HARDWARE_PROFILES) {
+      const dies = getTopology(id).computeDies;
+      expect(dies === 1 || dies === 8, `${id}: ${dies} compute dies`).toBe(true);
+    }
+  });
+});

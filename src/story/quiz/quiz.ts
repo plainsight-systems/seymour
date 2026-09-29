@@ -13,6 +13,8 @@ export interface QuizItem {
 
 export interface QuizSpec<P> {
   items: QuizItem[];
+  /** What one item is called in the bar's labels, matching the question's own heading (e.g. "Scenario"). */
+  itemNoun: string;
   /** A fresh, empty pick for an item. */
   emptyPick(): P;
   /** Whether a pick is complete enough to check. */
@@ -102,6 +104,8 @@ export interface CardOptions {
   noun: string;
   verdict: string;
   next: { href: string; label: string };
+  /** The button that closes the card to look back through the items. */
+  reviewLabel: string;
   titleId: string;
 }
 
@@ -118,7 +122,7 @@ export function quizCard(options: CardOptions): string {
       <p class="build-done-kicker">Challenge complete</p>
       <h3 id="${options.titleId}"><span data-quiz-count="${options.right}">${options.play ? 0 : options.right}</span> of ${options.total} ${escapeHtml(options.noun)}</h3>
       <p class="build-done-score">${escapeHtml(options.verdict)}</p>
-      <div class="build-done-actions"><a class="build-next" href="${options.next.href}">${escapeHtml(options.next.label)}</a><button type="button" class="build-look" data-quiz-review>Review answers</button><button type="button" class="build-reset" data-quiz-restart>Play again</button></div>
+      <div class="build-done-actions"><a class="build-next" href="${options.next.href}">${escapeHtml(options.next.label)}</a><button type="button" class="build-look" data-quiz-review>${escapeHtml(options.reviewLabel)}</button><button type="button" class="build-reset" data-quiz-restart>Play again</button></div>
     </div></div>`;
 }
 
@@ -187,7 +191,7 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
   function bar(): string {
     const score = tally(ids, results);
     return quizBar({
-      items: spec.items, index, itemNoun: 'Question', doneWord: 'answered', rightWord: 'right',
+      items: spec.items, index, itemNoun: spec.itemNoun, doneWord: 'answered', rightWord: 'right',
       states: spec.items.map((item) => { const result = results.get(item.id); return result === undefined ? 'open' : result ? 'right' : 'wrong'; }),
       right: score.right, answered: score.answered, total: score.total,
       offerResults: score.complete && !showCard, canReset: score.answered > 0 || picks.size > 0,
@@ -196,7 +200,7 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
 
   function card(play: boolean): string {
     const score = tally(ids, results);
-    return quizCard({ play, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, titleId: `${host.id || 'quiz'}-done-title` });
+    return quizCard({ play, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, reviewLabel: 'Review answers', titleId: `${host.id || 'quiz'}-done-title` });
   }
 
   function render(): void {

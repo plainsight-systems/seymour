@@ -23,6 +23,7 @@ export function mountBottleneckChallenge(host: HTMLElement, openStage: (stage: S
 
   const quiz = mountQuiz<Pick>(host, {
     items: SCENARIOS.map(({ id, title }) => ({ id, title })),
+    itemNoun: 'Scenario',
     emptyPick: () => ({ stage: null, limit: null }),
     ready: (pick) => pick.stage !== null && pick.limit !== null,
     pickFrom(target, pick) {
