@@ -50,6 +50,48 @@ export const CHALLENGES: Challenge[] = [
     lesson: 'Active KV belongs beside the math: every token re-reads it. An idle session can wait farther away, even on local SSD, as long as reading it back beats rebuilding it with a first pass. Network object storage is too slow even for that at this size.',
     lessonHolds: (settings) => settings.kvPlacement === 'hbm' && settings.idleKvPlacement !== 'object',
   },
+  {
+    id: 'code-assistant',
+    title: 'The code assistant',
+    brief: 'One developer asks for edits to a 4,096-token file. The answer copies most of the file back, so 80% of guessed tokens land. Stream each token within 1.2 ms.',
+    fixed: { hardwareId: 'h100-sxm', batch: 1, sequenceLength: 4096, draftAcceptanceRate: 0.8 },
+    adjustable: ['weightBits', 'speculativeTokens'],
+    constraints: [{ metric: 'msPerToken', op: '<=', value: 1.2 }],
+    solution: { ...base, batch: 1, sequenceLength: 4096, draftAcceptanceRate: 0.8, weightBits: 8, speculativeTokens: 4 },
+    naive: { ...base, batch: 1, sequenceLength: 4096, draftAcceptanceRate: 0.8, weightBits: 16, speculativeTokens: 0 },
+    lesson: 'One user’s pass is almost all weight reading. Fewer weight bytes shrink that read, and when guesses usually land, checking several in one pass turns one read into several tokens. Neither alone reaches 1.2 ms here.',
+    lessonHolds: (settings) => settings.speculativeTokens > 0 && settings.weightBits <= 8,
+  },
+  {
+    id: 'bigger-model',
+    title: 'The bigger model',
+    brief: 'Serve Qwen3 30B-A3B, a mixture-of-experts model, to 48 users with 8,192-token conversations on one H100. Fit in GPU memory and keep each user’s tokens at most 40 ms apart.',
+    fixed: { hardwareId: 'h100-sxm', modelId: 'qwen3-30b-a3b', batch: 48, sequenceLength: 8192 },
+    adjustable: ['weightBits', 'kvBits'],
+    constraints: [
+      { metric: 'fitsInGpuMemory', op: '==', value: true },
+      { metric: 'msPerToken', op: '<=', value: 40 },
+    ],
+    solution: { ...base, modelId: 'qwen3-30b-a3b', batch: 48, sequenceLength: 8192, weightBits: 8, kvBits: 8 },
+    naive: { ...base, modelId: 'qwen3-30b-a3b', batch: 48, sequenceLength: 8192, weightBits: 16, kvBits: 16 },
+    lesson: 'Each token reads only the few experts it is routed to, but every expert must be stored. At 16-bit the weights leave too little room for 48 users’ KV, and 8-bit KV alone does not free enough. Capacity, not bandwidth, is the wall: fewer weight bytes are the fix.',
+    lessonHolds: (settings) => settings.weightBits <= 8,
+  },
+  {
+    id: 'pick-the-chip',
+    title: 'Pick the chip',
+    brief: 'Sixteen 32K-token conversations, with the KV cache kept at 16 bits for quality. Choose a chip that holds them all in GPU memory and returns the first token within 20 seconds.',
+    fixed: { batch: 16, sequenceLength: 32768, kvBits: 16, kvPlacement: 'hbm' },
+    adjustable: ['hardwareId'],
+    constraints: [
+      { metric: 'fitsInGpuMemory', op: '==', value: true },
+      { metric: 'timeToFirstTokenMs', op: '<=', value: 20000 },
+    ],
+    solution: { ...base, batch: 16, sequenceLength: 32768, hardwareId: 'mi300x' },
+    naive: { ...base, batch: 16, sequenceLength: 32768, hardwareId: 'h100-sxm' },
+    lesson: 'Memory capacity decides whether the conversations fit: the H100 cannot hold them. The first token is a first pass, limited by math: the H200 holds them but has the H100’s math rate, so it misses 20 seconds.',
+    lessonHolds: (settings) => settings.hardwareId !== 'h100-sxm' && settings.hardwareId !== 'h200-sxm',
+  },
 ];
 
 export function getChallenge(id: string): Challenge {

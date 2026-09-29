@@ -50,7 +50,7 @@ The playground combines the story's knobs and lets the reader zoom through all f
 - **Placement:** where must active or idle state live?
 - **Execution:** is enough parallel work exposed?
 
-Three tested challenges make the reader prove the model: a busy chatbot, a long-document workload, and an object-storage proposal. Each has fixed workload constraints, an obvious attempt that fails, and a known configuration that passes without relying on an unmodeled feature.
+Six tested challenges in Act 4 make the reader prove the model: a busy chatbot, a long-document workload, an object-storage proposal, a code assistant, a mixture-of-experts model on one GPU, and picking the chip. Each fixes a workload and targets, starts from an obvious attempt that fails, and exposes only the knobs it allows. Each also states what every passing answer must do, and a test searches every allowed setting to prove the lesson never claims more than the challenge demands. Acts 1–3 end with their own challenges: rebuilding the GPU, finding the bottleneck of one forward pass, and picking the throttle that helps most.
 
 ### Under the hood
 

@@ -860,6 +860,6 @@ function syncAct4Chips(): void {
     tools.appendChild(note);
   }
   note.hidden = locked === null;
-  note.textContent = locked ? `${getHardware(locked).name}: fixed by this challenge` : '';
+  note.textContent = locked ? `${getHardware(locked).name}: ${challengeBoard.chipIsAKnob() ? 'picked in this challenge' : 'fixed by this challenge'}` : '';
 }
 syncAct4Chips();

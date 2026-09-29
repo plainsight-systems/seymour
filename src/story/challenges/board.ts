@@ -11,8 +11,10 @@ import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, 
 // navigation, and the finale share the quiz bar and card from Acts 2 and 3.
 
 export interface ChallengeBoardView {
-  /** The chip the challenge on screen runs on (fixed by the challenge). */
+  /** The chip the challenge on screen runs on. */
   currentChip(): string;
+  /** Whether that chip is chosen inside the challenge (a knob) rather than fixed by it. */
+  chipIsAKnob(): boolean;
 }
 
 const PLACEMENT_LABEL: Record<KvPlacement, string> = {
@@ -190,7 +192,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     host.innerHTML = `<div class="quiz-scene ch-scene">
       <div data-ch-bar>${barHtml()}</div>
       <div class="quiz-question">
-        <p class="stage-kicker">Challenge ${index + 1} of ${CHALLENGES.length} · runs on ${escapeHtml(hardware.name)}, fixed by this challenge</p>
+        <p class="stage-kicker">Challenge ${index + 1} of ${CHALLENGES.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, fixed by this challenge`}</p>
         <h3>${escapeHtml(challenge.title)}</h3>
         <p class="stage-lead">${escapeHtml(challenge.brief)}</p>
         <div class="ch-knobs" data-ch-knobs>${knobsHtml()}</div>
@@ -214,7 +216,9 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
 
   function update(settings: SimulationSettings, whole: boolean): void {
     const challenge = current();
+    const chipChanged = attempts.get(challenge.id)!.hardwareId !== settings.hardwareId;
     attempts.set(challenge.id, settings);
+    if (chipChanged) onChipChange();
     if (!cleared.has(challenge.id) && evaluateChallenge(challenge, settings).passed) {
       cleared.add(challenge.id);
       justCleared = challenge.id;
@@ -228,10 +232,10 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
 
   function go(next: number): void {
     showCard = false;
-    const before = current().fixed.hardwareId;
     index = Math.max(0, Math.min(CHALLENGES.length - 1, next));
     render();
-    if (current().fixed.hardwareId !== before) onChipChange();
+    // Each challenge has its own chip (fixed, or picked in it), so the header re-syncs on every move.
+    onChipChange();
   }
 
   host.addEventListener('input', (event) => {
@@ -274,5 +278,6 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
   render();
   return {
     currentChip: () => attempts.get(current().id)!.hardwareId,
+    chipIsAKnob: () => current().adjustable.includes('hardwareId'),
   };
 }
