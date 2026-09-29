@@ -88,7 +88,7 @@ export function serverPlate(inputs: CutawayInputs, mode: PlateMode = 'workload')
     b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs`, 'reached through the switch chips', 'published');
     b.label('switch', 'switch2', 'right', 'NVLink switch chips', `${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per GPU`, peer.basis);
   } else {
-    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each: ${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per peer, ${formatBandwidth(inputs.tiers.peers.bandwidthBytesPerSecond!)} across all seven`, peer.basis);
+    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each: ${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per peer, ${formatBandwidth(inputs.tiers.peers.bandwidthBytesPerSecond!)} across all ${topology.peerCount}`, peer.basis);
   }
   b.label('host', 'cpu', 'left', 'CPU and its memory', 'large, but reachable only through PCIe', 'schematic');
   b.label('pcie', 'pcie', 'left', 'PCIe Gen5 x16', `${formatBandwidth(host.bandwidthBytesPerSecond!)} each way, per GPU`, 'published');
@@ -119,7 +119,7 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
     return;
   }
   const m = inputs.memory;
-  const idle = m.weightsFraction * (1 - inputs.weightsReadFraction);
+  const idle = readsAllWeights(inputs) ? 0 : m.weightsFraction * (1 - inputs.weightsReadFraction);
   const parts: [number, Fill, string, boolean][] = [
     [m.weightsFraction - idle, 'green', 'weights', false],
     [idle, 'leaf', 'weights-idle', false],
@@ -127,13 +127,21 @@ function stack(b: SceneBuilder, id: string, x: number, y: number, z: number, w: 
     [m.freeFraction, 'paperBright', 'free', false],
     [m.reserveFraction, 'paperDeep', 'reserve', true],
   ];
+  // A tiny but real share (a short context's KV) is still drawn, as a thin slice its label can point at.
+  const minimumHeight = 0.3;
   let level = z + 0.6;
   for (const [fraction, fill, part, ghost] of parts) {
-    if (fraction <= 0.0005) continue;
-    b.box({ ...base, id: `${id}-${part}`, part, z: level, h: h * fraction, fill, ghost });
-    level += h * fraction;
+    if (fraction <= 0) continue;
+    const height = Math.max(h * fraction, minimumHeight);
+    b.box({ ...base, id: `${id}-${part}`, part, z: level, h: height, fill, ghost });
+    level += height;
   }
   if (m.overflowBytes > 0) b.box({ ...base, id: `${id}-overflow`, part: 'overflow', z: level + 1.2, h: 1.6, fill: 'red', ghost: true, layer: 6 });
+}
+
+/** At 99.9% or more of the experts touched, a step reads all the weights: drawn and labeled as one block. */
+function readsAllWeights(inputs: CutawayInputs): boolean {
+  return inputs.weightsReadFraction >= 0.999;
 }
 
 /** Labels the fill on the front-most left stack, aiming at each segment's visible face. */
@@ -148,7 +156,7 @@ function fillLabels(b: SceneBuilder, inputs: CutawayInputs, frontStack: string):
     const box = b.find((candidate) => candidate.id === `${frontStack}-${part}`);
     return box ? frontFace(box) : undefined;
   };
-  if (m.weightsFraction > 0 && inputs.weightsReadFraction >= 0.999) {
+  if (m.weightsFraction > 0 && readsAllWeights(inputs)) {
     b.label('weights', `${frontStack}-weights`, 'left', `Model weights · ${formatBytes(m.weightBytes)}`, 'every generated token reads all of it', 'published', face('weights'));
   } else if (m.weightsFraction > 0) {
     const read = m.weightBytes * inputs.weightsReadFraction;
@@ -471,7 +479,7 @@ export function unitPlate(hardwareId: string, tileStep: number): Plate {
     id: 'unit', scene: b.build(), defaultSelection: step.parts, litPath: null,
     note: topology.computeDies === 1
       ? 'Quadrant layout after NVIDIA’s SM diagram; relative sizes are stylized.'
-      : 'Four SIMDs per CU inferred from 1,216 matrix cores across 304 CUs. Layout is schematic.',
+      : `${topology.unitPartitions} SIMDs per CU inferred from ${(topology.unitPartitions * topology.enabledUnits).toLocaleString()} matrix cores across ${topology.enabledUnits} CUs. Layout is schematic.`,
     sources: topology.sources,
   };
 }

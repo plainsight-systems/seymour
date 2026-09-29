@@ -64,6 +64,11 @@ function drawGeometry(svg: SVGSVGElement, scene: Scene): { root: SVGGElement; la
     for (const p of [...top, ...left, ...right]) grow(project(p));
   }
 
+  // A label must point at something drawn; a missing anchor is a plate bug, not something to hide.
+  for (const label of scene.labels) {
+    if (!byId.has(label.anchor)) throw new Error(`Label "${label.part}" points at a missing box: ${label.anchor}`);
+  }
+
   for (const link of scene.links) {
     const from = byId.get(link.from);
     const to = byId.get(link.to);
@@ -85,7 +90,7 @@ function wideCallouts(layer: SVGGElement, scene: Scene, bounds: { minX: number; 
   const offset = 30 * k;
   for (const side of ['left', 'right'] as const) {
     const items = scene.labels
-      .filter((label) => label.side === side && byId.has(label.anchor))
+      .filter((label) => label.side === side)
       .map((label) => ({ label, anchor: project(label.at ?? topCenter(byId.get(label.anchor)!)), y: 0 }))
       .sort((a, b) => a.anchor[1] - b.anchor[1]);
     let last = -Infinity;
@@ -117,8 +122,7 @@ function narrowMarkers(layer: SVGGElement, scene: Scene, k: number): void {
   const placed: [number, number][] = [];
   const collides = (x: number, y: number) => placed.some(([px, py]) => Math.hypot(px - x, py - y) < 2.2 * r);
   scene.labels.forEach((label, index) => {
-    const box = byId.get(label.anchor);
-    if (!box) return;
+    const box = byId.get(label.anchor)!;
     const [ax, ay] = project(label.at ?? topCenter(box));
     // Step markers that would overlap sideways, keeping a leader to the anchor.
     let x = ax;
@@ -263,7 +267,8 @@ export function mountCutaway(host: HTMLElement, initial: Plate, ariaLabel: strin
       event.preventDefault();
       pick((target as SVGElement).dataset.part);
     }
-    if (event.key === 'Escape') { picked = null; applySelection(); }
+    // Escape clears the selection exactly as a second click would, so listeners hear it too.
+    if (event.key === 'Escape' && picked !== null) { picked = null; applySelection(); options.onSelect?.(null); }
   };
   host.addEventListener('click', onClick);
   host.addEventListener('keydown', onKey);

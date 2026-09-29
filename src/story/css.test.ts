@@ -19,5 +19,11 @@ describe('stylesheets', () => {
       expect(lowest).toBe(0);
       expect(depth).toBe(0);
     });
+
+    it(`${name} has no selector left dangling after a combinator`, () => {
+      // A line ending in ">", "+", or "~" fuses with the next rule into a selector that never matches.
+      const dangling = source.split('\n').filter((line) => /[>+~]\s*$/.test(line));
+      expect(dangling).toEqual([]);
+    });
   }
 });

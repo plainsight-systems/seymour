@@ -7,6 +7,7 @@ import type { KvPlacement, SimulationSettings } from '../../types';
 import { buildCutawayInputs } from './inputs';
 import { PLACEMENT_PART, tileSteps, diePlate, packagePlate, serverPlate, unitPlate, unresolvedLabels } from './plates';
 import { project } from './project';
+import { illustrativeDisabledUnits } from './scene';
 
 const base: SimulationSettings = { ...DEFAULT_SETTINGS, phase: 'decode', kvPlacement: 'hbm' };
 
@@ -62,8 +63,10 @@ describe('cutaway inputs', () => {
 });
 
 describe('plates', () => {
-  const allPlates = () => HARDWARE_PROFILES.flatMap((hardware) => {
-    const { inputs } = inputsFor({ hardwareId: hardware.id, batch: 64 });
+  // Include the extremes: a sliver of KV (1 user, 128 tokens) and an overflowing batch.
+  const WORKLOADS: Partial<SimulationSettings>[] = [{ batch: 1, sequenceLength: 128 }, { batch: 64 }, { batch: 1024, sequenceLength: 32768 }];
+  const allPlates = () => HARDWARE_PROFILES.flatMap((hardware) => WORKLOADS.flatMap((workload) => {
+    const { inputs } = inputsFor({ hardwareId: hardware.id, ...workload });
     return [
       serverPlate(inputs),
       packagePlate(inputs),
@@ -71,7 +74,7 @@ describe('plates', () => {
       diePlate(inputs, { job: 'prefill', detail: 'minimal' }),
       ...tileSteps(hardware.id).map((_, step) => unitPlate(hardware.id, step)),
     ];
-  });
+  }));
 
   it('never labels a part that is not drawn', () => {
     for (const plate of allPlates()) expect(unresolvedLabels(plate.scene)).toEqual([]);
@@ -180,5 +183,24 @@ describe('plates', () => {
         expect(plate.defaultSelection).toEqual([]);
       }
     }
+  });
+});
+
+describe('illustrative disabled units', () => {
+  it('picks exactly the published count, the same way every time', () => {
+    const first = illustrativeDisabledUnits(144, 12, 7);
+    expect(first.size).toBe(12);
+    expect([...illustrativeDisabledUnits(144, 12, 7)]).toEqual([...first]);
+    for (const unit of first) expect(unit >= 0 && unit < 144).toBe(true);
+  });
+
+  it('spreads positions instead of falling into a regular pattern', () => {
+    const units = [...illustrativeDisabledUnits(144, 12, 7)];
+    expect(units.some((unit) => unit % 4 !== 0)).toBe(true);
+  });
+
+  it('finishes even when every unit is disabled, and refuses more than exist', () => {
+    expect(illustrativeDisabledUnits(40, 40, 11).size).toBe(40);
+    expect(() => illustrativeDisabledUnits(4, 5, 1)).toThrow();
   });
 });

@@ -107,11 +107,21 @@ export function frontFace(box: SceneBox): Vec3 {
  * illustrative; only the count is a fact.
  */
 export function illustrativeDisabledUnits(total: number, count: number, seed: number): Set<number> {
-  const out = new Set<number>();
-  let state = seed;
-  while (out.size < Math.min(count, total)) {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    out.add(state % total);
+  if (count > total) throw new Error(`Cannot disable ${count} of ${total} units`);
+  // A seeded Fisher–Yates shuffle with an exact 32-bit generator (mulberry32):
+  // evenly spread, and it always finishes.
+  let state = seed >>> 0;
+  const next = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const units = Array.from({ length: total }, (_, index) => index);
+  for (let i = total - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1));
+    [units[i], units[j]] = [units[j]!, units[i]!];
   }
-  return out;
+  return new Set(units.slice(0, count));
 }
