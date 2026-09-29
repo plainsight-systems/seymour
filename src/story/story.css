@@ -493,8 +493,36 @@
 .bn-chart small { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .bn-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; align-items: center; margin: 0; color: var(--ink-soft); font-size: 0.72rem; }
 .bn-legend i { display: inline-block; width: 12px; height: 8px; }
+.bn-top { display: flex; flex-wrap: wrap; grid-column: 1 / -1; gap: 0.6rem 1.2rem; align-items: center; padding-bottom: 0.7rem; border-bottom: 1px solid var(--line); }
+.bn-nav { display: flex; gap: 0.35rem; align-items: center; }
+.bn-pips { display: flex; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }
+.bn-pip, .bn-step { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 50%; background: var(--paper); font: inherit; font-size: 0.85rem; font-weight: 850; cursor: pointer; }
+.bn-step { border-radius: 0; font-size: 1.2rem; }
+.bn-step:disabled { cursor: default; opacity: 0.35; }
+.bn-pip[data-state='right'] { color: var(--paper); border-color: var(--green); background: var(--green); }
+.bn-pip[data-state='wrong'] { color: var(--paper); border-color: var(--red); background: var(--red); }
+.bn-pip[aria-current='step'] { outline: 3px solid var(--mustard); outline-offset: 2px; }
+.bn-pip:focus-visible, .bn-step:focus-visible, .bn-small:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.bn-pips.is-popping .bn-pip { animation: bn-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--i) * 0.1s) both; }
+@keyframes bn-pop { 0% { transform: scale(1); } 45% { transform: scale(1.45); } 100% { transform: scale(1); } }
+.bn-tally { margin: 0; font-size: 0.9rem; }
+.bn-tally b { font-family: 'Anybody Variable', sans-serif; font-size: 1.3rem; }
+.bn-tally span { color: var(--ink-soft); }
+.bn-top-actions { display: flex; gap: 0.5rem; margin-left: auto; }
+.bn-small { min-height: 36px; padding: 0 0.8rem; color: var(--ink); border: 1px solid var(--ink); background: var(--paper); font: inherit; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
+.bn-small:disabled { cursor: default; opacity: 0.4; }
+.bn-small[data-bn-card] { background: var(--mustard); }
+.bn-done { z-index: 6; top: var(--bn-top, 4rem); place-items: start center; padding-top: 1.5rem; overflow: hidden; }
+.bn-confetti { position: absolute; top: 9rem; left: 50%; width: 0; height: 0; pointer-events: none; }
+.bn-confetti i { position: absolute; width: var(--w); height: calc(var(--w) * 0.45); background: var(--c); opacity: 0; animation: bn-confetti 1.6s cubic-bezier(0.15, 0.7, 0.35, 1) var(--d) forwards; }
+@keyframes bn-confetti {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(0.4); }
+  60% { opacity: 1; transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); }
+  100% { opacity: 0; transform: translate(var(--x), calc(var(--y) + 140px)) rotate(calc(var(--r) * 1.6)) scale(1); }
+}
+.bn-done.is-celebrating .build-done-card { animation: build-stamp 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 0.3s both; }
 @media (max-width: 1000px) { .bn-scene { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .bn-reveal { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .bn-reveal, .bn-pips.is-popping .bn-pip, .bn-done.is-celebrating .build-done-card { animation: none; } }
 
 /* ---- Act 2: the pass loop --------------------------------------------------- */
 .pass-loop { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 0.75fr); gap: 0.4rem 1.5rem; align-items: center; padding: 0 clamp(1rem, 4vw, 4rem) 0.5rem; }
