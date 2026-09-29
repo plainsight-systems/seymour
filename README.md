@@ -4,13 +4,13 @@
 
 # Seymour
 
-**A visual, quantitative introduction to the costs that shape LLM inference.**
+**Your GPU is starving. Come find out why.**
 
 **Live demo:** <https://plainsight-systems.github.io/seymour/>
 
-Seymour teaches LLM inference performance from the software engineer's point of view, hardware and software together: what is on the chip, what one forward pass asks of it, which choices change that, and how to combine them under real targets. Every number comes from one deterministic first-order model; concepts the model does not calculate are labeled **not modeled**.
+A modern GPU can do roughly a quadrillion math operations a second, and when it serves an LLM it spends much of its time doing nothing: waiting for bytes to show up from memory. Seymour is a hands-on tour of why. Take the chip apart, push a token through the model, pull the throttles, then try to hit real serving targets without blowing the memory budget.
 
-The name is for Seymour Cray, by way of the idea that a GPU is a hungry plant: the math units are the mouth, and the memory hierarchy has to keep bringing food.
+It's built for software engineers, hardware and software together, and it keeps you honest: every number comes from one small, deterministic model you can read, and anything that model doesn't calculate is stamped **not modeled** right where you see it.
 
 ## The experience
 
@@ -120,3 +120,5 @@ Seymour follows the Plainsight split license:
 - Prose, explanatory content, and original visual assets—including the README illustration—are licensed under [Creative Commons Attribution 4.0 International](LICENSE-CONTENT).
 
 The project's name and identity do not grant trademark rights. The README illustration is original project artwork and does not reproduce film stills, posters, characters, or actor likenesses.
+
+<sub>Feed me, Seymour.</sub>
