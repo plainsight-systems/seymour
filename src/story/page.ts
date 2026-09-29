@@ -11,13 +11,14 @@ import { mountActs, type ActSpec } from './acts';
 import { FORWARD_TOOLS, PASS_LOOP, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
 import { mountBottleneckChallenge } from './forward/challenge';
 import { mountPickChallenge } from './throttles/challenge';
+import { mountChallengeBoard } from './challenges/board';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
 import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from './panels';
 import { buildPictureModel, type PictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
-import { mountPlayground } from './playground';
+import { mountPlayground, type PlaygroundView } from './playground';
 
 const root = document.querySelector<HTMLElement>('#route-root');
 if (!root) throw new Error('Missing #route-root');
@@ -283,13 +284,22 @@ const ACTS: ActSpec[] = [
   },
   {
     id: 'act-4', number: 4, title: 'Putting it together',
-    intro: 'Every knob at once, on any chip. Play freely, or pick a challenge with fixed constraints to beat.',
+    intro: 'Real serving problems with fixed targets, then every knob at once on any chip.',
     footnote: EFFICIENCY_NOTE,
-    scenes: [{ id: 'playground', label: 'Playground and challenges' }],
+    scenes: [{ id: 'challenges', label: 'Challenges' }, { id: 'playground', label: 'Playground' }],
   },
 ];
 
-const acts = mountActs(root, ACTS, { headerTools: chipToggle(), onShow: (sceneId) => (sceneId === 'build' ? buildView : gpuViews.get(sceneId))?.refresh() });
+// Views mounted while hidden measure nothing, so each redraws when its scene opens.
+// The playground mounts after the acts, so it may not exist yet on the first show.
+let playground: PlaygroundView | null = null;
+const acts = mountActs(root, ACTS, {
+  headerTools: chipToggle(),
+  onShow: (sceneId) => {
+    if (sceneId === 'playground') { playground?.refresh(); return; }
+    (sceneId === 'build' ? buildView : gpuViews.get(sceneId))?.refresh();
+  },
+});
 
 /** The workload dimension each panel's own knob controls, which Act 2 must not override. */
 const KNOB_OWNS: Record<string, ('batch' | 'sequenceLength')[]> = {
@@ -798,8 +808,12 @@ const pickChallenge = mountPickChallenge(acts.sceneHost('pick'), (target) => {
 });
 pickChallenge.render(storyHardwareId);
 
-// Act 4: the playground.
-const playground = mountPlayground(acts.sceneHost('playground'));
+// Act 4: the challenges, then the playground.
+mountChallengeBoard(acts.sceneHost('challenges'), (target) => {
+  acts.open(target, true);
+  history.replaceState(null, '', `#${target}`);
+}, () => {});
+playground = mountPlayground(acts.sceneHost('playground'));
 
 // One accelerator for the whole story: any act's selector switches every act.
 root.addEventListener('click', (event) => {
@@ -816,5 +830,5 @@ root.addEventListener('click', (event) => {
     panelState.get(panel.id)!.settings.hardwareId = storyHardwareId;
     renderPanel(panel);
   }
-  playground.setHardware(storyHardwareId);
+  playground?.setHardware(storyHardwareId);
 });

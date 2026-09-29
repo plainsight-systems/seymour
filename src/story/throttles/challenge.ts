@@ -81,7 +81,7 @@ export function mountPickChallenge(host: HTMLElement, openScene: (target: string
     finale: {
       noun: 'throttles picked',
       verdict: (right, total) => `${right === total ? 'The right lever every time.' : right >= total - 1 ? 'Nearly every lever right.' : 'Each throttle above shows why its move helps where it does.'} Act 4 puts them together under real constraints.`,
-      next: { href: '#act-4/playground', label: 'On to Act 4 · Putting it together ↓' },
+      next: { href: '#act-4/challenges', label: 'On to Act 4 · Putting it together ↓' },
     },
   });
 

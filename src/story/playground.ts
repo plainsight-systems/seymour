@@ -3,8 +3,7 @@ import { calculateSimulation, formatDuration, formatNumber, responseTiming } fro
 import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
-import { CHALLENGES, getChallenge } from './challenges/data';
-import { evaluateChallenge, type Challenge, type ConstraintMetric, type KnobId } from './challenges/engine';
+import type { KnobId } from './challenges/engine';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { tileSteps, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
 import { mountCutaway, type CutawayView } from './cutaway/render';
@@ -16,12 +15,6 @@ type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens' | 'mat
 /** Answer lengths, up to long reasoning-style answers. */
 const ANSWER_LENGTHS = [1, 32, 128, 512, 2048, 8192];
 
-const CONTROL_NAMES: Record<ControlKey, string> = {
-  batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
-  reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', idleKvPlacement: 'idle KV location', hardwareId: 'accelerator',
-  modelId: 'model', speculativeTokens: 'speculative decoding', mathBits: 'math precision', outputLength: 'answer length',
-};
-
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
 
 function nearestIndex(choices: number[], value: number): number {
@@ -31,23 +24,22 @@ function nearestIndex(choices: number[], value: number): number {
 }
 
 export interface PlaygroundView {
-  /** Follows the story-wide accelerator choice while in free play; challenges keep their fixed chip. */
+  /** Follows the story-wide accelerator choice. */
   setHardware(hardwareId: string): void;
+  /** Re-measures the drawing after the playground's scene becomes visible. */
+  refresh(): void;
 }
 
 export function mountPlayground(root: HTMLElement): PlaygroundView {
-  // Open in free play: every knob is live until the reader accepts a challenge.
+  // Free play: every knob is live. The challenges have their own scene.
   let settings: SimulationSettings = { ...DEFAULT_SETTINGS };
-  let selectedChallenge: Challenge | null = null;
   let plateId: PlateId = 'package';
   let tileStep = 0;
   let cutaway: CutawayView | null = null;
 
   root.innerHTML = `
     <div class="playground-shell">
-      <section class="challenge-board" data-challenge-board aria-live="polite"></section>
       <aside class="playground-controls">
-        <label><span>Mode</span><select aria-label="Mode" data-control="challenge"><option value="free">Free play</option>${CHALLENGES.map((challenge) => `<option value="${challenge.id}">Challenge: ${challenge.title}</option>`).join('')}</select><small class="playground-lock" data-lock-note hidden></small></label>
         <details class="playground-group" open><summary>Workload</summary>
           <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
@@ -84,8 +76,6 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
       </div>
     </div>`;
 
-  const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
-  challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
   for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'idleKvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
@@ -110,44 +100,8 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     root.querySelector<HTMLOutputElement>('[data-output="outputLength"]')!.value = `${settings.outputLength.toLocaleString()} tokens`;
     root.querySelector<HTMLOutputElement>('[data-output="prefixCachePercent"]')!.value = settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'off';
 
-    const locked: string[] = [];
-    for (const [key, control] of controls) {
-      control.disabled = selectedChallenge !== null && !selectedChallenge.adjustable.includes(key as KnobId);
-      if (control.disabled) locked.push(CONTROL_NAMES[key]);
-    }
-    if (!settings.reusePromptPrefixes) controls.get('prefixCachePercent')!.disabled = true;
-    if (settings.weightBits === 16) controls.get('mathBits')!.disabled = true;
-    const note = root.querySelector<HTMLElement>('[data-lock-note]')!;
-    note.hidden = locked.length === 0;
-    note.textContent = `This challenge fixes ${locked.join(', ')}. Choose Free play to change them.`;
-  }
-
-  function metricLabel(metric: ConstraintMetric): string {
-    return ({ msPerToken: 'Time per token', timeToFirstTokenMs: 'First token', totalTokensPerSec: 'Total throughput', fitsInGpuMemory: 'Fits in GPU memory', restoreBeatsRecompute: 'Idle restore beats rebuild' })[metric];
-  }
-
-  function metricValue(metric: ConstraintMetric, value: number | boolean): string {
-    if (typeof value === 'boolean') return value ? 'yes' : 'no';
-    if (metric === 'msPerToken' || metric === 'timeToFirstTokenMs') return formatDuration(value);
-    if (metric === 'totalTokensPerSec') return `${formatNumber(value)} tok/s`;
-    return formatNumber(value);
-  }
-
-  function renderChallenge(): void {
-    const board = root.querySelector<HTMLElement>('[data-challenge-board]')!;
-    if (!selectedChallenge) {
-      board.innerHTML = '<span>Free play</span><p>Nothing is fixed. Watch the picture and ask which of Work, Traffic, Placement, or Execution changes.</p>';
-      board.dataset.passed = 'false';
-      return;
-    }
-    const evaluation = evaluateChallenge(selectedChallenge, settings);
-    board.dataset.passed = String(evaluation.passed);
-    board.innerHTML = `<header><div><span>Challenge</span><h3>${selectedChallenge.title}</h3></div><button type="button" data-reset-challenge>Reset obvious attempt</button></header><p>${selectedChallenge.brief}</p><ul>${evaluation.results.map((result) => `<li data-met="${result.met}"><span>${result.met ? '✓' : '×'}</span><p><b>${metricLabel(result.constraint.metric)}</b><small>actual ${metricValue(result.constraint.metric, result.actual)} · target ${result.constraint.op} ${metricValue(result.constraint.metric, result.constraint.value)}</small></p></li>`).join('')}</ul>${evaluation.passed ? `<div class="challenge-success"><strong>Constraint cleared.</strong><p>${selectedChallenge.lesson}</p></div>` : ''}`;
-    board.querySelector<HTMLButtonElement>('[data-reset-challenge]')!.addEventListener('click', () => {
-      settings = { ...selectedChallenge!.naive };
-      syncControls();
-      render();
-    });
+    controls.get('prefixCachePercent')!.disabled = !settings.reusePromptPrefixes;
+    controls.get('mathBits')!.disabled = settings.weightBits === 16;
   }
 
   function render(): void {
@@ -158,7 +112,6 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     renderPicture(root.querySelector<HTMLElement>('[data-playground-picture]')!, picture, new Set(['stepCost', 'throughput', 'distanceLadder']));
     renderResponse(hardware, model);
     renderCutaway();
-    renderChallenge();
   }
 
   function renderResponse(hardware: ReturnType<typeof getHardware>, model: ReturnType<typeof modelFor>): void {
@@ -217,13 +170,6 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     renderCutaway();
   });
 
-  challengeSelect.addEventListener('change', () => {
-    selectedChallenge = challengeSelect.value === 'free' ? null : getChallenge(challengeSelect.value);
-    settings = selectedChallenge ? { ...selectedChallenge.naive } : { ...DEFAULT_SETTINGS };
-    syncControls();
-    render();
-  });
-
   for (const [key, control] of controls) {
     control.addEventListener('input', () => {
       if (key === 'batch') settings.batch = batchFromSlider(Number(control.value));
@@ -249,8 +195,10 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
   render();
 
   return {
+    refresh(): void {
+      cutaway?.refresh();
+    },
     setHardware(hardwareId: string): void {
-      if (selectedChallenge) return;
       settings.hardwareId = hardwareId;
       syncControls();
       render();
