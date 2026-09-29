@@ -4,10 +4,9 @@
 .lookup-hero h1 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: clamp(3.2rem, 7vw, 7rem); letter-spacing: -0.05em; line-height: 0.88; }
 .lookup-hero h1 em { color: var(--mustard); font-style: normal; }
 .lookup-hero > p { max-width: 52ch; margin: 0; line-height: 1.65; }
-.lookup-table { padding: clamp(2rem, 5vw, 5rem); }
+.lookup-table { padding: clamp(2rem, 5vw, 5rem); overflow-x: auto; }
 .lookup-table h2 { margin: 0 0 2rem; font-family: 'Anybody Variable', sans-serif; font-size: clamp(2rem, 4vw, 4rem); }
 .lookup-grid { min-width: 960px; border: 1px solid var(--ink); }
-.lookup-table { overflow-x: auto; }
 .lookup-row { display: grid; grid-template-columns: minmax(210px, 1.2fr) repeat(4, minmax(180px, 1fr)); }
 .lookup-row > * { min-width: 0; padding: 1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lookup-row > *:last-child { border-right: 0; }
