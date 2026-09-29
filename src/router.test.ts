@@ -2,25 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { isRouteChange, resolveRoute } from './router';
 
 describe('resolveRoute', () => {
-  it('sends old query-string share links to Under the hood', () => {
-    expect(resolveRoute('', '?phase=decode&batch=64')).toEqual({ route: 'under-the-hood', redirectHash: '#/under-the-hood' });
+  it('keeps explicit hash routes stable', () => {
+    expect(resolveRoute('')).toEqual({ route: 'story' });
+    expect(resolveRoute('#/')).toEqual({ route: 'story' });
+    expect(resolveRoute('#/lookup')).toEqual({ route: 'lookup' });
   });
 
-  it('keeps explicit hash routes stable', () => {
-    expect(resolveRoute('#/', '')).toEqual({ route: 'story' });
-    expect(resolveRoute('#/under-the-hood', '?batch=64')).toEqual({ route: 'under-the-hood' });
-    expect(resolveRoute('#/lookup', '')).toEqual({ route: 'lookup' });
+  it('opens the story for retired routes, such as the removed Under the hood page', () => {
+    expect(resolveRoute('#/under-the-hood')).toEqual({ route: 'story' });
   });
 
   it('treats non-route hashes as story anchors', () => {
-    expect(resolveRoute('#playground', '')).toEqual({ route: 'story', anchor: 'playground' });
-    expect(resolveRoute('#memory-wall', '')).toEqual({ route: 'story', anchor: 'memory-wall' });
+    expect(resolveRoute('#act-4/challenges')).toEqual({ route: 'story', anchor: 'act-4/challenges' });
+    expect(resolveRoute('#act-2/attention')).toEqual({ route: 'story', anchor: 'act-2/attention' });
   });
 
   it('only reloads when the route itself changes', () => {
-    expect(isRouteChange('#/', '#playground', '')).toBe(false);
-    expect(isRouteChange('#two-jobs', '#distance', '')).toBe(false);
-    expect(isRouteChange('#playground', '#/lookup', '')).toBe(true);
-    expect(isRouteChange('#/lookup', '#/', '')).toBe(true);
+    expect(isRouteChange('#/', '#act-4/playground')).toBe(false);
+    expect(isRouteChange('#act-2/two-jobs', '#act-3/distance')).toBe(false);
+    expect(isRouteChange('#act-4/playground', '#/lookup')).toBe(true);
+    expect(isRouteChange('#/lookup', '#/')).toBe(true);
   });
 });

@@ -1,32 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from './data/profiles';
-import { parseSettings, settingsToSearchParams } from './state';
+import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from './state';
 
-describe('settings URL compatibility', () => {
-  it('parses existing query keys into concept-named settings', () => {
-    const parsed = parseSettings(new URLSearchParams(
-      'phase=prefill&gpu=mi300x&batch=64&tokens=32768&cache=75&output=128&tokenBudget=2048&memory=0.8&weights=8&kv=8&placement=peer&attention=separate&overlap=off&prefix=off&chunked=off&view=story',
-    ));
-
-    expect(parsed).toMatchObject({
-      phase: 'prefill',
-      hardwareId: 'mi300x',
-      batch: 64,
-      sequenceLength: 32768,
-      promptTokensPerStep: 2048,
-      servingMemoryFraction: 0.8,
-      reusePromptPrefixes: false,
-      splitLongPrompts: false,
-      kvPlacement: 'peer',
-    });
+describe('slider scales', () => {
+  it('round-trips every position', () => {
+    for (let position = 0; position <= 10; position++) expect(batchToSlider(batchFromSlider(position))).toBe(position);
+    for (let position = 0; position <= 8; position++) expect(sequenceToSlider(sequenceFromSlider(position))).toBe(position);
+    for (let position = 0; position <= 5; position++) expect(prefixCacheToSlider(prefixCacheFromSlider(position))).toBe(position);
   });
 
-  it('keeps the existing URL keys when serializing renamed settings', () => {
-    const params = settingsToSearchParams({ ...DEFAULT_SETTINGS });
-    expect(params.get('tokenBudget')).toBe(String(DEFAULT_SETTINGS.promptTokensPerStep));
-    expect(params.get('memory')).toBe(String(DEFAULT_SETTINGS.servingMemoryFraction));
-    expect(params.get('placement')).toBe('hbm');
-    expect(params.has('maxNumBatchedTokens')).toBe(false);
-    expect(params.has('gpuMemoryUtilization')).toBe(false);
+  it('clamps positions past either end and snaps values to the nearest step', () => {
+    expect(batchFromSlider(-3)).toBe(1);
+    expect(batchFromSlider(99)).toBe(1024);
+    expect(batchToSlider(48)).toBe(batchToSlider(32));
+    expect(sequenceToSlider(5000)).toBe(sequenceToSlider(4096));
   });
 });

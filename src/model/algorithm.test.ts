@@ -15,7 +15,6 @@ describe('buildAlgorithmSteps', () => {
     kvBits: 16 as const,
     attentionKernel: 'fused' as const,
     overlap: true,
-    view: 'hardware' as const,
   };
 
   it('exposes explicit attention and sampling operations', () => {

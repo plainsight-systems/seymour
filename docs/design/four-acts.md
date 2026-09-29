@@ -20,7 +20,7 @@ Four acts, stacked vertically. Each act is one screen tall; scrolling moves betw
 | **3 · The throttles** | How each Act 2 step is changed by decisions and limited by Act 1 hardware | One scene per lever (the current concept panels, re-scoped) |
 | **4 · Putting it together** | Prove it under constraints | Playground and challenges |
 
-The lookup page stays a separate route. Under the hood is absorbed into Acts 1 and 2 over time, then retired.
+The lookup page stays a separate route. Under the hood was absorbed into Acts 1 and 2 and retired on 2026-09-29: its route, code, and the Three.js dependency were removed.
 
 ## 3. Decisions
 

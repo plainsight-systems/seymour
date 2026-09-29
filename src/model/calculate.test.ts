@@ -8,7 +8,7 @@ describe('calculateSimulation', () => {
 
   it('shows single-batch decode as memory bound', () => {
     const result = calculateSimulation(
-      { ...defaults, phase: 'decode', batch: 1, sequenceLength: 4096, view: 'story' },
+      { ...defaults, phase: 'decode', batch: 1, sequenceLength: 4096 },
       hardware,
       DEFAULT_MODEL,
     );
@@ -35,7 +35,7 @@ describe('calculateSimulation', () => {
 
   it('moves prefill into the compute-bound regime', () => {
     const result = calculateSimulation(
-      { ...defaults, phase: 'prefill', batch: 1, sequenceLength: 4096, view: 'story' },
+      { ...defaults, phase: 'prefill', batch: 1, sequenceLength: 4096 },
       hardware,
       DEFAULT_MODEL,
     );
@@ -57,7 +57,6 @@ describe('calculateSimulation', () => {
       kvBits: 16 as const,
       attentionKernel: 'fused' as const,
       overlap: true,
-      view: 'story' as const,
     };
     const h100 = calculateSimulation(settings, hardware, DEFAULT_MODEL);
     const mi300x = calculateSimulation(settings, getHardware('mi300x'), DEFAULT_MODEL);

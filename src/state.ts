@@ -1,83 +1,9 @@
-import { DEFAULT_SETTINGS, MODEL_PROFILES } from './data/profiles';
-import type { AttentionKernel, KvBits, KvPlacement, LifecycleStageId, Phase, SimulationSettings, ViewMode, WeightBits } from './types';
+// Slider scales: each range control moves through a fixed list of values,
+// and these map between a slider position and its value.
 
 const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
 const SEQUENCES = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
 const PREFIX_CACHE_PERCENTAGES = [0, 25, 50, 75, 90, 100];
-const OUTPUT_LENGTHS = [1, 8, 32, 128, 512];
-
-export function readSettings(): SimulationSettings {
-  return parseSettings(new URLSearchParams(window.location.search));
-}
-
-export function parseSettings(params: URLSearchParams): SimulationSettings {
-  const phase: Phase = params.get('phase') === 'prefill' ? 'prefill' : 'decode';
-  const hardwareId = params.get('gpu') || DEFAULT_SETTINGS.hardwareId;
-  const batch = nearest(Number(params.get('batch')) || DEFAULT_SETTINGS.batch, BATCHES);
-  const sequenceLength = nearest(
-    Number(params.get('tokens')) || DEFAULT_SETTINGS.sequenceLength,
-    SEQUENCES,
-  );
-  const prefixCachePercent = nearest(Number(params.get('cache')) || DEFAULT_SETTINGS.prefixCachePercent, PREFIX_CACHE_PERCENTAGES);
-  const outputLength = nearest(Number(params.get('output')) || DEFAULT_SETTINGS.outputLength, OUTPUT_LENGTHS);
-  const reusePromptPrefixes = params.get('prefix') !== 'off';
-  const splitLongPrompts = params.get('chunked') !== 'off';
-  const promptTokensPerStep = nearest(Number(params.get('tokenBudget')) || DEFAULT_SETTINGS.promptTokensPerStep, [512, 1024, 2048, 4096, 8192, 16384]);
-  const servingMemoryFraction = nearest(Number(params.get('memory')) || DEFAULT_SETTINGS.servingMemoryFraction, [0.7, 0.8, 0.9, 0.95]);
-  const weightBits = ([4, 8, 16] as const).includes(Number(params.get('weights')) as WeightBits)
-    ? Number(params.get('weights')) as WeightBits
-    : DEFAULT_SETTINGS.weightBits;
-  const kvBits = ([8, 16] as const).includes(Number(params.get('kv')) as KvBits)
-    ? Number(params.get('kv')) as KvBits
-    : DEFAULT_SETTINGS.kvBits;
-  const kvPlacement = (['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as const).includes(params.get('placement') as KvPlacement)
-    ? params.get('placement') as KvPlacement
-    : DEFAULT_SETTINGS.kvPlacement;
-  const idleKvPlacement = (['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as const).includes(params.get('idle') as KvPlacement)
-    ? params.get('idle') as KvPlacement
-    : DEFAULT_SETTINGS.idleKvPlacement;
-  const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
-  const overlap = params.get('overlap') !== 'off';
-  const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
-  const modelId = MODEL_PROFILES.some((profile) => profile.id === params.get('model')) ? params.get('model')! : DEFAULT_SETTINGS.modelId;
-  const speculativeTokens = ([0, 2, 4] as const).find((k) => k === Number(params.get('spec'))) ?? DEFAULT_SETTINGS.speculativeTokens;
-  const draftAcceptanceRate = DEFAULT_SETTINGS.draftAcceptanceRate;
-  const mathBits = params.get('math') === '8' ? 8 : 16;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, idleKvPlacement, modelId, speculativeTokens, draftAcceptanceRate, mathBits, attentionKernel, overlap, view };
-}
-
-export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
-  const params = settingsToSearchParams(settings, operationId, lifecycleStageId);
-  history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
-}
-
-export function settingsToSearchParams(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): URLSearchParams {
-  const params = new URLSearchParams({
-    phase: settings.phase,
-    gpu: settings.hardwareId,
-    batch: String(settings.batch),
-    tokens: String(settings.sequenceLength),
-    cache: String(settings.prefixCachePercent),
-    output: String(settings.outputLength),
-    tokenBudget: String(settings.promptTokensPerStep),
-    memory: String(settings.servingMemoryFraction),
-    weights: String(settings.weightBits),
-    kv: String(settings.kvBits),
-    placement: settings.kvPlacement,
-    idle: settings.idleKvPlacement,
-    model: settings.modelId,
-    spec: String(settings.speculativeTokens),
-    math: String(settings.mathBits),
-    attention: settings.attentionKernel,
-    view: settings.view,
-  });
-  if (!settings.overlap) params.set('overlap', 'off');
-  if (!settings.reusePromptPrefixes) params.set('prefix', 'off');
-  if (!settings.splitLongPrompts) params.set('chunked', 'off');
-  if (operationId) params.set('op', operationId);
-  if (lifecycleStageId) params.set('stage', lifecycleStageId);
-  return params;
-}
 
 export function prefixCacheFromSlider(value: number): number {
   return PREFIX_CACHE_PERCENTAGES[Math.max(0, Math.min(PREFIX_CACHE_PERCENTAGES.length - 1, value))]!;
@@ -85,14 +11,6 @@ export function prefixCacheFromSlider(value: number): number {
 
 export function prefixCacheToSlider(percent: number): number {
   return PREFIX_CACHE_PERCENTAGES.indexOf(nearest(percent, PREFIX_CACHE_PERCENTAGES));
-}
-
-export function outputLengthFromSlider(value: number): number {
-  return OUTPUT_LENGTHS[Math.max(0, Math.min(OUTPUT_LENGTHS.length - 1, value))]!;
-}
-
-export function outputLengthToSlider(length: number): number {
-  return OUTPUT_LENGTHS.indexOf(nearest(length, OUTPUT_LENGTHS));
 }
 
 export function batchFromSlider(value: number): number {

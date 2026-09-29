@@ -14,15 +14,12 @@ The name is for Seymour Cray, by way of the idea that a GPU is a hungry plant: t
 
 ## The experience
 
-The static site has three routes in one GitHub Pages build:
+The static site has two routes in one GitHub Pages build:
 
 | Route | Purpose |
 | --- | --- |
 | `#/` | The six-panel story and optimization playground |
-| `#/under-the-hood` | The full request lifecycle, transformer operations, kernel schedules, SIMD/SIMT lanes, and Three.js hardware cutaway |
 | `#/lookup` | Portable optimization concepts mapped to vLLM, SGLang, TensorRT-LLM, and llama.cpp terminology, plus the AMD Instinct stack (ROCm, AITER, ATOM) and KV-tiering projects (LMCache, Mooncake) |
-
-Old query-string share links still open Under the hood with their selected state.
 
 ### The six-panel story
 
@@ -51,18 +48,6 @@ The playground combines the story's knobs and lets the reader zoom through all f
 - **Execution:** is enough parallel work exposed?
 
 Six tested challenges in Act 4 make the reader prove the model: a busy chatbot, a long-document workload, an object-storage proposal, a code assistant, a mixture-of-experts model on one GPU, and picking the chip. Each fixes a workload, offers every throttle, and starts from an obvious attempt that fails. Challenges are built for the chip you pick: their workloads and targets come from that chip's own numbers, so every chip gets the same puzzle. Each also states what every passing answer must do, and a test searches every throttle combination on every chip to prove the lesson never claims more than the challenge demands. Acts 1–3 end with their own challenges: rebuilding the GPU, finding the bottleneck of one forward pass, and picking the throttle that helps most.
-
-### Under the hood
-
-The deeper route preserves the original machinery for readers who want to inspect one inference step in detail:
-
-- a complete request lifecycle from admission and prefix lookup through prefill, first token, repeated decode, streaming, and cache release;
-- a 12-operation transformer path with equations, live tensor shapes, FLOPs, and boundary bytes;
-- named reference kernels, grid/workgroup shapes, launch and memory schedules, modeled SM/CU utilization, and lane-level WGMMA or MFMA views;
-- a canonical hardware map plus an optional Three.js cutaway spanning host memory, PCIe, accelerator package, HBM, caches, compute units, registers, and matrix/vector units;
-- red warnings for the currently limiting boundary and for capacity overflow into slower system memory.
-
-Seymour uses **kernel**, the standard ML/HPC term for the GPU program being dispatched. Readers coming from graphics can think of it as a compute-shader-like program specialized for tensor and vector work.
 
 ## Run locally
 
@@ -100,8 +85,6 @@ Active KV placement can be moved among GPU memory, system memory, a peer GPU, lo
 
 If model weights plus GPU-resident KV exceed the serving memory budget, the overflow is shown in red and priced over the one-direction PCIe link. Fused attention keeps its score/probability intermediate on chip; the separate schedule counts its additional HBM crossings.
 
-The execution microscope is analytical too. It uses a visible 5 µs launch assumption and two resident workgroups per SM/CU. Unit coverage estimates how many units receive a workgroup in the first scheduling wave; it is not telemetry.
-
 ## Sources
 
 Core hardware, model, and memory-distance inputs are linked in the interface and derived from:
@@ -117,8 +100,6 @@ Core hardware, model, and memory-distance inputs are linked in the interface and
 - [Meta Llama 3.1 8B configuration](https://huggingface.co/meta-llama/Llama-3.1-8B/blob/main/config.json)
 - [Samsung data-center SSD specifications](https://semiconductor.samsung.com/ssd/datacenter-ssd/)
 - [Amazon S3 performance design patterns](https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html)
-- [NVIDIA CUTLASS WGMMA programming guide](https://docs.nvidia.com/cutlass/4.5.2/media/docs/pythonDSL/mma_docs/wgmma_programming.html)
-- [AMD HIP hardware implementation: MFMA](https://rocm.docs.amd.com/projects/HIP/en/develop/understand/hardware_implementation.html)
 
 The Concept lookup route cites the current documentation for each framework term it displays.
 
@@ -129,8 +110,6 @@ src/data/             cited hardware, model, and memory-tier data
 src/model/            deterministic analytical model and tests
 src/story/            concept panels, cutaway plates, playground, and challenges
 src/lookup/           cited framework-term lookup
-src/visualization/    Three.js hardware scene and camera API
-src/ui/               Under-the-hood supporting visualizations
 docs/design/          approved product and implementation plan
 public/assets/        original project artwork
 ```

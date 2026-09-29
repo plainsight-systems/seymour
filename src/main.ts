@@ -7,26 +7,18 @@ const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
 async function boot(): Promise<void> {
-  const resolved = resolveRoute(window.location.hash, window.location.search);
-  if (resolved.redirectHash) {
-    window.location.replace(`${window.location.pathname}${window.location.search}${resolved.redirectHash}`);
-    return;
-  }
+  const resolved = resolveRoute(window.location.hash);
 
   app!.innerHTML = `<header class="route-header">
     <a class="route-brand" href="#/" aria-label="Seymour story"><span aria-hidden="true"><i></i><i></i><i></i></span><strong>Seymour</strong></a>
     <nav aria-label="Seymour sections">
       <a href="#/" aria-current="${resolved.route === 'story' ? 'page' : 'false'}">Story</a>
-      <a href="#/under-the-hood" aria-current="${resolved.route === 'under-the-hood' ? 'page' : 'false'}">Under the hood</a>
       <a href="#/lookup" aria-current="${resolved.route === 'lookup' ? 'page' : 'false'}">Concept lookup</a>
       <a href="https://github.com/plainsight-systems/seymour">GitHub</a>
     </nav>
   </header><main id="route-root" tabindex="-1"></main>`;
 
-  if (resolved.route === 'under-the-hood') {
-    document.title = 'Under the hood — Seymour';
-    await import('./underhood');
-  } else if (resolved.route === 'lookup') {
+  if (resolved.route === 'lookup') {
     document.title = 'Concept lookup — Seymour';
     await import('./lookup/page');
   } else {
@@ -48,11 +40,11 @@ function scrollToAnchor(id: string): void {
 window.addEventListener('hashchange', (event) => {
   const fromHash = new URL(event.oldURL).hash;
   const toHash = window.location.hash;
-  if (isRouteChange(fromHash, toHash, window.location.search)) {
+  if (isRouteChange(fromHash, toHash)) {
     window.location.reload();
     return;
   }
-  const { anchor } = resolveRoute(toHash, window.location.search);
+  const { anchor } = resolveRoute(toHash);
   if (anchor) scrollToAnchor(anchor);
 });
 void boot();

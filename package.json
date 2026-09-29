@@ -13,11 +13,9 @@
   },
   "dependencies": {
     "@fontsource-variable/anybody": "latest",
-    "@fontsource-variable/public-sans": "latest",
-    "three": "latest"
+    "@fontsource-variable/public-sans": "latest"
   },
   "devDependencies": {
-    "@types/three": "latest",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"

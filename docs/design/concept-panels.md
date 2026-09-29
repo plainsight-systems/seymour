@@ -1,5 +1,7 @@
 # Design: Concept Panels
 
+> **Status (2026-09-29):** superseded by [four-acts.md](four-acts.md). The Under the hood route this plan preserved has since been removed; references to it below are historical.
+
 **Status:** Approved direction, ready to execute
 **Change class:** Architectural (information architecture + model inputs), executed in phases
 **Owner:** Andy Hunter · **Executor:** Sol

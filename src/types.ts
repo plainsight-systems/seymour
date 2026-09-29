@@ -1,13 +1,9 @@
 export type Phase = 'decode' | 'prefill';
-export type ViewMode = 'story' | 'hardware';
 export type WeightBits = 4 | 8 | 16;
 export type KvBits = 8 | 16;
 export type AttentionKernel = 'fused' | 'separate';
 export type KvPlacement = 'hbm' | 'host' | 'peer' | 'peers' | 'ssd' | 'object';
-export type LifecycleStageId = 'request' | 'prefix' | 'prefill' | 'kv-ready' | 'first-token' | 'decode' | 'stream' | 'release';
 export type HardwareStage = 'host' | 'hbm' | 'l2' | 'shared' | 'registers' | 'compute';
-export type KernelTrack = 'runtime' | 'memory' | 'execution';
-export type KernelPhaseKind = 'submit' | 'host-transfer' | 'hbm-load' | 'stage' | 'compute' | 'sync' | 'store';
 
 export interface HardwareProfile {
   id: string;
@@ -16,11 +12,6 @@ export interface HardwareProfile {
   unitName: string;
   unitCount: number;
   architecture: string;
-  waveName: 'warp' | 'wavefront';
-  waveSize: number;
-  matrixGroupSize: number;
-  matrixInstruction: string;
-  matrixInstructionShape: string;
   sharedMemoryKB: number;
   registerFileKB: number;
   l2CacheMB: number;
@@ -37,8 +28,6 @@ export interface HardwareProfile {
   peerFabric: 'switched' | 'direct';
   /** One-direction peer bandwidth: the per-GPU total when switched, per link when direct. */
   peerEachWayGBs: number;
-  /** Whether Under the hood has reference kernel and instruction data for this chip. */
-  kernelModel: boolean;
   sourceUrl: string;
   sourceLabel: string;
   note: string;
@@ -85,7 +74,6 @@ export interface SimulationSettings {
   idleKvPlacement: KvPlacement;
   attentionKernel: AttentionKernel;
   overlap: boolean;
-  view: ViewMode;
   modelId: string;
   /** Tokens guessed ahead and verified in one step; 0 turns speculation off. */
   speculativeTokens: 0 | 2 | 4;
@@ -95,20 +83,6 @@ export interface SimulationSettings {
   mathBits: 16 | 8;
 }
 
-export interface LifecycleStage {
-  id: LifecycleStageId;
-  number: string;
-  label: string;
-  title: string;
-  summary: string;
-  equation: string;
-  metricLabel: string;
-  metricValue: string;
-  phase: Phase;
-  hardwareStage: HardwareStage;
-  hasTransformerWork: boolean;
-  skipped?: boolean;
-}
 
 export interface SimulationResult {
   flops: number;
@@ -171,40 +145,4 @@ export interface AlgorithmStep {
   repetition: string;
 }
 
-export interface KernelPhase {
-  id: string;
-  label: string;
-  kind: KernelPhaseKind;
-  track: KernelTrack;
-  startMs: number;
-  durationMs: number;
-  bytes: number;
-  flops: number;
-  location: HardwareStage;
-  detail: string;
-}
 
-export interface KernelPlan {
-  operationId: string;
-  kernelId: string;
-  kernelName: string;
-  qualifier: string;
-  fusedOperations: string[];
-  grid: [number, number, number];
-  workgroupSize: number;
-  groups: number;
-  wavesPerGroup: number;
-  waveSize: number;
-  cooperativeLanes: number;
-  estimatedActiveUnitFraction: number;
-  estimatedFirstWaveOccupancy: number;
-  tile: string;
-  instruction: string;
-  instructionShape: string;
-  phases: KernelPhase[];
-  totalMs: number;
-  hbmBytes: number;
-  hostBytes: number;
-  flops: number;
-  assumptions: string[];
-}
