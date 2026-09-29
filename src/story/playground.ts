@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../data/profiles';
+import { DEFAULT_SETTINGS, MODEL_PROFILES, getHardware } from '../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber, responseTiming } from '../model/calculate';
 import { modelFor } from '../model/strategy';
 import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
@@ -10,7 +10,8 @@ import { mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
-type ControlKey = KnobId | 'hardwareId' | 'modelId' | 'speculativeTokens' | 'mathBits' | 'outputLength';
+/** The playground's controls. The chip comes from the act header, so it has no control here. */
+type ControlKey = Exclude<KnobId, 'hardwareId' | 'idleKvPlacement'> | 'outputLength';
 
 /** Answer lengths, up to long reasoning-style answers. */
 const ANSWER_LENGTHS = [1, 32, 128, 512, 2048, 8192];
@@ -41,29 +42,30 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     <div class="playground-shell">
       <aside class="playground-controls">
         <details class="playground-group" open><summary>Workload</summary>
-          <label><span>Concurrent users <output data-output="batch"></output></span><input aria-label="Concurrent users" data-control="batch" type="range" min="0" max="10" step="1"></label>
+          <label><span>Users per pass <output data-output="batch"></output></span><input aria-label="Users per pass" data-control="batch" type="range" min="0" max="10" step="1"></label>
           <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
           <label><span>Answer length <output data-output="outputLength"></output></span><input aria-label="Answer length" data-control="outputLength" type="range" min="0" max="${ANSWER_LENGTHS.length - 1}" step="1"></label>
         </details>
-        <details class="playground-group"><summary>Model + decoding</summary>
+        <details class="playground-group"><summary>Model and guessing ahead</summary>
           <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.name.split(' · ')[0]}</option>`).join('')}</select></label>
-          <label><span>Speculative decoding</span><select aria-label="Speculative decoding" data-control="speculativeTokens"><option value="0">Off</option><option value="2">Guess 2 tokens ahead</option><option value="4">Guess 4 tokens ahead</option></select></label>
+          <label><span>Guess tokens ahead</span><select aria-label="Guess tokens ahead" data-control="speculativeTokens"><option value="0">Off</option><option value="2">2 tokens ahead</option><option value="4">4 tokens ahead</option></select></label>
         </details>
-        <details class="playground-group"><summary>Bytes</summary>
-          <label><span>Model precision</span><select aria-label="Model precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
-          <label><span>Math precision</span><select aria-label="Math precision" data-control="mathBits"><option value="16">FP16</option><option value="8">FP8 (needs 8- or 4-bit weights)</option></select></label>
-          <label><span>KV precision</span><select aria-label="KV precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
-          <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt prefix</span></label>
-          <label><span>Prefix already available <output data-output="prefixCachePercent"></output></span><input aria-label="Prefix already available" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
+        <details class="playground-group"><summary>Precision and reuse</summary>
+          <label><span>Weight precision</span><select aria-label="Weight precision" data-control="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
+          <label><span>Math precision</span><select aria-label="Math precision" data-control="mathBits"><option value="16">16-bit</option><option value="8">8-bit (needs 8- or 4-bit weights)</option></select></label>
+          <label><span>KV cache precision</span><select aria-label="KV cache precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
+          <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt</span></label>
+          <label><span>Share already processed <output data-output="prefixCachePercent"></output></span><input aria-label="Share of the prompt already processed" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
         </details>
-        <details class="playground-group"><summary>Placement + target</summary>
-          <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
-          <label><span>Idle sessions wait in</span><select aria-label="Idle sessions wait in" data-control="idleKvPlacement"><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
-          <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
+        <details class="playground-group"><summary>Where the KV cache lives</summary>
+          <label><span>Active KV lives in</span><select aria-label="Active KV lives in" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
         </details>
       </aside>
       <div class="playground-workbench" data-bench-view="cutaway">
-        <div class="view-toggle playground-bench-toggle" role="group" aria-label="Workbench view"><button type="button" data-bench="cutaway" aria-pressed="true">Cutaway</button><button type="button" data-bench="numbers" aria-pressed="false">Numbers</button></div>
+        <div class="playground-top">
+          <section class="playground-response" data-response aria-label="Response timing"></section>
+          <div class="view-toggle playground-bench-toggle" role="group" aria-label="Workbench view"><button type="button" data-bench="cutaway" aria-pressed="true">Cutaway</button><button type="button" data-bench="numbers" aria-pressed="false">Numbers</button></div>
+        </div>
         <section class="playground-cutaway" aria-label="Cutaway view">
           <div class="playground-plate-tabs" role="group" aria-label="Zoom level">${PLATE_TABS.map(([id, label]) => `<button type="button" data-plate="${id}" aria-pressed="${id === 'package'}">${label}</button>`).join('')}</div>
           <div class="playground-tile" data-tile-steps hidden></div>
@@ -71,13 +73,12 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
           <p class="panel-caption" data-tile-text hidden></p>
           <ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>
         </section>
-        <section class="playground-response" data-response aria-label="Response timing"></section>
         <div data-playground-picture></div>
       </div>
     </div>`;
 
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
-  for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'idleKvPlacement', 'hardwareId'] as ControlKey[]) {
+  for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
   }
 
@@ -89,8 +90,6 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     (controls.get('reusePromptPrefixes') as HTMLInputElement).checked = settings.reusePromptPrefixes;
     (controls.get('prefixCachePercent') as HTMLInputElement).value = String(prefixCacheToSlider(settings.prefixCachePercent));
     (controls.get('kvPlacement') as HTMLSelectElement).value = settings.kvPlacement;
-    (controls.get('idleKvPlacement') as HTMLSelectElement).value = settings.idleKvPlacement;
-    (controls.get('hardwareId') as HTMLSelectElement).value = settings.hardwareId;
     (controls.get('modelId') as HTMLSelectElement).value = settings.modelId;
     (controls.get('speculativeTokens') as HTMLSelectElement).value = String(settings.speculativeTokens);
     (controls.get('mathBits') as HTMLSelectElement).value = String(settings.mathBits);
@@ -119,8 +118,8 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     const node = root.querySelector<HTMLElement>('[data-response]')!;
     const metric = (label: string, value: string, note: string) => `<p><span>${label}</span><strong>${value}</strong><small>${note}</small></p>`;
     node.innerHTML = `<h3>One answer of ${settings.outputLength.toLocaleString()} tokens</h3><div>${[
-      metric('First token', formatDuration(timing.firstTokenMs), 'prompt processing'),
-      metric('Each token after', formatDuration(timing.msPerToken), 'priced at the answer’s midpoint context'),
+      metric('First token', formatDuration(timing.firstTokenMs), 'the first pass, over the whole prompt'),
+      metric('Each token after', formatDuration(timing.msPerToken), 'one per-token pass, at the answer’s middle'),
       metric('Full answer', formatDuration(timing.fullAnswerMs), `first token + ${Math.max(0, settings.outputLength - 1).toLocaleString()} more`),
       metric('GPU time per 1K tokens', `${formatNumber(timing.gpuSecondsPer1kTokens)} s`, settings.batch === 1 ? 'for one user' : `across all ${settings.batch.toLocaleString()} users`),
     ].join('')}</div>`;
@@ -180,8 +179,6 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
       if (key === 'reusePromptPrefixes') settings.reusePromptPrefixes = (control as HTMLInputElement).checked;
       if (key === 'prefixCachePercent') settings.prefixCachePercent = prefixCacheFromSlider(Number(control.value));
       if (key === 'kvPlacement') settings.kvPlacement = control.value as KvPlacement;
-      if (key === 'idleKvPlacement') settings.idleKvPlacement = control.value as KvPlacement;
-      if (key === 'hardwareId') settings.hardwareId = control.value;
       if (key === 'modelId') settings.modelId = control.value;
       if (key === 'mathBits') settings.mathBits = Number(control.value) as SimulationSettings['mathBits'];
       if (key === 'weightBits' && settings.weightBits === 16) settings.mathBits = 16;

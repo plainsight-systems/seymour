@@ -153,7 +153,7 @@
 .playground-controls .playground-check span { justify-content: start; }
 .playground-workbench { min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); }
 .playground-workbench > [data-playground-picture] { display: grid; place-items: center; margin-top: 1rem; }
-.playground-response { display: grid; gap: 0.6rem; margin-top: 1rem; padding: 1rem; color: var(--paper); background: var(--green); }
+.playground-response { display: grid; gap: 0.6rem; margin: 0 0 0.75rem; padding: 1rem; color: var(--paper); background: var(--green); }
 .playground-response h3 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: 1.1rem; }
 .playground-response > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
 .playground-response p { display: grid; gap: 0.15rem; margin: 0; }
@@ -382,7 +382,7 @@
 .panel-other-moves ul { margin-top: 0.4rem; }
 .stage-ops-wrap .stage-ops { margin-top: 0.4rem; }
 .playground-bench-toggle { margin-bottom: 0.75rem; }
-.playground-workbench[data-bench-view='cutaway'] .playground-response, .playground-workbench[data-bench-view='cutaway'] [data-playground-picture] { display: none; }
+.playground-workbench[data-bench-view='cutaway'] [data-playground-picture] { display: none; }
 .playground-workbench[data-bench-view='numbers'] .playground-cutaway { display: none; }
 .playground-workbench { padding: clamp(1rem, 2.5vw, 2rem); }
 .playground-shell > 
@@ -565,3 +565,10 @@
 .chip-lock[hidden] { display: none; }
 .act-tools [data-chip]:disabled { cursor: not-allowed; }
 .act-tools [data-chip]:disabled:not([aria-pressed='true']) { opacity: 0.45; }
+/* The playground's numbers strip sits above the drawing, so the drawing is capped lower to keep one screen. */
+.playground-cutaway .cw-svg { max-height: 46svh; }
+.playground-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: start; margin-bottom: 0.75rem; }
+.playground-top .playground-response { margin: 0; }
+.playground-top .playground-bench-toggle { margin: 0; }
+.playground-workbench { padding-block: 1rem; }
+@media (max-width: 700px) { .playground-top { grid-template-columns: 1fr; } }

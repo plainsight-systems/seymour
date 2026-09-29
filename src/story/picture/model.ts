@@ -79,11 +79,11 @@ export function buildPictureModel(
     kvFraction: Math.min(1, kvBytesInHbm / capacityBytes),
     steps: [
       {
-        id: 'prefill', label: 'Read the prompt', readMs: prefill.memoryMs, mathMs: prefill.computeMs,
+        id: 'prefill', label: 'First pass: the whole prompt', readMs: prefill.memoryMs, mathMs: prefill.computeMs,
         totalMs: prefill.totalMs, limit: prefill.bottleneck === 'compute' ? 'math' : 'reading', unit: `${settings.sequenceLength.toLocaleString()} prompt tokens`,
       },
       {
-        id: 'decode', label: 'Write one next token', readMs: decode.memoryMs, mathMs: decode.computeMs,
+        id: 'decode', label: 'Each later pass: one new token', readMs: decode.memoryMs, mathMs: decode.computeMs,
         totalMs: decode.totalMs, limit: decode.bottleneck === 'compute' ? 'math' : decode.bottleneck === 'placement' ? 'distance' : 'reading', unit: 'one generated token per user',
       },
     ],

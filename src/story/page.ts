@@ -860,6 +860,6 @@ function syncAct4Chips(): void {
     tools.appendChild(note);
   }
   note.hidden = locked === null;
-  note.textContent = locked ? `Fixed at ${getHardware(locked).name} by this challenge. The playground uses the chip you pick.` : '';
+  note.textContent = locked ? `${getHardware(locked).name}: fixed by this challenge` : '';
 }
 syncAct4Chips();
