@@ -11,7 +11,7 @@ import { mountActs, type ActSpec } from './acts';
 import { FORWARD_TOOLS, PASS_LOOP, STAGE_ORDER, STAGE_TAB_LABEL, mountForwardScenes } from './forward/scenes';
 import { mountBottleneckChallenge } from './forward/challenge';
 import { mountPickChallenge } from './throttles/challenge';
-import { mountChallengeBoard } from './challenges/board';
+import { mountChallengeBoard, type ChallengeBoardView } from './challenges/board';
 import { partEntry, type Vendor } from '../data/parts';
 import { assemblyPlate, assemblyRound, isComplete, isOpenZone, place, zoneNumber, type AssemblyRound, type PlacementResult, type RoundId } from './challenge/assembly';
 import { mountCutaway, type CutawayView } from './cutaway/render';
@@ -293,9 +293,13 @@ const ACTS: ActSpec[] = [
 // Views mounted while hidden measure nothing, so each redraws when its scene opens.
 // The playground mounts after the acts, so it may not exist yet on the first show.
 let playground: PlaygroundView | null = null;
+let challengeBoard: ChallengeBoardView | null = null;
+/** Act 4's visible scene: its chip buttons show the challenge's fixed chip while the challenges are open. */
+let act4Scene: 'challenges' | 'playground' = 'challenges';
 const acts = mountActs(root, ACTS, {
   headerTools: chipToggle(),
   onShow: (sceneId) => {
+    if (sceneId === 'challenges' || sceneId === 'playground') { act4Scene = sceneId; syncAct4Chips(); }
     if (sceneId === 'playground') { playground?.refresh(); return; }
     (sceneId === 'build' ? buildView : gpuViews.get(sceneId))?.refresh();
   },
@@ -809,10 +813,10 @@ const pickChallenge = mountPickChallenge(acts.sceneHost('pick'), (target) => {
 pickChallenge.render(storyHardwareId);
 
 // Act 4: the challenges, then the playground.
-mountChallengeBoard(acts.sceneHost('challenges'), (target) => {
+challengeBoard = mountChallengeBoard(acts.sceneHost('challenges'), (target) => {
   acts.open(target, true);
   history.replaceState(null, '', `#${target}`);
-}, () => {});
+}, () => syncAct4Chips());
 playground = mountPlayground(acts.sceneHost('playground'));
 
 // One accelerator for the whole story: any act's selector switches every act.
@@ -831,4 +835,31 @@ root.addEventListener('click', (event) => {
     renderPanel(panel);
   }
   playground?.setHardware(storyHardwareId);
+  syncAct4Chips();
 });
+
+/**
+ * Act 4's chip buttons never claim a chip the numbers are not using: while the
+ * challenges are open they show the challenge's fixed chip, disabled, with a
+ * note; on the playground they show the story-wide chip.
+ */
+function syncAct4Chips(): void {
+  // Before the board mounts (while the acts are still being built) there is nothing to lock.
+  if (!challengeBoard) return;
+  const tools = acts.sceneHost('challenges').closest('.act')!.querySelector<HTMLElement>('.act-tools')!;
+  const locked = act4Scene === 'challenges' ? challengeBoard.currentChip() : null;
+  for (const chip of tools.querySelectorAll<HTMLButtonElement>('[data-chip]')) {
+    chip.setAttribute('aria-pressed', String(chip.dataset.chip === (locked ?? storyHardwareId)));
+    chip.disabled = locked !== null;
+  }
+  let note = tools.querySelector<HTMLElement>('[data-chip-lock]');
+  if (!note) {
+    note = document.createElement('small');
+    note.className = 'chip-lock';
+    note.dataset.chipLock = '';
+    tools.appendChild(note);
+  }
+  note.hidden = locked === null;
+  note.textContent = locked ? `Fixed at ${getHardware(locked).name} by this challenge. The playground uses the chip you pick.` : '';
+}
+syncAct4Chips();

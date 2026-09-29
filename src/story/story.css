@@ -561,3 +561,7 @@
 .ch-success-stamp { color: var(--green); font-family: 'Anybody Variable', sans-serif; font-size: 1.6rem !important; font-weight: 850; letter-spacing: 0.02em; text-transform: uppercase; }
 .ch-success.is-new { animation: build-stamp 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
 @media (prefers-reduced-motion: reduce) { .ch-success.is-new { animation: none; } .ch-meter-bar i { transition: none; } }
+.chip-lock { max-width: 22rem; color: var(--ink-soft); font-size: 0.75rem; line-height: 1.35; }
+.chip-lock[hidden] { display: none; }
+.act-tools [data-chip]:disabled { cursor: not-allowed; }
+.act-tools [data-chip]:disabled:not([aria-pressed='true']) { opacity: 0.45; }
