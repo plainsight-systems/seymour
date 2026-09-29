@@ -4,7 +4,15 @@ import { modelFor } from '../../model/strategy';
 import type { SimulationSettings } from '../../types';
 
 export type KnobId = 'batch' | 'sequenceLength' | 'weightBits' | 'kvBits' | 'reusePromptPrefixes' | 'prefixCachePercent' | 'kvPlacement' | 'idleKvPlacement' | 'speculativeTokens' | 'mathBits' | 'modelId' | 'hardwareId';
-export type ConstraintMetric = 'msPerToken' | 'timeToFirstTokenMs' | 'totalTokensPerSec' | 'fitsInGpuMemory' | 'restoreBeatsRecompute';
+export type ConstraintMetric = 'msPerToken' | 'timeToFirstTokenMs' | 'totalTokensPerSec' | 'fitsInGpuMemory' | 'restoreBeatsRecompute' | 'concurrentUsers' | 'weightBits' | 'kvBits';
+
+/**
+ * The throttles every challenge offers. Everything else (context length,
+ * model, how much of the prompt is shared, how often guesses land) is the
+ * workload: a fact of the challenge, not a choice. A challenge whose question
+ * is the chip adds 'hardwareId'.
+ */
+export const THROTTLES: KnobId[] = ['batch', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'speculativeTokens', 'kvPlacement', 'idleKvPlacement'];
 
 /** Every value the reader can give each knob, as the controls offer them. Tests search these exhaustively. */
 export const KNOB_VALUES: { [K in KnobId]: SimulationSettings[K][] } = {
@@ -32,7 +40,9 @@ export interface Challenge {
   id: string;
   title: string;
   brief: string;
+  /** The workload: settings that are facts of the challenge. Never a throttle. */
   fixed: Partial<SimulationSettings>;
+  /** The knobs the reader can move: THROTTLES, plus the chip when that is the question. */
   adjustable: KnobId[];
   constraints: Constraint[];
   solution: SimulationSettings;
@@ -57,11 +67,9 @@ export interface ChallengeEvaluation {
   results: ConstraintResult[];
 }
 
-/** Settings the controls cannot produce: FP8 math needs weights of 8 bits or fewer; a prefix share needs reuse on. */
+/** Settings the controls cannot produce: FP8 math needs weights of 8 bits or fewer. */
 export function isReachable(settings: SimulationSettings): boolean {
-  if (settings.mathBits === 8 && settings.weightBits === 16) return false;
-  if (!settings.reusePromptPrefixes && settings.prefixCachePercent !== 0) return false;
-  return true;
+  return !(settings.mathBits === 8 && settings.weightBits === 16);
 }
 
 export function evaluateChallenge(challenge: Challenge, settings: SimulationSettings): ChallengeEvaluation {
@@ -76,8 +84,12 @@ export function evaluateChallenge(challenge: Challenge, settings: SimulationSett
     // The first pass produces the first token.
     timeToFirstTokenMs: prefill.totalMs,
     totalTokensPerSec: decode.tokenRate,
-    fitsInGpuMemory: decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
+    // KV placed off the GPU is not "in GPU memory", however much room that frees.
+    fitsInGpuMemory: settings.kvPlacement === 'hbm' && decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
     restoreBeatsRecompute: needsParking && restoreVsRecompute(settings, hardware, model, settings.idleKvPlacement).cheaper === 'restore',
+    concurrentUsers: settings.batch,
+    weightBits: settings.weightBits,
+    kvBits: settings.kvBits,
   };
 
   const results = challenge.constraints.map((constraint) => {
@@ -114,5 +126,9 @@ export function validateChallenge(challenge: Challenge): string[] {
   for (const knob of challenge.adjustable) {
     if (knob in challenge.fixed) errors.push(`${knob} is both fixed and adjustable.`);
   }
+  for (const throttle of THROTTLES) {
+    if (!challenge.adjustable.includes(throttle)) errors.push(`${throttle} is a throttle but not offered.`);
+  }
+  if (challenge.adjustable.some((knob) => !THROTTLES.includes(knob) && knob !== 'hardwareId')) errors.push('Only throttles (and the chip) can be adjustable.');
   return errors;
 }

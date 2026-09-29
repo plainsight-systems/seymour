@@ -27,10 +27,16 @@ const METRIC_LABEL: Record<ConstraintMetric, string> = {
   totalTokensPerSec: 'Tokens per second, all users',
   fitsInGpuMemory: 'Weights and KV fit in GPU memory',
   restoreBeatsRecompute: 'Bringing an idle session back beats rebuilding it',
+  concurrentUsers: 'Users served at once',
+  weightBits: 'Weight precision (quality rule)',
+  kvBits: 'KV cache precision (quality rule)',
 };
 
-/** Where the story teaches the fix for each target. */
-const METRIC_HINT: Record<ConstraintMetric, { scene: string; label: string }> = {
+/** Where the story teaches the fix for each target. Quality rules are requirements, not puzzles, so they have none. */
+const METRIC_HINT: Record<ConstraintMetric, { scene: string; label: string } | null> = {
+  concurrentUsers: { scene: 'act-3/share-read', label: 'Share the read' },
+  weightBits: null,
+  kvBits: null,
   msPerToken: { scene: 'act-3/read-model', label: 'Every token re-reads the model' },
   timeToFirstTokenMs: { scene: 'act-2/two-jobs', label: 'First pass vs. every pass after' },
   totalTokensPerSec: { scene: 'act-3/share-read', label: 'Share the read' },
@@ -50,6 +56,8 @@ function escapeHtml(text: string): string {
 
 function valueText(metric: ConstraintMetric, value: number | boolean): string {
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (metric === 'concurrentUsers') return value.toLocaleString();
+  if (metric === 'weightBits' || metric === 'kvBits') return `${value}-bit`;
   if (metric === 'totalTokensPerSec') return `${formatNumber(value)} tok/s`;
   return formatDuration(value);
 }
@@ -57,16 +65,29 @@ function valueText(metric: ConstraintMetric, value: number | boolean): string {
 function targetText(result: ConstraintResult): string {
   const { metric, op, value } = result.constraint;
   if (typeof value === 'boolean') return value ? 'must be yes' : 'must be no';
+  if (op === '==') return `must be ${valueText(metric, value)}`;
   return `${op === '<=' ? 'at most' : 'at least'} ${valueText(metric, value)}`;
 }
 
 /** How far toward the target, 0–1: the meter's fill. */
 function progress(result: ConstraintResult): number {
   const { op, value } = result.constraint;
-  if (typeof value === 'boolean') return result.met ? 1 : 0;
+  if (typeof value === 'boolean' || op === '==') return result.met ? 1 : 0;
   const actual = Number(result.actual);
   const fill = op === '<=' ? Number(value) / Math.max(actual, Number.EPSILON) : actual / Number(value);
   return Math.max(0.02, Math.min(1, fill));
+}
+
+/** The fixed facts of the challenge's workload, so every throttle's effect can be reasoned about. */
+function workloadFacts(challenge: Challenge, settings: SimulationSettings): string {
+  const facts = [
+    escapeHtml(MODEL_PROFILES.find((model) => model.id === settings.modelId)!.name.split(' · ')[0]!),
+    `${settings.sequenceLength.toLocaleString()}-token context`,
+    settings.prefixCachePercent ? `${settings.prefixCachePercent}% of each prompt shared` : 'nothing shared between prompts',
+    `${Math.round(settings.draftAcceptanceRate * 100)}% of guesses land`,
+  ];
+  if (!challenge.adjustable.includes('hardwareId')) facts.unshift(escapeHtml(getHardware(settings.hardwareId).name));
+  return facts.map((fact) => `<span>${fact}</span>`).join('');
 }
 
 function segmented(knob: KnobId, options: [string, string][], current: string, disabled = false): string {
@@ -86,7 +107,7 @@ function knobControl(knob: KnobId, settings: SimulationSettings): string {
     case 'kvBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit']], String(settings.kvBits))}</div>`;
     case 'mathBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit (needs 8-bit weights)']], String(settings.mathBits), settings.weightBits === 16)}</div>`;
     case 'speculativeTokens': return `<div class="ch-knob">${label}${segmented(knob, [['0', 'Off'], ['2', '2 ahead'], ['4', '4 ahead']], String(settings.speculativeTokens))}</div>`;
-    case 'reusePromptPrefixes': return `<div class="ch-knob">${label}${segmented(knob, [['false', 'Off'], ['true', 'On']], String(settings.reusePromptPrefixes))}</div>`;
+    case 'reusePromptPrefixes': return `<div class="ch-knob">${label}${segmented(knob, [['false', 'Off'], ['true', settings.prefixCachePercent ? `On (${settings.prefixCachePercent}% shared)` : 'On (nothing shared)']], String(settings.reusePromptPrefixes))}</div>`;
     case 'prefixCachePercent': {
       const values = KNOB_VALUES.prefixCachePercent;
       return `<label class="ch-knob">${label}<output>${settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'reuse is off'}</output><input type="range" data-ch-knob="prefixCachePercent" min="0" max="${values.length - 1}" step="1" value="${Math.max(0, values.indexOf(settings.prefixCachePercent))}" ${settings.reusePromptPrefixes ? '' : 'disabled'} aria-label="${escapeHtml(KNOB_LABEL[knob])}"></label>`;
@@ -109,7 +130,7 @@ function applyKnob(settings: SimulationSettings, knob: KnobId, raw: string): Sim
     case 'kvBits': next.kvBits = Number(raw) as SimulationSettings['kvBits']; break;
     case 'mathBits': next.mathBits = Number(raw) as SimulationSettings['mathBits']; break;
     case 'speculativeTokens': next.speculativeTokens = Number(raw) as SimulationSettings['speculativeTokens']; break;
-    case 'reusePromptPrefixes': next.reusePromptPrefixes = raw === 'true'; if (!next.reusePromptPrefixes) next.prefixCachePercent = 0; break;
+    case 'reusePromptPrefixes': next.reusePromptPrefixes = raw === 'true'; break;
     case 'kvPlacement': next.kvPlacement = raw as KvPlacement; break;
     case 'idleKvPlacement': next.idleKvPlacement = raw as KvPlacement; break;
     case 'modelId': next.modelId = raw; break;
@@ -168,10 +189,12 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     const meters = evaluation.results.map((result) => {
       const hint = METRIC_HINT[result.constraint.metric];
       const pct = Math.round(progress(result) * 100);
+      // A quality rule is met or not: it gets no progress bar.
+      const rule = result.constraint.metric === 'weightBits' || result.constraint.metric === 'kvBits';
       return `<li class="ch-meter" data-met="${result.met}">
         <p class="ch-meter-head"><span class="ch-meter-mark" aria-hidden="true">${result.met ? '✓' : '✗'}</span><b>${METRIC_LABEL[result.constraint.metric]}</b><strong>${valueText(result.constraint.metric, result.actual)}</strong></p>
-        <span class="ch-meter-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${escapeHtml(METRIC_LABEL[result.constraint.metric])}: ${pct}% of the way to the target"><i style="width:${pct}%"></i></span>
-        <small>Target: ${targetText(result)}${result.met ? '' : ` · <button type="button" class="ch-hint" data-ch-open="${hint.scene}">Stuck? ${escapeHtml(hint.label)} ↑</button>`}</small>
+        ${rule ? '' : `<span class="ch-meter-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${escapeHtml(METRIC_LABEL[result.constraint.metric])}: ${pct}% of the way to the target"><i style="width:${pct}%"></i></span>`}
+        <small>Target: ${targetText(result)}${result.met || !hint ? '' : ` · <button type="button" class="ch-hint" data-ch-open="${hint.scene}">Stuck? ${escapeHtml(hint.label)} ↑</button>`}</small>
       </li>`;
     }).join('');
     const success = evaluation.passed
@@ -182,7 +205,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
 
   function knobsHtml(): string {
     const settings = attempts.get(current().id)!;
-    return `<p class="ch-knobs-title">You can change</p>${current().adjustable.map((knob) => knobControl(knob, settings)).join('')}`;
+    return `<p class="ch-knobs-title">Throttles</p><div class="ch-knob-grid">${current().adjustable.map((knob) => knobControl(knob, settings)).join('')}</div>`;
   }
 
   function render(): void {
@@ -195,6 +218,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
         <p class="stage-kicker">Challenge ${index + 1} of ${CHALLENGES.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, fixed by this challenge`}</p>
         <h3>${escapeHtml(challenge.title)}</h3>
         <p class="stage-lead">${escapeHtml(challenge.brief)}</p>
+        <p class="quiz-workload">${workloadFacts(challenge, attempts.get(challenge.id)!)}</p>
         <div class="ch-knobs" data-ch-knobs>${knobsHtml()}</div>
         <button type="button" class="quiz-small ch-start-over" data-ch-start-over>Start this challenge over</button>
       </div>

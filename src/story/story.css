@@ -572,3 +572,14 @@
 .playground-top .playground-bench-toggle { margin: 0; }
 .playground-workbench { padding-block: 1rem; }
 @media (max-width: 700px) { .playground-top { grid-template-columns: 1fr; } }
+.ch-knob-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.7rem 1.2rem; }
+.ch-knob .ch-seg button { min-height: 36px; padding: 0 0.6rem; font-size: 0.78rem; }
+/* Compact throttle rows: label (and readout) on the left, control on the right. */
+.ch-knob-grid .ch-knob { grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0.1rem 0.6rem; align-items: center; }
+.ch-knob-grid .ch-knob > .ch-knob-label { grid-column: 1; font-size: 0.78rem; line-height: 1.2; }
+.ch-knob-grid .ch-knob > output { grid-column: 1; grid-row: 2; font-size: 0.78rem; }
+.ch-knob-grid .ch-knob > input[type='range'], .ch-knob-grid .ch-knob > select, .ch-knob-grid .ch-knob > .ch-seg { grid-column: 2; grid-row: 1 / span 2; }
+.ch-knob-grid .ch-knob > select { min-height: 36px; font-size: 0.8rem; }
+.ch-knob-grid .ch-knob:has([data-ch-knob='hardwareId']) { grid-column: 1 / -1; }
+.ch-scene { grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); }
+.ch-knob-grid .ch-seg { flex-wrap: nowrap; }
