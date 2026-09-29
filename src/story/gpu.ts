@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../data/profiles';
-import { partEntry } from '../data/parts';
+import { requirePartEntry } from '../data/parts';
 import { modelFor } from '../model/strategy';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { diePlate, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
@@ -49,7 +49,7 @@ export function mountGpuScenes(hostFor: (sceneId: GpuSceneId) => HTMLElement, in
     const vendor = getHardware(hardwareId).vendor;
     const part = gpuSelected.get(sceneId) ?? null;
     const detail = host.querySelector<HTMLElement>('[data-part-detail]')!;
-    const entry = part ? partEntry(part, vendor) : undefined;
+    const entry = part ? requirePartEntry(part, vendor) : undefined;
     detail.innerHTML = entry
       ? `<p class="part-kicker">Selected part</p><h4>${escapeHtml(entry.name)}</h4>
         <dl class="part-terms">${entry.terms.map((term) => `<div><dt>${escapeHtml(term.term)}</dt><dd>${escapeHtml(term.meaning)}</dd></div>`).join('')}</dl>
@@ -62,8 +62,7 @@ export function mountGpuScenes(hostFor: (sceneId: GpuSceneId) => HTMLElement, in
     const seen = new Set<string>();
     const chips: string[] = [];
     for (const label of plate.scene.labels) {
-      const labelEntry = partEntry(label.part, vendor);
-      if (!labelEntry) continue;
+      const labelEntry = requirePartEntry(label.part, vendor);
       for (const term of labelEntry.terms) {
         if (seen.has(term.term)) continue;
         seen.add(term.term);

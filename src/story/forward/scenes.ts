@@ -50,8 +50,9 @@ export interface ForwardScenesView {
 export function mountForwardScenes(
   hostFor: (stage: StageId) => HTMLElement,
   toolsRoot: HTMLElement,
+  loop: HTMLElement,
   openPart: (link: HardwareLink) => void,
-  onWorkloadChange: (settings: SimulationSettings) => void = () => {},
+  onWorkloadChange: (settings: SimulationSettings) => void,
 ): ForwardScenesView {
   let hardwareId = DEFAULT_SETTINGS.hardwareId as string;
   const workload: SimulationSettings = { ...DEFAULT_SETTINGS, phase: 'prefill', batch: 1, sequenceLength: 4096, reusePromptPrefixes: false, prefixCachePercent: 0 };
@@ -81,15 +82,13 @@ export function mountForwardScenes(
     const who = workload.batch === 1 ? 'one user' : `${workload.batch} users`;
     const perUser = workload.batch === 1 ? '' : ' each';
     const perUserOf = workload.batch === 1 ? '' : ' per user';
-    const loop = toolsRoot.closest('.act')?.querySelector<HTMLElement>('[data-pass-loop]');
-    if (loop) {
-      const later = (n: string) => `<li class="pass-thin"><b>Pass ${n} · ${formatDuration(totals.decode)}</b><span>1 token${perUserOf} in → token ${n}</span></li>`;
-      loop.innerHTML = `<ol>
-        <li class="pass-wide"><b>Pass 1 · the whole prompt · ${formatDuration(totals.prefill)}</b><span>${context} tokens${perUser} in → token 1 out</span></li>
-        ${later('2')}${later('3')}<li class="pass-more" aria-label="and so on">…</li>${later('<i>n</i>')}
-      </ol>
-      <p>Every pass runs all seven stages below, with the same weights. Pass 1 also saves the prompt’s keys and values (the KV cache); later passes send only the newest token through and read that cache back. Floors for ${escapeHtml(who)} on ${escapeHtml(hardware.name)}.</p>`;
-    }
+    // The loop strip above the tabs: pass 1 over the prompt, then one pass per new token.
+    const later = (n: string) => `<li class="pass-thin"><b>Pass ${n} · ${formatDuration(totals.decode)}</b><span>1 token${perUserOf} in → token ${n}</span></li>`;
+    loop.innerHTML = `<ol>
+      <li class="pass-wide"><b>Pass 1 · the whole prompt · ${formatDuration(totals.prefill)}</b><span>${context} tokens${perUser} in → token 1 out</span></li>
+      ${later('2')}${later('3')}<li class="pass-more" aria-label="and so on">…</li>${later('<i>n</i>')}
+    </ol>
+    <p>Every pass runs all seven stages below, with the same weights. Pass 1 also saves the prompt’s keys and values (the KV cache); later passes send only the newest token through and read that cache back. Floors for ${escapeHtml(who)} on ${escapeHtml(hardware.name)}.</p>`;
 
     STAGE_ORDER.forEach((id, index) => {
       const copy = STAGE_COPY[id];

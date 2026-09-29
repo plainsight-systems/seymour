@@ -57,4 +57,10 @@ describe('find-the-bottleneck challenge', () => {
     expect(judge(answer, { stage: 'attention', limit: 'memory' })).toEqual({ stageRight: false, limitRight: true });
     expect(judge(answer, { stage: 'mlp', limit: 'math' })).toEqual({ stageRight: true, limitRight: false });
   });
+
+  it('only ever answers math or memory, the two limits the challenge offers', () => {
+    for (const hardware of HARDWARE_PROFILES) {
+      for (const scenario of SCENARIOS) expect(['math', 'memory'], `${scenario.id} on ${hardware.id}`).toContain(solve(scenario, hardware.id).limit);
+    }
+  });
 });

@@ -93,7 +93,8 @@ const panels: PanelsView = mountPanels((panelId) => acts.sceneHost(panelId), sto
 // Act 2: one forward pass, stage by stage. Its users and context carry into the panels.
 const forward = mountForwardScenes(
   (stage) => acts.sceneHost(stage),
-  acts.sceneHost('tokenize').closest<HTMLElement>('.act')!.querySelector<HTMLElement>('.act-tools')!,
+  acts.partOf('act-2', '.act-tools'),
+  acts.partOf('act-2', '[data-pass-loop]'),
   openHardwarePart,
   (workload) => panels.adoptWorkload(workload),
 );
@@ -134,7 +135,7 @@ root.addEventListener('click', (event) => {
 function syncAct4Chips(): void {
   // Before the board mounts (while the acts are still being built) there is nothing to lock.
   if (!challengeBoard) return;
-  const tools = acts.sceneHost('challenges').closest('.act')!.querySelector<HTMLElement>('.act-tools')!;
+  const tools = acts.partOf('act-4', '.act-tools');
   const locked = act4Scene === 'challenges' && challengeBoard.chipIsAKnob() ? challengeBoard.currentChip() : null;
   for (const chip of tools.querySelectorAll<HTMLButtonElement>('[data-chip]')) {
     chip.setAttribute('aria-pressed', String(chip.dataset.chip === (locked ?? storyHardwareId)));

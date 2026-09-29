@@ -1,4 +1,4 @@
-import { buildMemoryLadder, type MemoryTier } from '../../data/memoryLadder';
+import { getMemoryTier, type MemoryTier } from '../../data/memoryLadder';
 import { getTopology } from '../../data/topology';
 import { calculateSimulation } from '../../model/calculate';
 import type { HardwareProfile, KvPlacement, ModelProfile, SimulationResult, SimulationSettings } from '../../types';
@@ -77,8 +77,7 @@ export function buildCutawayInputs(settings: SimulationSettings, hardware: Hardw
   const weightsFraction = weightsResident / physicalBytes;
   const kvFraction = kvResident / physicalBytes;
   const enabledPerCluster = Math.round(topology.enabledUnits / (topology.physicalUnits / topology.unitsPerCluster));
-  const ladder = buildMemoryLadder(hardware);
-  const tier = (id: KvPlacement) => ladder.find((candidate) => candidate.id === id)!;
+  const tier = (id: KvPlacement) => getMemoryTier(hardware, id);
 
   return {
     hardwareId: hardware.id,

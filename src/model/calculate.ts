@@ -1,5 +1,5 @@
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../types';
-import { getMemoryTier } from '../data/memoryLadder';
+import { getMemoryTier, tierBandwidth } from '../data/memoryLadder';
 import { meanAttendedKeys } from './attention';
 import { cachedPromptTokens } from './prompt';
 import { activeParametersPerToken, expertsTouchedFraction, weightReadBytes } from './moe';
@@ -84,7 +84,7 @@ export function calculateSimulation(
   const hostSeconds = hostTrafficBytes / (hardware.hostLinkGBs * GIGA);
   const kvTier = getMemoryTier(hardware, settings.kvPlacement);
   const kvTierSeconds = settings.phase === 'decode' && remoteKvTrafficBytes > 0
-    ? remoteKvTrafficBytes / kvTier.bandwidthBytesPerSecond! + (kvTier.firstByteLatencyMs ?? 0) / 1000
+    ? remoteKvTrafficBytes / tierBandwidth(kvTier) + (kvTier.firstByteLatencyMs ?? 0) / 1000
     : 0;
   const localMemorySeconds = hbmSeconds + hostSeconds;
   const memorySeconds = localMemorySeconds + kvTierSeconds;
@@ -197,7 +197,7 @@ export function restoreVsRecompute(
 ): { restoreMs: number; recomputeMs: number; cheaper: 'restore' | 'recompute' } {
   const tier = getMemoryTier(hardware, tierId);
   const oneSequenceKvBytes = model.layers * 2 * model.kvHeads * model.headDim * (model.kvBits / 8) * settings.sequenceLength;
-  const restoreMs = oneSequenceKvBytes / tier.bandwidthBytesPerSecond! * 1000 + (tier.firstByteLatencyMs ?? 0);
+  const restoreMs = oneSequenceKvBytes / tierBandwidth(tier) * 1000 + (tier.firstByteLatencyMs ?? 0);
   const recompute = calculateSimulation(
     {
       ...settings,

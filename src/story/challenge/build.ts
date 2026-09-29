@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
-import { partEntry } from '../../data/parts';
+import { requirePartEntry } from '../../data/parts';
 import { modelFor } from '../../model/strategy';
 import { buildCutawayInputs } from '../cutaway/inputs';
 import { diePlate, packagePlate, type Plate } from '../cutaway/plates';
@@ -153,7 +153,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     else buildView = mountCutaway(buildHost.querySelector<HTMLElement>('[data-build-plate]')!, plate, 'Build the GPU', { labels: 'markers', onSelect: (part) => { if (part) chooseZone(part); } });
     // The tray is sorted by name, so its order never reveals the zone numbers.
     const cards = buildRound.parts
-      .map((part) => ({ part, entry: partEntry(part, vendor)! }))
+      .map((part) => ({ part, entry: requirePartEntry(part, vendor) }))
       .sort((a, b) => a.entry.name.localeCompare(b.entry.name));
     buildHost.querySelector<HTMLElement>('[data-build-tray]')!.innerHTML = cards.map(({ part, entry }) => {
       const done = placed.has(part);
@@ -176,7 +176,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
     const vendor = getHardware(hardwareId).vendor;
     const placed = buildPlaced[buildRoundId];
     const result = place(buildRound, placed, card, zone);
-    const cardEntry = partEntry(card, vendor)!;
+    const cardEntry = requirePartEntry(card, vendor);
     if (result === 'already-placed') {
       buildFeedback(`Zone ${zoneNumber(buildRound, zone)} is already filled.`);
       return result;

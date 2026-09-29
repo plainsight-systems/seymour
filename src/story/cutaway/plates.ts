@@ -1,4 +1,5 @@
 import { getHardware } from '../../data/profiles';
+import { tierBandwidth } from '../../data/memoryLadder';
 import { getTopology, type ChipTopology, type TopologySource } from '../../data/topology';
 import { formatBytes, formatNumber } from '../../model/calculate';
 import type { KvPlacement } from '../../types';
@@ -58,12 +59,12 @@ export function serverPlate(inputs: CutawayInputs, mode: PlateMode = 'workload')
     for (let i = 0; i < 4; i++) {
       b.box({ id: `switch${i}`, part: 'switch', x: 4 + i * 11, y: 13.5, w: 5, d: 3, h: 1.2, fill: 'mustard', layer: 2 });
       // NVLink traffic to any peer is striped across all switch chips.
-      b.link({ from: 'gpu0', to: `switch${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond! / 4, basis: peer.basis, paths: ['peer', 'peers'] });
+      b.link({ from: 'gpu0', to: `switch${i}`, bytesPerSecond: tierBandwidth(peer) / 4, basis: peer.basis, paths: ['peer', 'peers'] });
     }
   } else {
     for (let i = 1; i <= topology.peerCount; i++) {
       // One direct link per peer: reading from one peer uses one link.
-      b.link({ from: 'gpu0', to: `gpu${i}`, bytesPerSecond: peer.bandwidthBytesPerSecond!, basis: peer.basis, paths: i === 1 ? ['peer', 'peers'] : ['peers'] });
+      b.link({ from: 'gpu0', to: `gpu${i}`, bytesPerSecond: tierBandwidth(peer), basis: peer.basis, paths: i === 1 ? ['peer', 'peers'] : ['peers'] });
     }
   }
 
@@ -77,23 +78,23 @@ export function serverPlate(inputs: CutawayInputs, mode: PlateMode = 'workload')
   b.box({ id: 'nic', part: 'net', x: 34, y: oy + 4, w: 6, d: 3, h: 1.4, fill: 'leaf', layer: 2 });
   b.box({ id: 'ssd', part: 'ssd', x: 34, y: oy + 11, w: 6, d: 2.4, h: 0.9, fill: 'paperBright', layer: 2 });
   b.box({ id: 'store', part: 'net', x: 56, y: oy + 2, w: 9, d: 9, h: 7, fill: 'paperBright', layer: 3, ghost: true });
-  b.link({ from: 'gpu0', to: 'pcie', bytesPerSecond: host.bandwidthBytesPerSecond!, basis: 'published', paths: ['host', 'ssd', 'object'] });
-  b.link({ from: 'pcie', to: 'cpu', bytesPerSecond: host.bandwidthBytesPerSecond!, basis: 'published', paths: ['host'] });
-  b.link({ from: 'pcie', to: 'ssd', bytesPerSecond: ssd.bandwidthBytesPerSecond!, basis: ssd.basis, paths: ['ssd'] });
-  b.link({ from: 'pcie', to: 'nic', bytesPerSecond: object.bandwidthBytesPerSecond!, basis: object.basis, paths: ['object'] });
-  b.link({ from: 'nic', to: 'store', bytesPerSecond: object.bandwidthBytesPerSecond!, basis: object.basis, dashed: true, paths: ['object'] });
+  b.link({ from: 'gpu0', to: 'pcie', bytesPerSecond: tierBandwidth(host), basis: 'published', paths: ['host', 'ssd', 'object'] });
+  b.link({ from: 'pcie', to: 'cpu', bytesPerSecond: tierBandwidth(host), basis: 'published', paths: ['host'] });
+  b.link({ from: 'pcie', to: 'ssd', bytesPerSecond: tierBandwidth(ssd), basis: ssd.basis, paths: ['ssd'] });
+  b.link({ from: 'pcie', to: 'nic', bytesPerSecond: tierBandwidth(object), basis: object.basis, paths: ['object'] });
+  b.link({ from: 'nic', to: 'store', bytesPerSecond: tierBandwidth(object), basis: object.basis, dashed: true, paths: ['object'] });
 
   b.label('gpu', 'gpu0', 'left', 'This GPU', `reads its own memory at ${formatBandwidth(inputs.hbmPeakBytesPerSecond)}`, 'published');
   if (switched) {
     b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs`, 'reached through the switch chips', 'published');
-    b.label('switch', 'switch2', 'right', 'NVLink switch chips', `${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per GPU`, peer.basis);
+    b.label('switch', 'switch2', 'right', 'NVLink switch chips', `${formatBandwidth(tierBandwidth(peer))} each way per GPU`, peer.basis);
   } else {
-    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each: ${formatBandwidth(peer.bandwidthBytesPerSecond!)} each way per peer, ${formatBandwidth(inputs.tiers.peers.bandwidthBytesPerSecond!)} across all ${topology.peerCount}`, peer.basis);
+    b.label('peers', 'gpu6', 'right', `${topology.peerCount} peer GPUs, directly linked`, `one link to each: ${formatBandwidth(tierBandwidth(peer))} each way per peer, ${formatBandwidth(tierBandwidth(inputs.tiers.peers))} across all ${topology.peerCount}`, peer.basis);
   }
   b.label('host', 'cpu', 'left', 'CPU and its memory', 'large, but reachable only through PCIe', 'schematic');
-  b.label('pcie', 'pcie', 'left', 'PCIe Gen5 x16', `${formatBandwidth(host.bandwidthBytesPerSecond!)} each way, per GPU`, 'published');
-  b.label('ssd', 'ssd', 'right', 'Local SSD', `~${formatBandwidth(ssd.bandwidthBytesPerSecond!)} per drive`, ssd.basis);
-  b.label('net', 'store', 'right', 'Object storage, over the network', `~${formatBandwidth(object.bandwidthBytesPerSecond!)}, ~${object.firstByteLatencyMs} ms to first byte`, object.basis);
+  b.label('pcie', 'pcie', 'left', 'PCIe Gen5 x16', `${formatBandwidth(tierBandwidth(host))} each way, per GPU`, 'published');
+  b.label('ssd', 'ssd', 'right', 'Local SSD', `~${formatBandwidth(tierBandwidth(ssd))} per drive`, ssd.basis);
+  b.label('net', 'store', 'right', 'Object storage, over the network', `~${formatBandwidth(tierBandwidth(object))}, ~${object.firstByteLatencyMs} ms to first byte`, object.basis);
 
   return {
     id: 'server', scene: b.build(),
@@ -310,12 +311,13 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
   }
   b.box({ id: 'l2-a', part: 'l2', x: 4, y: 13.4, w: 15.9, d: 4.2, h: 1.1, z: 0.8, fill: 'mustard', layer: 2 });
   b.box({ id: 'l2-b', part: 'l2', x: 20.3, y: 13.4, w: 15.9, d: 4.2, h: 1.1, z: 0.8, fill: 'mustard', layer: 2 });
+  // Controllers are drawn only where their count is published; the plate's note says when it is not.
   const controllers = topology.memoryControllers ?? 0;
   const perSide = controllers / 2;
   for (let side = 0; side < 2; side++) {
     for (let i = 0; i < perSide; i++) {
       const index = side * perSide + i;
-      const active = index < (topology.memoryControllersActive ?? 0);
+      const active = index < (topology.memoryControllersActive ?? controllers);
       b.box({ id: `mc${index}`, part: 'mc', x: side === 0 ? 0.6 : 37, y: 1.6 + i * 4.8, w: 2.4, d: 4.2, h: 0.9, z: 0.8, layer: 2, fill: active ? 'slate' : 'paperBright', ghost: !active });
     }
   }
@@ -331,7 +333,7 @@ function monolithicDie(inputs: CutawayInputs, topology: ChipTopology, options: D
   }
   return {
     id: 'die', scene: b.build(), defaultSelection: [], litPath: null,
-    note: 'Layout follows NVIDIA’s published block diagram. Disabled-unit positions are illustrative; shading is a share of time.',
+    note: `Layout follows NVIDIA’s published block diagram. Disabled-unit positions are illustrative; shading is a share of time.${topology.memoryControllers === undefined ? ' Memory controllers are not drawn: their count is not published for this chip.' : ''}`,
     sources: topology.sources,
   };
 }
@@ -429,11 +431,18 @@ export function tileSteps(hardwareId: string): TileStep[] {
   ];
 }
 
+/** Vector lanes per partition, which a monolithic unit plate draws one by one. */
+function lanesPerPartition(topology: ChipTopology): number {
+  if (topology.vectorLanesPerPartition === undefined) throw new Error(`No published vector lane count for ${topology.hardwareId}`);
+  return topology.vectorLanesPerPartition;
+}
+
 export function unitPlate(hardwareId: string, tileStep: number): Plate {
   const topology = getTopology(hardwareId);
   const hardware = getHardware(hardwareId);
   const steps = tileSteps(hardwareId);
-  const step = steps[Math.max(0, Math.min(steps.length - 1, tileStep))]!;
+  const step = steps[tileStep];
+  if (!step) throw new Error(`Tile step ${tileStep} does not exist; ${hardwareId} has ${steps.length}`);
   const b = new SceneBuilder();
   if (topology.computeDies === 1) {
     b.box({ id: 'sm', x: 0, y: 0, w: 26, d: 24, h: 0.8 });
@@ -444,7 +453,7 @@ export function unitPlate(hardwareId: string, tileStep: number): Plate {
       b.box({ id: `registers${q}`, part: 'registers', x: qx + 0.5, y: qy + 0.6, w: 2.6, d: 6.6, h: 3.2, z: 1.1, fill: 'mustard', layer: 2 });
       b.box({ id: `matrix${q}`, part: 'matrix', x: qx + 7.2, y: qy + 0.6, w: 3.8, d: 4.2, h: 2.4, z: 1.1, fill: 'red', layer: 2 });
       b.box({ id: `scheduler${q}`, part: 'scheduler', x: qx + 7.2, y: qy + 5.4, w: 3.8, d: 1.8, h: 0.8, z: 1.1, fill: 'slate', layer: 2 });
-      for (let lane = 0; lane < (topology.vectorLanesPerPartition ?? 32); lane++) {
+      for (let lane = 0; lane < lanesPerPartition(topology); lane++) {
         b.box({ id: `lane${q}-${lane}`, part: 'lanes', x: qx + 3.6 + Math.floor(lane / 8) * 0.85, y: qy + 0.6 + (lane % 8) * 0.83, w: 0.6, d: 0.6, h: 0.9, z: 1.1, fill: 'green', layer: 2 });
       }
     }
@@ -452,7 +461,7 @@ export function unitPlate(hardwareId: string, tileStep: number): Plate {
     b.box({ id: 'tma', part: 'tma', x: 20.5, y: 18.2, w: 4.5, d: 4.8, h: 1.0, z: 0.8, fill: 'slate', layer: 2 });
     b.label('matrix', 'matrix1', 'right', 'Tensor core', `${topology.unitPartitions} per SM: the matrix math`, 'published');
     b.label('registers', 'registers1', 'right', `Register file · ${hardware.registerFileKB / topology.unitPartitions} KB`, `per quadrant; ${hardware.registerFileKB} KB per SM`, 'published');
-    b.label('lanes', 'lane0-4', 'left', `${topology.vectorLanesPerPartition} vector lanes`, 'per quadrant, for non-matrix math', 'published');
+    b.label('lanes', 'lane0-4', 'left', `${lanesPerPartition(topology)} vector lanes`, 'per quadrant, for non-matrix math', 'published');
     b.label('scheduler', 'scheduler2', 'left', 'Warp scheduler', 'picks which 32 threads run next', 'published');
     b.label('smem', 'smem', 'left', `Shared memory · up to ${hardware.sharedMemoryKB} KB`, 'the scratchpad for tiles', 'published');
     b.label('tma', 'tma', 'right', 'Tensor Memory Accelerator', 'copies tiles into shared memory', 'published');

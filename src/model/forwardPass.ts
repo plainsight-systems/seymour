@@ -48,7 +48,11 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
   // One pass means the whole prompt at once (no chunking), or one new token per sequence.
   settings = { ...settings, splitLongPrompts: false };
   const steps = buildAlgorithmSteps(settings, model);
-  const byId = (id: string) => steps.find((step) => step.id === id)!;
+  const byId = (id: string) => {
+    const step = steps.find((candidate) => candidate.id === id);
+    if (!step) throw new Error(`Unknown algorithm step "${id}"`);
+    return step;
+  };
   const layers = model.layers;
   // A first pass still runs the newest token, even on a full prefix hit.
   const tokensThisPass = settings.batch * (settings.phase === 'prefill' ? Math.max(1, newPromptTokens(settings)) : 1);

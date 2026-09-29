@@ -132,5 +132,13 @@ export function buildMemoryLadder(hardware: HardwareProfile): MemoryTier[] {
 }
 
 export function getMemoryTier(hardware: HardwareProfile, id: MemoryTierId): MemoryTier {
-  return buildMemoryLadder(hardware).find((tier) => tier.id === id)!;
+  const tier = buildMemoryLadder(hardware).find((candidate) => candidate.id === id);
+  if (!tier) throw new Error(`No memory tier "${id}" for ${hardware.name}`);
+  return tier;
+}
+
+/** A tier's bandwidth, for tiers that data can be read from; throws for a tier that publishes none (on-chip tiers). */
+export function tierBandwidth(tier: MemoryTier): number {
+  if (tier.bandwidthBytesPerSecond === undefined) throw new Error(`Memory tier "${tier.id}" has no bandwidth to read at`);
+  return tier.bandwidthBytesPerSecond;
 }

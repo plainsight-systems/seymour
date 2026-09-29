@@ -28,6 +28,8 @@ export interface ActsView {
   open(target: string, scroll: boolean): boolean;
   /** Opens a scene, scrolls to its act, and records it in the address bar (no reload). Throws for unknown targets. */
   navigate(target: string): void;
+  /** An element inside an act (e.g. its header tools); throws if the act or element is missing. */
+  partOf(actId: string, selector: string): HTMLElement;
 }
 
 export interface ActsOptions {
@@ -140,6 +142,11 @@ export function mountActs(root: HTMLElement, acts: ActSpec[], options: ActsOptio
       if (sceneId && act.scenes.some((scene) => scene.id === sceneId)) select(act, sceneId, false);
       if (scroll) pin(act.id);
       return true;
+    },
+    partOf(actId: string, selector: string): HTMLElement {
+      const element = root.querySelector<HTMLElement>(`#${actId} ${selector}`);
+      if (!element) throw new Error(`No "${selector}" in ${actId}`);
+      return element;
     },
     navigate(target: string): void {
       if (!view.open(target, true)) throw new Error(`Unknown scene "${target}"`);

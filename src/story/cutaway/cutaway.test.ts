@@ -204,3 +204,17 @@ describe('illustrative disabled units', () => {
     expect(() => illustrativeDisabledUnits(4, 5, 1)).toThrow();
   });
 });
+
+describe('plate contracts', () => {
+  it('refuses a tile step that does not exist instead of showing another', () => {
+    expect(() => unitPlate('h100-sxm', tileSteps('h100-sxm').length)).toThrow('does not exist');
+  });
+
+  it('says so when a chip does not publish its memory controllers', () => {
+    const h200 = diePlate(inputsFor({ hardwareId: 'h200-sxm' }).inputs, { job: 'decode', detail: 'full' });
+    expect(h200.scene.boxes.some((box) => box.part === 'mc')).toBe(false);
+    expect(h200.note).toContain('not published');
+    const h100 = diePlate(inputsFor({ hardwareId: 'h100-sxm' }).inputs, { job: 'decode', detail: 'full' });
+    expect(h100.note).not.toContain('not published');
+  });
+});

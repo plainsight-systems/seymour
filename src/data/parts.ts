@@ -330,3 +330,10 @@ export function partEntry(part: string, vendor: Vendor): PartEntry | undefined {
   if (!source) return undefined;
   return typeof source === 'function' ? source(vendor) : source;
 }
+
+/** The entry for a part the story draws and labels; every such part has one (tested), so a miss is a bug. */
+export function requirePartEntry(part: string, vendor: Vendor): PartEntry {
+  const entry = partEntry(part, vendor);
+  if (!entry) throw new Error(`No glossary entry for part "${part}"`);
+  return entry;
+}

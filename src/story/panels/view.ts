@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/profiles';
+import { tierBandwidth } from '../../data/memoryLadder';
 import { getTopology } from '../../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
@@ -11,7 +12,7 @@ import { diePlate, formatBandwidth, packagePlate, serverPlate, type Plate } from
 import { CUTAWAY_LEGEND as LEGEND, mountCutaway, type CutawayView } from '../cutaway/render';
 import { STAGE_TAB_LABEL } from '../forward/scenes';
 import type { HardwareLink } from '../forward/stages';
-import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } from '../panels';
+import { STORY_PANELS, type MoveEffect, type PanelId, type StoryMove, type StoryPanelSpec } from '../panels';
 import { buildPictureModel, type PictureModel } from '../picture/model';
 import { escapeHtml } from '../html';
 import { renderPicture } from '../picture/render';
@@ -56,12 +57,17 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
   const panelState = new Map<string, PanelState>();
 
-  function defaultsFor(panelId: string): SimulationSettings {
+  function defaultsFor(panelId: PanelId): SimulationSettings {
     // Moves start switched off so each one visibly changes the plate when applied.
     const base = { ...DEFAULT_SETTINGS, phase: 'decode' as const, kvPlacement: 'hbm' as const, kvBits: 16 as const, reusePromptPrefixes: false, prefixCachePercent: 0 };
-    if (panelId === 'memory-wall' || panelId === 'distance') return { ...base, batch: 64, sequenceLength: 4096 };
-    if (panelId === 'heavier-tokens') return { ...base, modelId: 'qwen3-30b-a3b', batch: 1, sequenceLength: 2048 };
-    return base;
+    switch (panelId) {
+      case 'memory-wall':
+      case 'distance': return { ...base, batch: 64, sequenceLength: 4096 };
+      case 'heavier-tokens': return { ...base, modelId: 'qwen3-30b-a3b', batch: 1, sequenceLength: 2048 };
+      case 'two-jobs':
+      case 'read-model':
+      case 'share-read': return base;
+    }
   }
 
   function zoomLabel(plate: StoryPanelSpec['plate'], hardwareId: string): string {
@@ -75,93 +81,104 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
 
   function knobMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string {
-    if (panel.id === 'two-jobs' || panel.id === 'memory-wall') {
-      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.sequenceLength.toLocaleString()} tokens</output><input id="knob-${panel.id}" data-knob="sequenceLength" type="range" min="0" max="${SEQUENCES.length - 1}" step="1" value="${sequenceToSlider(settings.sequenceLength)}"><small><b>128</b><b>32K</b></small></label>`;
+    const open = `<label class="story-knob" for="knob-${panel.id}"><span>${escapeHtml(panel.knobLabel)}</span>`;
+    switch (panel.knob) {
+      case 'sequenceLength': return `${open}<output>${settings.sequenceLength.toLocaleString()} tokens</output><input id="knob-${panel.id}" data-knob="sequenceLength" type="range" min="0" max="${SEQUENCES.length - 1}" step="1" value="${sequenceToSlider(settings.sequenceLength)}"><small><b>128</b><b>32K</b></small></label>`;
+      case 'weightBits': return `${open}<select id="knob-${panel.id}" data-knob="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select><small>Fewer bits mean fewer bytes per weight.</small></label>`;
+      case 'batch': return `${open}<output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="${BATCHES.length - 1}" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
+      case 'kvPlacement': return `${open}<select id="knob-${panel.id}" data-knob="kvPlacement">${placementOptions()}</select><small>The model prices this read on every generated token.</small></label>`;
     }
-    if (panel.id === 'read-model') {
-      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select><small>Fewer bits mean fewer bytes per weight.</small></label>`;
+  }
+
+  /** The knob's readout after its setting changes. */
+  function knobReadout(panel: StoryPanelSpec, settings: SimulationSettings): string | null {
+    switch (panel.knob) {
+      case 'sequenceLength': return `${settings.sequenceLength.toLocaleString()} tokens`;
+      case 'batch': return settings.batch.toLocaleString();
+      case 'weightBits':
+      case 'kvPlacement': return null;
     }
-    if (panel.id === 'share-read' || panel.id === 'heavier-tokens') {
-      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="${BATCHES.length - 1}" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
-    }
-    return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="kvPlacement">${placementOptions()}</select><small>The model prices this read on every generated token.</small></label>`;
   }
 
   function surprise(panel: StoryPanelSpec, picture: PictureModel, inputs: CutawayInputs, settings: SimulationSettings): string {
     const prefill = picture.steps[0]!;
     const decode = picture.steps[1]!;
-    if (panel.id === 'two-jobs') {
-      const promptPerToken = prefill.totalMs / Math.max(1, newPromptTokens(settings));
-      return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
-    }
-    if (panel.id === 'read-model') {
-      return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each later pass waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
-    }
-    if (panel.id === 'share-read') {
-      const solo = buildPictureModel(
-        calculateSimulation({ ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings)),
-        { ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings),
-      );
-      if (settings.batch === 1) return `One user gets the whole read to itself: ${formatNumber(picture.perUserTokensPerSecond)} tokens/s. Add users and watch both numbers below.`;
-      const kvShare = picture.kvBytes / (picture.kvBytes + picture.modelBytes);
-      return `${settings.batch.toLocaleString()} users get ${formatNumber(picture.totalTokensPerSecond)} tokens/s in total, ${formatNumber(picture.totalTokensPerSecond / solo.totalTokensPerSecond)}× what one user gets. But each user now advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s instead of ${formatNumber(solo.perUserTokensPerSecond)}: the ${formatBytes(picture.modelBytes)} model read is shared, while every user adds their own KV cache to read, now ${formatBytes(picture.kvBytes)} (${Math.round(kvShare * 100)}% of each step’s bytes).`;
-    }
-    if (panel.id === 'memory-wall') {
-      return picture.overflowBytes > 0
-        ? `The model plus KV exceed the serving budget by ${formatBytes(picture.overflowBytes)}. That overflow has to live off the package, behind a far slower link.`
-        : `The KV cache is ${formatNumber(picture.kvBytes / picture.modelBytes)}× the model’s size at this setting. Push the context longer to find the wall.`;
-    }
-    if (panel.id === 'heavier-tokens') {
-      const read = inputs.memory.weightBytes * inputs.weightsReadFraction;
-      const experts = Math.round(inputs.expertsTouchedFraction * 100);
-      const who = `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'}`;
-      const discount = inputs.expertsTouchedFraction > 0.95
-        ? 'With this many users nearly every expert is touched, so each step reads almost the whole model: the experts discount is gone, and sharing the read is what pays.'
-        : 'Add users and watch the discount shrink as more experts are touched.';
-      let spec = '';
-      if (settings.speculativeTokens > 0) {
-        const off = buildCutawayInputs({ ...settings, speculativeTokens: 0 }, getHardware(settings.hardwareId), modelFor(settings));
-        const moreRead = inputs.weightsReadFraction / off.weightsReadFraction;
-        spec = moreRead > 1.2
-          ? ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step, but checking ${settings.speculativeTokens + 1} tokens touches ${Math.round(inputs.expertsTouchedFraction * 100)}% of the experts instead of ${Math.round(off.expertsTouchedFraction * 100)}%, so each step reads ${formatNumber(moreRead)}× more. Per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}: on a dense model the same trick pays far more.`
-          : ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step for nearly the same read, so per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}.`;
+    switch (panel.id) {
+      case 'two-jobs': {
+        const promptPerToken = prefill.totalMs / Math.max(1, newPromptTokens(settings));
+        return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
       }
-      return `With ${who}, each step reads ${formatBytes(read)} of the model’s ${formatBytes(inputs.memory.weightBytes)}: ${experts}% of the experts. ${discount}${spec}`;
+      case 'read-model':
+        return `The compute units spend ${formatNumber((1 - inputs.decode.mathShare) * 100)}% of each later pass waiting for bytes. At ${precisionLabel(settings.weightBits)}, the model is ${formatBytes(picture.modelBytes)}; fewer bits per weight means less to wait for.`;
+      case 'share-read': {
+        const solo = buildPictureModel(
+          calculateSimulation({ ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings)),
+          { ...settings, batch: 1 }, getHardware(settings.hardwareId), modelFor(settings),
+        );
+        if (settings.batch === 1) return `One user gets the whole read to itself: ${formatNumber(picture.perUserTokensPerSecond)} tokens/s. Add users and watch both numbers below.`;
+        const kvShare = picture.kvBytes / (picture.kvBytes + picture.modelBytes);
+        return `${settings.batch.toLocaleString()} users get ${formatNumber(picture.totalTokensPerSecond)} tokens/s in total, ${formatNumber(picture.totalTokensPerSecond / solo.totalTokensPerSecond)}× what one user gets. But each user now advances at ${formatNumber(picture.perUserTokensPerSecond)} tokens/s instead of ${formatNumber(solo.perUserTokensPerSecond)}: the ${formatBytes(picture.modelBytes)} model read is shared, while every user adds their own KV cache to read, now ${formatBytes(picture.kvBytes)} (${Math.round(kvShare * 100)}% of each step’s bytes).`;
+      }
+      case 'memory-wall':
+        return picture.overflowBytes > 0
+          ? `The model plus KV exceed the serving budget by ${formatBytes(picture.overflowBytes)}. That overflow has to live off the package, behind a far slower link.`
+          : `The KV cache is ${formatNumber(picture.kvBytes / picture.modelBytes)}× the model’s size at this setting. Push the context longer to find the wall.`;
+      case 'heavier-tokens': {
+        const read = inputs.memory.weightBytes * inputs.weightsReadFraction;
+        const experts = Math.round(inputs.expertsTouchedFraction * 100);
+        const who = `${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'}`;
+        const discount = inputs.expertsTouchedFraction > 0.95
+          ? 'With this many users nearly every expert is touched, so each step reads almost the whole model: the experts discount is gone, and sharing the read is what pays.'
+          : 'Add users and watch the discount shrink as more experts are touched.';
+        let spec = '';
+        if (settings.speculativeTokens > 0) {
+          const off = buildCutawayInputs({ ...settings, speculativeTokens: 0 }, getHardware(settings.hardwareId), modelFor(settings));
+          const moreRead = inputs.weightsReadFraction / off.weightsReadFraction;
+          spec = moreRead > 1.2
+            ? ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step, but checking ${settings.speculativeTokens + 1} tokens touches ${Math.round(inputs.expertsTouchedFraction * 100)}% of the experts instead of ${Math.round(off.expertsTouchedFraction * 100)}%, so each step reads ${formatNumber(moreRead)}× more. Per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}: on a dense model the same trick pays far more.`
+            : ` Speculation keeps ${formatNumber(inputs.tokensPerStep)} tokens per step for nearly the same read, so per-token time goes from ${formatDuration(off.msPerToken)} to ${formatDuration(inputs.msPerToken)}.`;
+        }
+        return `With ${who}, each step reads ${formatBytes(read)} of the model’s ${formatBytes(inputs.memory.weightBytes)}: ${experts}% of the experts. ${discount}${spec}`;
+      }
+      case 'distance': {
+        const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), modelFor(settings));
+        if (settings.kvPlacement === 'hbm') return `Every token re-reads ${formatBytes(picture.kvBytes)} of KV. Keeping each step at ${formatDuration(hbm.totalMs)} needs about ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s for the KV alone. Now move it.`;
+        return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${PLACEMENT_PHRASE[settings.kvPlacement]}.`;
+      }
     }
-    const hbm = calculateSimulation({ ...settings, kvPlacement: 'hbm' }, getHardware(settings.hardwareId), modelFor(settings));
-    if (settings.kvPlacement === 'hbm') return `Every token re-reads ${formatBytes(picture.kvBytes)} of KV. Keeping each step at ${formatDuration(hbm.totalMs)} needs about ${formatNumber(picture.bandwidthNeeded / 1e12)} TB/s for the KV alone. Now move it.`;
-    return `Each token now takes ${formatDuration(decode.totalMs)} instead of ${formatDuration(hbm.totalMs)}: ${formatNumber(decode.totalMs / hbm.totalMs)}× slower, because every step re-reads all ${formatBytes(picture.kvBytes)} from ${PLACEMENT_PHRASE[settings.kvPlacement]}.`;
   }
 
   function caption(panel: StoryPanelSpec, inputs: CutawayInputs, settings: SimulationSettings): string {
     const m = inputs.memory;
-    if (panel.id === 'read-model') {
-      return `Each generated token reads <b>${formatBytes(m.weightBytes + m.kvBytes)}</b> from these stacks: reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math takes <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
+    switch (panel.id) {
+      // Act 2's panel captions each of its two plates instead (jobCaption).
+      case 'two-jobs': return '';
+      case 'read-model':
+        return `Each generated token reads <b>${formatBytes(m.weightBytes + m.kvBytes)}</b> from these stacks: reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math takes <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
+      case 'share-read': {
+        const who = settings.batch === 1 ? 'One user' : `${settings.batch.toLocaleString()} users`;
+        return `${who}: each step reads <b>${formatBytes(inputs.memory.weightBytes)}</b> of model (shared) + <b>${formatBytes(inputs.memory.kvBytes)}</b> of KV (one cache per user). Reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
+      }
+      case 'memory-wall': {
+        const total = m.weightBytes + m.kvBytes;
+        const fill = m.overflowBytes > 0
+          ? `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b>. <strong class="cw-warn">Only ${formatBytes(m.usableBytes)} is usable: ${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>`
+          : `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b> of ${formatBytes(m.usableBytes)} usable.`;
+        return `${fill} Each token: <b>${formatDuration(inputs.decode.totalMs)}</b>. Reading all ${settings.batch} prompts: <b>${formatDuration(inputs.prefill.totalMs)}</b>.`;
+      }
+      case 'heavier-tokens': {
+        const read = m.weightBytes * inputs.weightsReadFraction;
+        const spec = settings.speculativeTokens > 0 ? ` <b>${formatNumber(inputs.tokensPerStep)}</b> tokens per step per user.` : '';
+        const overflow = m.overflowBytes > 0 ? ` <strong class="cw-warn">${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>` : '';
+        return `Stored: <b>${formatBytes(m.weightBytes)}</b>. Read per step: <b>${formatBytes(read)}</b> (${Math.round(inputs.expertsTouchedFraction * 100)}% of experts, assuming uniform routing).${spec} Each token: <b>${formatDuration(inputs.msPerToken)}</b>.${overflow}`;
+      }
+      case 'distance': {
+        const tier = inputs.tiers[settings.kvPlacement];
+        const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), modelFor(settings), settings.kvPlacement);
+        const where = PLACEMENT_PHRASE[settings.kvPlacement];
+        return `KV in <b>${where}</b> (${formatBandwidth(tierBandwidth(tier))}): each later pass takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
+      }
     }
-    if (panel.id === 'share-read') {
-      const who = settings.batch === 1 ? 'One user' : `${settings.batch.toLocaleString()} users`;
-      return `${who}: each step reads <b>${formatBytes(inputs.memory.weightBytes)}</b> of model (shared) + <b>${formatBytes(inputs.memory.kvBytes)}</b> of KV (one cache per user). Reading takes <b>${formatDuration(inputs.decode.memoryMs)}</b>, the math <b>${formatDuration(inputs.decode.computeMs)}</b>.`;
-    }
-    if (panel.id === 'memory-wall') {
-      const total = m.weightBytes + m.kvBytes;
-      const fill = m.overflowBytes > 0
-        ? `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b>. <strong class="cw-warn">Only ${formatBytes(m.usableBytes)} is usable: ${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>`
-        : `${formatBytes(m.weightBytes)} of weights + ${formatBytes(m.kvBytes)} of ${settings.kvBits}-bit KV = <b>${formatBytes(total)}</b> of ${formatBytes(m.usableBytes)} usable.`;
-      return `${fill} Each token: <b>${formatDuration(inputs.decode.totalMs)}</b>. Reading all ${settings.batch} prompts: <b>${formatDuration(inputs.prefill.totalMs)}</b>.`;
-    }
-    if (panel.id === 'heavier-tokens') {
-      const read = m.weightBytes * inputs.weightsReadFraction;
-      const spec = settings.speculativeTokens > 0 ? ` <b>${formatNumber(inputs.tokensPerStep)}</b> tokens per step per user.` : '';
-      const overflow = m.overflowBytes > 0 ? ` <strong class="cw-warn">${formatBytes(m.overflowBytes)} doesn’t fit and is read over PCIe every step.</strong>` : '';
-      return `Stored: <b>${formatBytes(m.weightBytes)}</b>. Read per step: <b>${formatBytes(read)}</b> (${Math.round(inputs.expertsTouchedFraction * 100)}% of experts, assuming uniform routing).${spec} Each token: <b>${formatDuration(inputs.msPerToken)}</b>.${overflow}`;
-    }
-    if (panel.id === 'distance') {
-      const tier = inputs.tiers[settings.kvPlacement];
-      const restore = restoreVsRecompute(settings, getHardware(settings.hardwareId), modelFor(settings), settings.kvPlacement);
-      const where = PLACEMENT_PHRASE[settings.kvPlacement];
-      return `KV in <b>${where}</b> (${formatBandwidth(tier.bandwidthBytesPerSecond!)}): each later pass takes <b>${formatDuration(inputs.decode.totalMs)}</b>. Parking one idle conversation there: restore <b>${formatDuration(restore.restoreMs)}</b> vs. rebuild from the prompt <b>${formatDuration(restore.recomputeMs)}</b>.`;
-    }
-    return '';
   }
 
   /** The model's own busy shares, to compare against a real trace. */
@@ -242,9 +259,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     return settings.reusePromptPrefixes && settings.prefixCachePercent > 0;
   }
 
-  function panelMarkup(panel: StoryPanelSpec): string {
-    const settings = { ...defaultsFor(panel.id), hardwareId };
-    panelState.set(panel.id, { settings, views: new Map() });
+  function panelMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string {
     const stage = panel.plate === 'die-pair'
       ? `<div class="panel-pair"><figure class="panel-figure"><figcaption data-job-caption="prefill"></figcaption><div data-cutaway="prefill"></div></figure><figure class="panel-figure"><figcaption data-job-caption="decode"></figcaption><div data-cutaway="decode"></div></figure></div>`
       : `<div data-cutaway="main"></div><p class="panel-caption" data-caption></p>`;
@@ -273,10 +288,6 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     </section>`;
   }
 
-  /** The workload dimension each panel's own knob controls, which Act 2 must not override. */
-  const KNOB_OWNS: Record<string, ('batch' | 'sequenceLength')[]> = {
-    'two-jobs': ['sequenceLength'], 'share-read': ['batch'], 'memory-wall': ['sequenceLength'], 'heavier-tokens': ['batch'],
-  };
 
   /** Moves a panel's slider to match its settings after they change from outside. */
   function syncKnob(panel: StoryPanelSpec): void {
@@ -286,7 +297,11 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     control.value = String(control.dataset.knob === 'batch' ? batchToSlider(settings.batch) : sequenceToSlider(settings.sequenceLength));
   }
 
-  for (const panel of STORY_PANELS) hostFor(panel.id).innerHTML = panelMarkup(panel);
+  for (const panel of STORY_PANELS) {
+    const settings = { ...defaultsFor(panel.id), hardwareId };
+    panelState.set(panel.id, { settings, views: new Map() });
+    hostFor(panel.id).innerHTML = panelMarkup(panel, settings);
+  }
 
   function renderPanel(panel: StoryPanelSpec): void {
     const section = hostFor(panel.id).querySelector<HTMLElement>(`[data-panel="${panel.id}"]`)!;
@@ -321,14 +336,16 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
       button.querySelector('[data-move-state]')!.textContent = on ? 'On' : 'Off';
     }
     const output = section.querySelector<HTMLOutputElement>('.story-knob output');
-    if (output) output.value = panel.id === 'share-read' || panel.id === 'heavier-tokens' ? settings.batch.toLocaleString() : `${settings.sequenceLength.toLocaleString()} tokens`;
+    const readout = knobReadout(panel, settings);
+    if (output && readout !== null) output.value = readout;
   }
 
   for (const panel of STORY_PANELS) {
     const section = hostFor(panel.id).querySelector<HTMLElement>(`[data-panel="${panel.id}"]`)!;
     const control = section.querySelector<HTMLInputElement | HTMLSelectElement>('[data-knob]')!;
     const { settings } = panelState.get(panel.id)!;
-    if (control instanceof HTMLSelectElement) control.value = panel.id === 'read-model' ? String(settings.weightBits) : settings.kvPlacement;
+    if (panel.knob === 'weightBits') control.value = String(settings.weightBits);
+    if (panel.knob === 'kvPlacement') control.value = settings.kvPlacement;
     section.querySelector('.panel-links')!.addEventListener('click', (event) => {
       const target = event.target as Element;
       const stage = target.closest<HTMLButtonElement>('[data-open-stage]');
@@ -363,8 +380,9 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     adoptWorkload(workload: SimulationSettings): void {
       for (const panel of STORY_PANELS) {
         const { settings } = panelState.get(panel.id)!;
-        if (!KNOB_OWNS[panel.id]?.includes('batch')) settings.batch = workload.batch;
-        if (!KNOB_OWNS[panel.id]?.includes('sequenceLength')) settings.sequenceLength = workload.sequenceLength;
+        // Act 2 must not override the dimension this panel's own knob controls.
+        if (panel.knob !== 'batch') settings.batch = workload.batch;
+        if (panel.knob !== 'sequenceLength') settings.sequenceLength = workload.sequenceLength;
         syncKnob(panel);
         renderPanel(panel);
       }

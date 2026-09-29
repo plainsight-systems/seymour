@@ -81,23 +81,22 @@ export function evaluateChallenge(challenge: Challenge, settings: SimulationSett
   const model = modelFor(settings);
   const decode = calculateSimulation({ ...settings, phase: 'decode' }, hardware, model);
   const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, model);
-  const needsParking = challenge.constraints.some((constraint) => constraint.metric === 'restoreBeatsRecompute');
-
-  const metrics: Record<ConstraintMetric, number | boolean> = {
-    msPerToken: decode.msPerToken,
+  // Each metric is computed only if a target asks for it, so none holds a made-up value.
+  const metrics: Record<ConstraintMetric, () => number | boolean> = {
+    msPerToken: () => decode.msPerToken,
     // The first pass produces the first token.
-    timeToFirstTokenMs: prefill.totalMs,
-    totalTokensPerSec: decode.tokenRate,
+    timeToFirstTokenMs: () => prefill.totalMs,
+    totalTokensPerSec: () => decode.tokenRate,
     // KV placed off the GPU is not "in GPU memory", however much room that frees.
-    fitsInGpuMemory: settings.kvPlacement === 'hbm' && decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
-    restoreBeatsRecompute: needsParking && restoreVsRecompute(settings, hardware, model, settings.idleKvPlacement).cheaper === 'restore',
-    concurrentUsers: settings.batch,
-    weightBits: settings.weightBits,
-    kvBits: settings.kvBits,
+    fitsInGpuMemory: () => settings.kvPlacement === 'hbm' && decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
+    restoreBeatsRecompute: () => restoreVsRecompute(settings, hardware, model, settings.idleKvPlacement).cheaper === 'restore',
+    concurrentUsers: () => settings.batch,
+    weightBits: () => settings.weightBits,
+    kvBits: () => settings.kvBits,
   };
 
   const results = challenge.constraints.map((constraint) => {
-    const actual = metrics[constraint.metric];
+    const actual = metrics[constraint.metric]();
     const met = constraint.op === '=='
       ? actual === constraint.value
       : constraint.op === '<='
