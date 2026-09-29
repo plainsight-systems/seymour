@@ -18,7 +18,7 @@ const ANSWER_LENGTHS = [1, 32, 128, 512, 2048, 8192];
 
 const CONTROL_NAMES: Record<ControlKey, string> = {
   batch: 'concurrent users', sequenceLength: 'context length', weightBits: 'model precision', kvBits: 'KV precision',
-  reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', hardwareId: 'accelerator',
+  reusePromptPrefixes: 'prefix reuse', prefixCachePercent: 'prefix share', kvPlacement: 'KV location', idleKvPlacement: 'idle KV location', hardwareId: 'accelerator',
   modelId: 'model', speculativeTokens: 'speculative decoding', mathBits: 'math precision', outputLength: 'answer length',
 };
 
@@ -66,6 +66,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
         </details>
         <details class="playground-group"><summary>Placement + target</summary>
           <label><span>Active KV location</span><select aria-label="Active KV location" data-control="kvPlacement"><option value="hbm">GPU memory</option><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
+          <label><span>Idle sessions wait in</span><select aria-label="Idle sessions wait in" data-control="idleKvPlacement"><option value="host">System memory</option><option value="peer">One other GPU</option><option value="peers">Spread across all seven other GPUs</option><option value="ssd">Local solid-state storage</option><option value="object">Network object storage</option></select></label>
           <label><span>Accelerator</span><select aria-label="Accelerator" data-control="hardwareId">${HARDWARE_PROFILES.map((hardware) => `<option value="${hardware.id}">${hardware.name}</option>`).join('')}</select></label>
         </details>
       </aside>
@@ -86,7 +87,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
   const challengeSelect = root.querySelector<HTMLSelectElement>('[data-control="challenge"]')!;
   challengeSelect.value = 'free';
   const controls = new Map<ControlKey, HTMLInputElement | HTMLSelectElement>();
-  for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'hardwareId'] as ControlKey[]) {
+  for (const key of ['batch', 'sequenceLength', 'outputLength', 'modelId', 'speculativeTokens', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'prefixCachePercent', 'kvPlacement', 'idleKvPlacement', 'hardwareId'] as ControlKey[]) {
     controls.set(key, root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-control="${key}"]`)!);
   }
 
@@ -98,6 +99,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     (controls.get('reusePromptPrefixes') as HTMLInputElement).checked = settings.reusePromptPrefixes;
     (controls.get('prefixCachePercent') as HTMLInputElement).value = String(prefixCacheToSlider(settings.prefixCachePercent));
     (controls.get('kvPlacement') as HTMLSelectElement).value = settings.kvPlacement;
+    (controls.get('idleKvPlacement') as HTMLSelectElement).value = settings.idleKvPlacement;
     (controls.get('hardwareId') as HTMLSelectElement).value = settings.hardwareId;
     (controls.get('modelId') as HTMLSelectElement).value = settings.modelId;
     (controls.get('speculativeTokens') as HTMLSelectElement).value = String(settings.speculativeTokens);
@@ -121,7 +123,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
   }
 
   function metricLabel(metric: ConstraintMetric): string {
-    return ({ msPerToken: 'Time per token', timeToFirstTokenMs: 'First token', totalTokensPerSec: 'Total throughput', concurrentUsers: 'Concurrent users', fitsInGpuMemory: 'Fits in GPU memory', activeKvInGpuMemory: 'Active KV beside the GPU', restoreBeatsRecompute: 'Idle restore beats rebuild' })[metric];
+    return ({ msPerToken: 'Time per token', timeToFirstTokenMs: 'First token', totalTokensPerSec: 'Total throughput', fitsInGpuMemory: 'Fits in GPU memory', restoreBeatsRecompute: 'Idle restore beats rebuild' })[metric];
   }
 
   function metricValue(metric: ConstraintMetric, value: number | boolean): string {
@@ -232,6 +234,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
       if (key === 'reusePromptPrefixes') settings.reusePromptPrefixes = (control as HTMLInputElement).checked;
       if (key === 'prefixCachePercent') settings.prefixCachePercent = prefixCacheFromSlider(Number(control.value));
       if (key === 'kvPlacement') settings.kvPlacement = control.value as KvPlacement;
+      if (key === 'idleKvPlacement') settings.idleKvPlacement = control.value as KvPlacement;
       if (key === 'hardwareId') settings.hardwareId = control.value;
       if (key === 'modelId') settings.modelId = control.value;
       if (key === 'mathBits') settings.mathBits = Number(control.value) as SimulationSettings['mathBits'];

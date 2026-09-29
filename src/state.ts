@@ -33,6 +33,9 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const kvPlacement = (['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as const).includes(params.get('placement') as KvPlacement)
     ? params.get('placement') as KvPlacement
     : DEFAULT_SETTINGS.kvPlacement;
+  const idleKvPlacement = (['hbm', 'host', 'peer', 'peers', 'ssd', 'object'] as const).includes(params.get('idle') as KvPlacement)
+    ? params.get('idle') as KvPlacement
+    : DEFAULT_SETTINGS.idleKvPlacement;
   const attentionKernel: AttentionKernel = params.get('attention') === 'separate' ? 'separate' : 'fused';
   const overlap = params.get('overlap') !== 'off';
   const view: ViewMode = params.get('view') === 'story' ? 'story' : DEFAULT_SETTINGS.view;
@@ -40,7 +43,7 @@ export function parseSettings(params: URLSearchParams): SimulationSettings {
   const speculativeTokens = ([0, 2, 4] as const).find((k) => k === Number(params.get('spec'))) ?? DEFAULT_SETTINGS.speculativeTokens;
   const draftAcceptanceRate = DEFAULT_SETTINGS.draftAcceptanceRate;
   const mathBits = params.get('math') === '8' ? 8 : 16;
-  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, modelId, speculativeTokens, draftAcceptanceRate, mathBits, attentionKernel, overlap, view };
+  return { phase, hardwareId, batch, sequenceLength, prefixCachePercent, outputLength, reusePromptPrefixes, splitLongPrompts, promptTokensPerStep, servingMemoryFraction, weightBits, kvBits, kvPlacement, idleKvPlacement, modelId, speculativeTokens, draftAcceptanceRate, mathBits, attentionKernel, overlap, view };
 }
 
 export function writeSettings(settings: SimulationSettings, operationId?: string, lifecycleStageId?: LifecycleStageId): void {
@@ -61,6 +64,7 @@ export function settingsToSearchParams(settings: SimulationSettings, operationId
     weights: String(settings.weightBits),
     kv: String(settings.kvBits),
     placement: settings.kvPlacement,
+    idle: settings.idleKvPlacement,
     model: settings.modelId,
     spec: String(settings.speculativeTokens),
     math: String(settings.mathBits),

@@ -213,6 +213,7 @@ export const DEFAULT_SETTINGS = {
   weightBits: 16,
   kvBits: 16,
   kvPlacement: 'hbm',
+  idleKvPlacement: 'host',
   modelId: 'llama-3.1-8b',
   speculativeTokens: 0,
   mathBits: 16,

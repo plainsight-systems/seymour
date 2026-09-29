@@ -81,6 +81,8 @@ export interface SimulationSettings {
   weightBits: WeightBits;
   kvBits: KvBits;
   kvPlacement: KvPlacement;
+  /** Where an idle session's KV waits between turns (priced against rebuilding it with a first pass). */
+  idleKvPlacement: KvPlacement;
   attentionKernel: AttentionKernel;
   overlap: boolean;
   view: ViewMode;
