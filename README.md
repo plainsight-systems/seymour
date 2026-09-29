@@ -8,7 +8,7 @@
 
 **Live demo:** <https://plainsight-systems.github.io/seymour/>
 
-Seymour teaches performance computing from the software engineer's point of view. It starts with five portable ideas—work, traffic, placement, capacity, and parallel execution—then shows where serving systems expose the corresponding optimizations. Every number comes from one deterministic first-order model; concepts the model does not calculate are labeled **not modeled**.
+Seymour teaches LLM inference performance from the software engineer's point of view, hardware and software together: what is on the chip, what one forward pass asks of it, which choices change that, and how to combine them under real targets. Every number comes from one deterministic first-order model; concepts the model does not calculate are labeled **not modeled**.
 
 The name is for Seymour Cray, by way of the idea that a GPU is a hungry plant: the math units are the mouth, and the memory hierarchy has to keep bringing food.
 
@@ -18,36 +18,30 @@ The static site has two routes in one GitHub Pages build:
 
 | Route | Purpose |
 | --- | --- |
-| `#/` | The six-panel story and optimization playground |
+| `#/` | The story, in four acts |
 | `#/lookup` | Portable optimization concepts mapped to vLLM, SGLang, TensorRT-LLM, and llama.cpp terminology, plus the AMD Instinct stack (ROCm, AITER, ATOM) and KV-tiering projects (LMCache, Mooncake) |
 
-### The six-panel story
+The story is four acts stacked down the page, each a screen tall, each a row of scene tabs. One accelerator is chosen for the whole story (NVIDIA H100 SXM, H200 SXM, or AMD MI300X, MI325X, MI355X) and every number follows it. Every scene has an address (`#act-2/attention`), so any scene can be linked.
 
-The story shows the chip. Each panel pairs one knob with an isometric cutaway plate—server, package, die, or compute unit—drawn from published topology and driven by the same model:
+### Act 1 · The GPU
 
-1. **Two different jobs** — two copies of the die: prompt processing lights nearly every SM with math, while generating a token leaves almost all of them waiting on memory.
-2. **Every token re-reads the model** — the package's memory stacks fill with the model's weights, and every generated token reads all of them.
-3. **Share the read** — as users share one read, more of the die's time goes to math.
-4. **Memory fills up** — KV state fills the stacks until it hits the capacity wall and overflows off the package.
-5. **Distance is speed** — on the server plate, the KV cache's data path lights up from GPU memory out to one peer GPU, all seven peers, system memory, local SSD, or object storage; active state needs to stay near the math, and idle state may be worth parking farther away when restore beats recompute. Switched NVLink gives one peer the full per-GPU bandwidth, while a directly linked AMD platform reaches one peer over one link and all seven together.
-6. **Change what one read buys** — a mixture-of-experts model (Qwen3 30B-A3B) reads only the experts its tokens touch, so the discount fades as users share the step; speculative decoding turns one read into several tokens on a dense model but gains little on MoE at one user, because checking guesses touches more experts.
+The chip at four zoom levels (server, package, die, compute unit), drawn as isometric cutaway plates from published topology. Click a part, or a term such as HBM or Tensor Core, to see what it is called, what it does, and why it matters for inference. Plates are stylized and not to scale; counts and arrangement follow NVIDIA's and AMD's published documents, and every label says whether it rests on a published figure, a representative figure, or a schematic placement. The act ends with a challenge: put the package and the die back together by dragging each part onto its outline.
 
-Every panel can switch between NVIDIA H100 SXM, H200 SXM, and AMD MI300X, MI325X, and MI355X. Modeled moves are toggles the reader can apply (8-bit KV, shared-prompt reuse, FP8 math, speculation), and each panel describes what its concept looks like in a profiler trace alongside the model's own math and memory busy shares.
+### Act 2 · Inference
 
-Click any part to highlight its label, or any label to highlight the part. Plates are stylized and not to scale; counts and arrangement follow NVIDIA's and AMD's published documents, and every label is marked as a published figure, a representative figure, or a schematic placement.
+One forward pass of Llama 3.1 8B, stage by stage: text to tokens on the CPU, embed, attention, MLP, un-embed, softmax and sampling on the GPU, and back to text. A request runs these stages once over the whole prompt (the first pass), then once per new token (every later pass); each stage shows both side by side, with its math, bytes, time floors, and what limits it. The act ends with a challenge: for five workloads, name the slowest stage and whether math or memory limits it.
 
-Each panel has one real knob, a computed surprise, and a list of engineering moves clearly marked as modeled or not modeled. The story deliberately introduces plain-language costs before hardware and framework vocabulary.
+### Act 3 · The throttles
 
-### Playground and challenges
+How each stage changes with the choices you make, and which part of the chip it runs into: every token re-reads the model, share the read, memory fills up, distance is speed (where the KV cache lives, from GPU memory to object storage), and change what one read buys (mixture of experts and guessing tokens ahead). Each panel has one knob, a computed surprise, the moves that change it (modeled ones are switches; the rest are marked not modeled), and what the concept looks like in a profiler trace. The act ends with a challenge: for five stuck workloads, pick the one throttle that helps most.
 
-The playground combines the story's knobs and lets the reader zoom through all four plates on either accelerator, including a follow-one-tile path from memory to the matrix units: concurrent users, context length, model and KV precision, shared-prefix reuse, active-KV placement, and accelerator choice. Its bottleneck readout always answers one of four durable questions:
+### Act 4 · Putting it together
 
-- **Work:** what calculation can disappear?
-- **Traffic:** what bytes can stop moving?
-- **Placement:** where must active or idle state live?
-- **Execution:** is enough parallel work exposed?
+Six challenges with fixed workloads and targets: a busy chatbot, a long document, an object-storage proposal, a code assistant, a mixture-of-experts model on one GPU, and picking the chip. Each offers every throttle, starts from an obvious attempt that fails, and is built for the chosen chip: its workload and targets come from that chip's own numbers, so every chip gets the same puzzle. Then the playground: every knob at once, on any chip.
 
-Six tested challenges in Act 4 make the reader prove the model: a busy chatbot, a long-document workload, an object-storage proposal, a code assistant, a mixture-of-experts model on one GPU, and picking the chip. Each fixes a workload, offers every throttle, and starts from an obvious attempt that fails. Challenges are built for the chip you pick: their workloads and targets come from that chip's own numbers, so every chip gets the same puzzle. Each also states what every passing answer must do, and a test searches every throttle combination on every chip to prove the lesson never claims more than the challenge demands. Acts 1–3 end with their own challenges: rebuilding the GPU, finding the bottleneck of one forward pass, and picking the throttle that helps most.
+### How the challenges stay honest
+
+Every answer comes from the model, never typed in. Each challenge states what every passing answer must do, and a test searches every combination of choices on every chip to prove the lesson never claims more than the challenge demands (Acts 2 and 3 also require a clear winner, so no answer is a coin flip).
 
 ## Run locally
 
@@ -106,9 +100,9 @@ The Concept lookup route cites the current documentation for each framework term
 ## Structure
 
 ```text
-src/data/             cited hardware, model, and memory-tier data
-src/model/            deterministic analytical model and tests
-src/story/            concept panels, cutaway plates, playground, and challenges
+src/data/             cited hardware, model, memory-tier, topology, and part-glossary data
+src/model/            deterministic analytical model (whole step, per operation, forward pass) and tests
+src/story/            the four acts: page wiring, cutaway plates, scene modules, challenges
 src/lookup/           cited framework-term lookup
 docs/design/          approved product and implementation plan
 public/assets/        original project artwork
