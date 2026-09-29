@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
-import { partEntry, type Vendor } from '../../data/parts';
+import { partEntry } from '../../data/parts';
 import { modelFor } from '../../model/strategy';
 import { buildCutawayInputs } from '../cutaway/inputs';
 import { diePlate, packagePlate, type Plate } from '../cutaway/plates';
@@ -143,7 +143,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   }
 
   function drawBuild(): void {
-    const vendor = getHardware(hardwareId).vendor as Vendor;
+    const vendor = getHardware(hardwareId).vendor;
     const source = buildSourcePlate();
     buildRound = assemblyRound(buildRoundId, source);
     const placed = buildPlaced[buildRoundId];
@@ -173,7 +173,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   }
 
   function tryPlace(card: string, zone: string): PlacementResult {
-    const vendor = getHardware(hardwareId).vendor as Vendor;
+    const vendor = getHardware(hardwareId).vendor;
     const placed = buildPlaced[buildRoundId];
     const result = place(buildRound, placed, card, zone);
     const cardEntry = partEntry(card, vendor)!;

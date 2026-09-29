@@ -3,7 +3,7 @@ import { getTopology } from '../../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
 import { modelFor, precisionLabel } from '../../model/strategy';
-import { batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../../state';
+import { BATCHES, SEQUENCES, batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../../state';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { buildCutawayInputs, type CutawayInputs } from '../cutaway/inputs';
 import { diePlate, formatBandwidth, packagePlate, serverPlate, type Plate } from '../cutaway/plates';
@@ -75,13 +75,13 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
   function knobMarkup(panel: StoryPanelSpec, settings: SimulationSettings): string {
     if (panel.id === 'two-jobs' || panel.id === 'memory-wall') {
-      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.sequenceLength.toLocaleString()} tokens</output><input id="knob-${panel.id}" data-knob="sequenceLength" type="range" min="0" max="8" step="1" value="${sequenceToSlider(settings.sequenceLength)}"><small><b>128</b><b>32K</b></small></label>`;
+      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.sequenceLength.toLocaleString()} tokens</output><input id="knob-${panel.id}" data-knob="sequenceLength" type="range" min="0" max="${SEQUENCES.length - 1}" step="1" value="${sequenceToSlider(settings.sequenceLength)}"><small><b>128</b><b>32K</b></small></label>`;
     }
     if (panel.id === 'read-model') {
       return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="weightBits"><option value="16">16-bit</option><option value="8">8-bit</option><option value="4">4-bit</option></select><small>Fewer bits mean fewer bytes per weight.</small></label>`;
     }
     if (panel.id === 'share-read' || panel.id === 'heavier-tokens') {
-      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="10" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
+      return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><output>${settings.batch.toLocaleString()}</output><input id="knob-${panel.id}" data-knob="batch" type="range" min="0" max="${BATCHES.length - 1}" step="1" value="${batchToSlider(settings.batch)}"><small><b>1</b><b>1,024</b></small></label>`;
     }
     return `<label class="story-knob" for="knob-${panel.id}"><span>${panel.knobLabel}</span><select id="knob-${panel.id}" data-knob="kvPlacement">${placementOptions()}</select><small>The model prices this read on every generated token.</small></label>`;
   }

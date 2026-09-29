@@ -1,4 +1,4 @@
-import { HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../../data/profiles';
+import { MODEL_PROFILES, getHardware } from '../../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
@@ -45,10 +45,12 @@ const METRIC_HINT: Record<ConstraintMetric, { scene: string; label: string } | n
 };
 
 const KNOB_LABEL: Record<KnobId, string> = {
-  batch: 'Users per pass', sequenceLength: 'Context length', weightBits: 'Weight precision', kvBits: 'KV cache precision',
-  reusePromptPrefixes: 'Reuse a shared prompt', prefixCachePercent: 'Share of the prompt already processed', kvPlacement: 'Active KV lives in',
-  idleKvPlacement: 'Idle sessions wait in', speculativeTokens: 'Guess tokens ahead', mathBits: 'Math precision', modelId: 'Model', hardwareId: 'Accelerator',
+  batch: 'Users per pass', weightBits: 'Weight precision', mathBits: 'Math precision', kvBits: 'KV cache precision',
+  reusePromptPrefixes: 'Reuse a shared prompt', speculativeTokens: 'Guess tokens ahead', kvPlacement: 'Active KV lives in',
+  idleKvPlacement: 'Idle sessions wait in', hardwareId: 'Accelerator',
 };
+
+const bits = (value: number) => `${value}-bit`;
 
 
 function valueText(metric: ConstraintMetric, value: number | boolean): string {
@@ -93,30 +95,27 @@ function segmented(knob: KnobId, options: [string, string][], current: string, d
 
 function knobControl(knob: KnobId, settings: SimulationSettings, challenge: Challenge): string {
   const label = `<span class="ch-knob-label">${escapeHtml(KNOB_LABEL[knob])}</span>`;
+  // Segmented choices are built from KNOB_VALUES, the same values the tests search.
+  const choices = <K extends KnobId>(key: K, text: (value: SimulationSettings[K]) => string, disabled = false) =>
+    `<div class="ch-knob">${label}${segmented(key, KNOB_VALUES[key].map((value) => [String(value), text(value)]), String(settings[key]), disabled)}</div>`;
   switch (knob) {
-    case 'batch':
-    case 'sequenceLength': {
-      const values = KNOB_VALUES[knob] as number[];
-      const current = settings[knob];
-      return `<label class="ch-knob">${label}<output>${current.toLocaleString()}${knob === 'sequenceLength' ? ' tokens' : ''}</output><input type="range" data-ch-knob="${knob}" min="0" max="${values.length - 1}" step="1" value="${Math.max(0, values.indexOf(current))}" aria-label="${escapeHtml(KNOB_LABEL[knob])}"></label>`;
+    case 'batch': {
+      const position = KNOB_VALUES.batch.indexOf(settings.batch);
+      if (position < 0) throw new Error(`Users per pass ${settings.batch} is not a step of the slider`);
+      return `<label class="ch-knob">${label}<output>${settings.batch.toLocaleString()}</output><input type="range" data-ch-knob="batch" min="0" max="${KNOB_VALUES.batch.length - 1}" step="1" value="${position}" aria-label="${escapeHtml(KNOB_LABEL.batch)}"></label>`;
     }
-    case 'weightBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit'], ['4', '4-bit']], String(settings.weightBits))}</div>`;
-    case 'kvBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit']], String(settings.kvBits))}</div>`;
-    case 'mathBits': return `<div class="ch-knob">${label}${segmented(knob, [['16', '16-bit'], ['8', '8-bit (needs 8- or 4-bit weights)']], String(settings.mathBits), settings.weightBits === 16)}</div>`;
-    case 'speculativeTokens': return `<div class="ch-knob">${label}${segmented(knob, [['0', 'Off'], ['2', '2 ahead'], ['4', '4 ahead']], String(settings.speculativeTokens))}</div>`;
-    case 'reusePromptPrefixes': return `<div class="ch-knob">${label}${segmented(knob, [['false', 'Off'], ['true', settings.prefixCachePercent ? `On (${settings.prefixCachePercent}% shared)` : 'On (nothing shared)']], String(settings.reusePromptPrefixes))}</div>`;
-    case 'prefixCachePercent': {
-      const values = KNOB_VALUES.prefixCachePercent;
-      return `<label class="ch-knob">${label}<output>${settings.reusePromptPrefixes ? `${settings.prefixCachePercent}%` : 'reuse is off'}</output><input type="range" data-ch-knob="prefixCachePercent" min="0" max="${values.length - 1}" step="1" value="${Math.max(0, values.indexOf(settings.prefixCachePercent))}" ${settings.reusePromptPrefixes ? '' : 'disabled'} aria-label="${escapeHtml(KNOB_LABEL[knob])}"></label>`;
-    }
-    case 'kvPlacement': return `<label class="ch-knob">${label}<select data-ch-knob="${knob}" aria-label="${escapeHtml(KNOB_LABEL[knob])}">${placementOptions(KNOB_VALUES[knob] as KvPlacement[], settings[knob])}</select></label>`;
+    case 'weightBits': return choices('weightBits', bits);
+    case 'kvBits': return choices('kvBits', bits);
+    case 'mathBits': return choices('mathBits', (value) => (value === 8 ? '8-bit (needs 8- or 4-bit weights)' : bits(value)), settings.weightBits === 16);
+    case 'speculativeTokens': return choices('speculativeTokens', (value) => (value === 0 ? 'Off' : `${value} ahead`));
+    case 'reusePromptPrefixes': return choices('reusePromptPrefixes', (value) => (!value ? 'Off' : settings.prefixCachePercent ? `On (${settings.prefixCachePercent}% shared)` : 'On (nothing shared)'));
+    case 'kvPlacement': return `<label class="ch-knob">${label}<select data-ch-knob="kvPlacement" aria-label="${escapeHtml(KNOB_LABEL.kvPlacement)}">${placementOptions(KNOB_VALUES.kvPlacement, settings.kvPlacement)}</select></label>`;
     case 'idleKvPlacement': {
       // Only a challenge that asks about bringing sessions back has idle sessions; elsewhere the control would do nothing.
       const matters = challenge.constraints.some((constraint) => constraint.metric === 'restoreBeatsRecompute');
-      return `<label class="ch-knob">${label}${matters ? '' : '<output>no idle sessions here</output>'}<select data-ch-knob="${knob}" aria-label="${escapeHtml(KNOB_LABEL[knob])}" ${matters ? '' : 'disabled'}>${placementOptions(KNOB_VALUES[knob] as KvPlacement[], settings[knob])}</select></label>`;
+      return `<label class="ch-knob">${label}${matters ? '' : '<output>no idle sessions here</output>'}<select data-ch-knob="idleKvPlacement" aria-label="${escapeHtml(KNOB_LABEL.idleKvPlacement)}" ${matters ? '' : 'disabled'}>${placementOptions(KNOB_VALUES.idleKvPlacement, settings.idleKvPlacement)}</select></label>`;
     }
-    case 'modelId': return `<label class="ch-knob">${label}<select data-ch-knob="modelId" aria-label="Model">${MODEL_PROFILES.map((model) => `<option value="${model.id}" ${model.id === settings.modelId ? 'selected' : ''}>${escapeHtml(model.name.split(' · ')[0]!)}</option>`).join('')}</select></label>`;
-    case 'hardwareId': return `<div class="ch-knob">${label}${segmented(knob, HARDWARE_PROFILES.map((hardware) => [hardware.id, hardware.name.replace(' SXM', '')]), settings.hardwareId)}</div>`;
+    case 'hardwareId': return choices('hardwareId', (id) => getHardware(id).name.replace(' SXM', ''));
   }
 }
 
@@ -125,8 +124,6 @@ function applyKnob(settings: SimulationSettings, knob: KnobId, raw: string): Sim
   const next = { ...settings };
   switch (knob) {
     case 'batch': next.batch = KNOB_VALUES.batch[Number(raw)]!; break;
-    case 'sequenceLength': next.sequenceLength = KNOB_VALUES.sequenceLength[Number(raw)]!; break;
-    case 'prefixCachePercent': next.prefixCachePercent = KNOB_VALUES.prefixCachePercent[Number(raw)]!; break;
     case 'weightBits': next.weightBits = Number(raw) as SimulationSettings['weightBits']; if (next.weightBits === 16) next.mathBits = 16; break;
     case 'kvBits': next.kvBits = Number(raw) as SimulationSettings['kvBits']; break;
     case 'mathBits': next.mathBits = Number(raw) as SimulationSettings['mathBits']; break;
@@ -134,7 +131,6 @@ function applyKnob(settings: SimulationSettings, knob: KnobId, raw: string): Sim
     case 'reusePromptPrefixes': next.reusePromptPrefixes = raw === 'true'; break;
     case 'kvPlacement': next.kvPlacement = raw as KvPlacement; break;
     case 'idleKvPlacement': next.idleKvPlacement = raw as KvPlacement; break;
-    case 'modelId': next.modelId = raw; break;
     case 'hardwareId': next.hardwareId = raw; break;
   }
   return next;
@@ -303,7 +299,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     if (control instanceof HTMLInputElement && control.type === 'range') {
       // Keep the slider under the pointer; update only its readout and the results.
       const output = control.closest('.ch-knob')?.querySelector('output');
-      if (output) output.textContent = knob === 'prefixCachePercent' ? `${settings.prefixCachePercent}%` : `${settings[knob as 'batch' | 'sequenceLength'].toLocaleString()}${knob === 'sequenceLength' ? ' tokens' : ''}`;
+      if (output) output.textContent = settings.batch.toLocaleString();
       update(settings, false);
       return;
     }

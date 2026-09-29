@@ -1,9 +1,8 @@
 import { DEFAULT_SETTINGS, MODEL_PROFILES, getHardware } from '../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber, responseTiming } from '../model/calculate';
 import { modelFor } from '../model/strategy';
-import { batchFromSlider, batchToSlider, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
+import { BATCHES, PREFIX_CACHE_PERCENTAGES, SEQUENCES, batchFromSlider, batchToSlider, nearestIndex, prefixCacheFromSlider, prefixCacheToSlider, sequenceFromSlider, sequenceToSlider } from '../state';
 import type { KvPlacement, SimulationSettings } from '../types';
-import type { KnobId } from './challenges/engine';
 import { placementOptions } from './placement';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { tileSteps, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
@@ -12,18 +11,12 @@ import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
 /** The playground's controls. The chip comes from the act header, so it has no control here. */
-type ControlKey = Exclude<KnobId, 'hardwareId' | 'idleKvPlacement'> | 'outputLength';
+type ControlKey = 'batch' | 'sequenceLength' | 'outputLength' | 'modelId' | 'speculativeTokens' | 'weightBits' | 'mathBits' | 'kvBits' | 'reusePromptPrefixes' | 'prefixCachePercent' | 'kvPlacement';
 
 /** Answer lengths, up to long reasoning-style answers. */
 const ANSWER_LENGTHS = [1, 32, 128, 512, 2048, 8192];
 
 const PLATE_TABS: [PlateId, string][] = [['server', 'Server'], ['package', 'Package'], ['die', 'Die'], ['unit', 'Compute unit']];
-
-function nearestIndex(choices: number[], value: number): number {
-  let best = 0;
-  choices.forEach((choice, index) => { if (Math.abs(choice - value) < Math.abs(choices[best]! - value)) best = index; });
-  return best;
-}
 
 export interface PlaygroundView {
   /** Follows the story-wide accelerator choice. */
@@ -43,8 +36,8 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
     <div class="playground-shell">
       <aside class="playground-controls">
         <details class="playground-group" open><summary>Workload</summary>
-          <label><span>Users per pass <output data-output="batch"></output></span><input aria-label="Users per pass" data-control="batch" type="range" min="0" max="10" step="1"></label>
-          <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="8" step="1"></label>
+          <label><span>Users per pass <output data-output="batch"></output></span><input aria-label="Users per pass" data-control="batch" type="range" min="0" max="${BATCHES.length - 1}" step="1"></label>
+          <label><span>Context length <output data-output="sequenceLength"></output></span><input aria-label="Context length" data-control="sequenceLength" type="range" min="0" max="${SEQUENCES.length - 1}" step="1"></label>
           <label><span>Answer length <output data-output="outputLength"></output></span><input aria-label="Answer length" data-control="outputLength" type="range" min="0" max="${ANSWER_LENGTHS.length - 1}" step="1"></label>
         </details>
         <details class="playground-group"><summary>Model and guessing ahead</summary>
@@ -56,7 +49,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
           <label><span>Math precision</span><select aria-label="Math precision" data-control="mathBits"><option value="16">16-bit</option><option value="8">8-bit (needs 8- or 4-bit weights)</option></select></label>
           <label><span>KV cache precision</span><select aria-label="KV cache precision" data-control="kvBits"><option value="16">16-bit</option><option value="8">8-bit</option></select></label>
           <label class="playground-check"><input data-control="reusePromptPrefixes" type="checkbox"><span>Reuse a shared prompt</span></label>
-          <label><span>Share already processed <output data-output="prefixCachePercent"></output></span><input aria-label="Share of the prompt already processed" data-control="prefixCachePercent" type="range" min="0" max="5" step="1"></label>
+          <label><span>Share already processed <output data-output="prefixCachePercent"></output></span><input aria-label="Share of the prompt already processed" data-control="prefixCachePercent" type="range" min="0" max="${PREFIX_CACHE_PERCENTAGES.length - 1}" step="1"></label>
         </details>
         <details class="playground-group"><summary>Where the KV cache lives</summary>
           <label><span>Active KV lives in</span><select aria-label="Active KV lives in" data-control="kvPlacement">${placementOptions()}</select></label>

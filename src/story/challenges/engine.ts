@@ -1,9 +1,12 @@
-import { getHardware } from '../../data/profiles';
+import { HARDWARE_PROFILES, getHardware } from '../../data/profiles';
 import { calculateSimulation, restoreVsRecompute } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
+import { BATCHES } from '../../state';
 import type { SimulationSettings } from '../../types';
+import { PLACEMENT_ORDER } from '../placement';
 
-export type KnobId = 'batch' | 'sequenceLength' | 'weightBits' | 'kvBits' | 'reusePromptPrefixes' | 'prefixCachePercent' | 'kvPlacement' | 'idleKvPlacement' | 'speculativeTokens' | 'mathBits' | 'modelId' | 'hardwareId';
+/** The knobs a challenge can offer: the throttles, plus the chip when that is the question. */
+export type KnobId = 'batch' | 'weightBits' | 'mathBits' | 'kvBits' | 'reusePromptPrefixes' | 'speculativeTokens' | 'kvPlacement' | 'idleKvPlacement' | 'hardwareId';
 export type ConstraintMetric = 'msPerToken' | 'timeToFirstTokenMs' | 'totalTokensPerSec' | 'fitsInGpuMemory' | 'restoreBeatsRecompute' | 'concurrentUsers' | 'weightBits' | 'kvBits';
 
 /**
@@ -14,20 +17,21 @@ export type ConstraintMetric = 'msPerToken' | 'timeToFirstTokenMs' | 'totalToken
  */
 export const THROTTLES: KnobId[] = ['batch', 'weightBits', 'mathBits', 'kvBits', 'reusePromptPrefixes', 'speculativeTokens', 'kvPlacement', 'idleKvPlacement'];
 
-/** Every value the reader can give each knob, as the controls offer them. Tests search these exhaustively. */
-export const KNOB_VALUES: { [K in KnobId]: SimulationSettings[K][] } = {
-  batch: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
-  sequenceLength: [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768],
+/**
+ * Every value the reader can give each knob. The board builds its controls
+ * from these, and the tests search them exhaustively, so the two cannot drift.
+ */
+export const KNOB_VALUES: { [K in KnobId]: readonly SimulationSettings[K][] } = {
+  batch: BATCHES,
   weightBits: [16, 8, 4],
+  mathBits: [16, 8],
   kvBits: [16, 8],
   reusePromptPrefixes: [false, true],
-  prefixCachePercent: [0, 25, 50, 75, 90, 100],
-  kvPlacement: ['hbm', 'host', 'peer', 'peers', 'ssd', 'object'],
-  idleKvPlacement: ['host', 'peer', 'peers', 'ssd', 'object'],
   speculativeTokens: [0, 2, 4],
-  mathBits: [16, 8],
-  modelId: ['llama-3.1-8b', 'qwen3-30b-a3b'],
-  hardwareId: ['h100-sxm', 'mi300x', 'h200-sxm', 'mi325x', 'mi355x'],
+  kvPlacement: PLACEMENT_ORDER,
+  // An idle session is parked somewhere other than GPU memory.
+  idleKvPlacement: PLACEMENT_ORDER.filter((tier) => tier !== 'hbm'),
+  hardwareId: HARDWARE_PROFILES.map((hardware) => hardware.id),
 };
 
 export interface Constraint {

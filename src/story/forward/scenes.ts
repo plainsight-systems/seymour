@@ -3,7 +3,7 @@ import { formatBytes, formatDuration, formatFlops } from '../../model/calculate'
 import { buildForwardPass, embeddingTableBytes, type ForwardStage, type StageId } from '../../model/forwardPass';
 import { modelFor } from '../../model/strategy';
 import type { SimulationSettings } from '../../types';
-import { STAGE_COPY, type HardwareLink, type StageFacts } from './stages';
+import { LIMIT_LABEL, STAGE_COPY, type HardwareLink, type StageFacts } from './stages';
 import { escapeHtml } from '../html';
 
 // Act 2: one forward pass, stage by stage. Renders the seven stage scenes
@@ -106,7 +106,7 @@ export function mountForwardScenes(
           ['KV cache read and written', (stage) => (stage.kvBytes ? formatBytes(stage.kvBytes) : 'none')],
           ['Other values moved', (stage) => formatBytes(stage.activationBytes)],
         ];
-      const limitName = (stage: ForwardStage) => (stage.limit === 'math' ? 'Math' : stage.limit === 'memory' ? 'Memory' : 'Host link');
+      const limitName = (stage: ForwardStage) => LIMIT_LABEL[stage.limit];
       const floors = (stage: ForwardStage) => {
         if (cpu) return `<span class="job-floor-one">${formatDuration(stage.memoryMs)} over PCIe</span>`;
         const max = Math.max(stage.computeMs, stage.memoryMs, Number.EPSILON);

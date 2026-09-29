@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../data/profiles';
-import { partEntry, type Vendor } from '../data/parts';
+import { partEntry } from '../data/parts';
 import { modelFor } from '../model/strategy';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { diePlate, packagePlate, serverPlate, unitPlate, type Plate } from './cutaway/plates';
@@ -46,7 +46,7 @@ export function mountGpuScenes(hostFor: (sceneId: GpuSceneId) => HTMLElement, in
   /** The part card: plain name, the terms people use, what it is, does, and why it matters. */
   function renderPartCard(sceneId: GpuSceneId, plate: Plate): void {
     const host = hostFor(sceneId);
-    const vendor = getHardware(hardwareId).vendor as Vendor;
+    const vendor = getHardware(hardwareId).vendor;
     const part = gpuSelected.get(sceneId) ?? null;
     const detail = host.querySelector<HTMLElement>('[data-part-detail]')!;
     const entry = part ? partEntry(part, vendor) : undefined;

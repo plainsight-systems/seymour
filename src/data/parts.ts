@@ -1,9 +1,11 @@
+import type { HardwareProfile } from '../types';
+
 // What each hardware part is called, what it is, what it does, and why it
 // matters for inference. Keys match the `part` ids drawn on the cutaway
 // plates. Terms are the names engineers will meet in docs, profilers, and
 // vendor material; where vendors differ, both names are given.
 
-export type Vendor = 'NVIDIA' | 'AMD';
+export type Vendor = HardwareProfile['vendor'];
 
 export interface PartTerm {
   term: string;

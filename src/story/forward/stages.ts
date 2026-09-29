@@ -1,9 +1,12 @@
-import type { StageId } from '../../model/forwardPass';
+import type { ForwardStage, StageId } from '../../model/forwardPass';
 import type { GpuSceneId } from '../gpu';
 import type { ModelProfile } from '../../types';
 
 // What each forward-pass stage is, in plain words, for Act 2. Numbers are
 // filled in from the model at render time; nothing here is a measurement.
+
+/** What limits a stage, in the words every Act 2 view uses. */
+export const LIMIT_LABEL: Record<ForwardStage['limit'], string> = { math: 'Math', memory: 'Reading memory', host: 'The host link' };
 
 export interface HardwareLink {
   /** Act 1 scene and part to open, e.g. package + hbm. */
