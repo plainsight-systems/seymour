@@ -51,12 +51,19 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   let buildView: CutawayView | null = null;
   let buildRound: AssemblyRound = { id: 'package', parts: [] };
   let toastTimer = 0;
+  /** The pending "round complete" card; cancelled whenever the card is hidden (round switch, reset, chip change). */
+  let doneTimer = 0;
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function buildSourcePlate(): Plate {
-    const settings = { ...DEFAULT_SETTINGS, hardwareId: hardwareId };
+  function buildSourcePlate(roundId: RoundId = buildRoundId): Plate {
+    const settings = { ...DEFAULT_SETTINGS, hardwareId };
     const inputs = buildCutawayInputs(settings, getHardware(hardwareId), modelFor(settings));
-    return buildRoundId === 'package' ? packagePlate(inputs, 'hardware') : diePlate(inputs, { job: 'decode', detail: 'full', activity: false });
+    return roundId === 'package' ? packagePlate(inputs, 'hardware') : diePlate(inputs, { job: 'decode', detail: 'full', activity: false });
+  }
+
+  /** Both rounds' parts on the current chip, to tell whether a chip change keeps progress valid. */
+  function roundParts(): string {
+    return (['package', 'die'] as const).map((id) => assemblyRound(id, buildSourcePlate(id)).parts.join(',')).join('|');
   }
 
   /** A message just above the drawing, where the reader is looking. Misses stay until the next move. */
@@ -103,6 +110,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   }
 
   function hideDone(): void {
+    window.clearTimeout(doneTimer);
     buildHost.querySelector<HTMLElement>('[data-build-done]')!.hidden = true;
   }
 
@@ -187,7 +195,7 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
       // Light every part in turn, then show the result.
       const step = reducedMotion() ? 0 : 140;
       buildRound.parts.forEach((part, index) => flashZone(part, 'cw-landed', index * step));
-      window.setTimeout(showDone, buildRound.parts.length * step + (step ? 350 : 0));
+      doneTimer = window.setTimeout(showDone, buildRound.parts.length * step + (step ? 350 : 0));
     } else {
       flashZone(zone, 'cw-landed');
       buildFeedback(`<span class="build-toast-mark" aria-hidden="true">✓</span><span><b>${escapeHtml(cardEntry.name)}</b> (${escapeHtml(terms)}). ${escapeHtml(cardEntry.does)}</span>`, 'good');
@@ -311,8 +319,11 @@ export function mountBuildChallenge(buildHost: HTMLElement, initialHardwareId: s
   renderBuild();
   return {
     setHardware(next: string): void {
+      const before = roundParts();
       hardwareId = next;
+      if (roundParts() === before) { renderBuild(); return; }
       resetBuild(['package', 'die']);
+      buildFeedback('This chip is built from different parts, so both rounds start over.');
     },
     refresh(): void {
       buildView?.refresh();

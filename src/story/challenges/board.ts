@@ -2,7 +2,7 @@ import { HARDWARE_PROFILES, MODEL_PROFILES, getHardware } from '../../data/profi
 import { calculateSimulation, formatDuration, formatNumber, responseTiming } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
-import { placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
+import { finishSchedule, placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
 import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
 import { escapeHtml } from '../html';
@@ -150,7 +150,9 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
   let justCleared: string | null = null;
   let showCard = false;
   let celebrate = false;
-  let finishTimer = 0;
+  const finish = finishSchedule();
+  /** Set when the last item is done; the finale plays once, the next time the results card opens. */
+  let finaleOwed = false;
 
   const current = (): Challenge => challenges[index]!;
 
@@ -228,7 +230,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
       ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, titleId: 'ch-done-title' }) : ''}
     </div>`;
     placeCard(host);
-    if (play) playFinale(host);
+    if (play) playFinale(host, finish);
     celebrate = false;
     justCleared = null;
   }
@@ -249,7 +251,8 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
       cleared.add(challenge.id);
       justCleared = challenge.id;
       if (cleared.size === challenges.length) {
-        finishTimer = window.setTimeout(() => { showCard = true; celebrate = true; render(); }, prefersReducedMotion() ? 0 : 1200);
+        finaleOwed = true;
+        finish.after(prefersReducedMotion() ? 0 : 1200, () => { showCard = true; celebrate = finaleOwed; finaleOwed = false; render(); });
       }
     }
     if (whole) { render(); return; }
@@ -257,6 +260,7 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
   }
 
   function go(next: number): void {
+    finish.cancel();
     showCard = false;
     index = Math.max(0, Math.min(challenges.length - 1, next));
     render();
@@ -286,13 +290,22 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     if (goTo) { go(Number(goTo.dataset.quizGo)); return; }
     if (target.closest('[data-quiz-prev]')) { go(index - 1); return; }
     if (target.closest('[data-quiz-next]')) { go(index + 1); return; }
-    if (target.closest('[data-quiz-card]')) { showCard = true; render(); return; }
-    if (target.closest('[data-quiz-review]')) { showCard = false; render(); return; }
+    if (target.closest('[data-quiz-card]')) {
+      // Opened before the finale played (early, or after moving away): play it now, once.
+      celebrate = finaleOwed;
+      finaleOwed = false;
+      finish.cancel();
+      showCard = true;
+      render();
+      return;
+    }
+    if (target.closest('[data-quiz-review]')) { finish.cancel(); showCard = false; render(); return; }
     if (target.closest('[data-ch-start-over]')) { attempts.set(current().id, { ...current().naive }); render(); return; }
     if (target.closest('[data-quiz-restart]')) {
-      window.clearTimeout(finishTimer);
+      finish.cancel();
       for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
       cleared.clear();
+      finaleOwed = false;
       showCard = false;
       go(0);
       return;
@@ -306,11 +319,12 @@ export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openS
     setHardware(next: string): void {
       if (next === hardwareId) return;
       hardwareId = next;
-      window.clearTimeout(finishTimer);
+      finish.cancel();
       challenges = challengesFor(hardwareId);
       attempts.clear();
       for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
       cleared.clear();
+      finaleOwed = false;
       showCard = false;
       render();
     },

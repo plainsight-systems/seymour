@@ -129,15 +129,41 @@ export function placeCard(host: HTMLElement): void {
   if (top && scene) scene.style.setProperty('--quiz-top', `${top.offsetTop + top.offsetHeight}px`);
 }
 
+/**
+ * The finale's timers (the delay before the results card, and the count-up).
+ * One per quiz or board, so every way out can cancel all of them at once.
+ */
+export interface FinishSchedule {
+  after(ms: number, run: () => void): void;
+  /** Whether a timer is still waiting to run. */
+  pending(): boolean;
+  cancel(): void;
+}
+
+export function finishSchedule(): FinishSchedule {
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  return {
+    after(ms, run) {
+      const id = setTimeout(() => { timers.delete(id); run(); }, ms);
+      timers.add(id);
+    },
+    pending: () => timers.size > 0,
+    cancel() {
+      for (const id of timers) clearTimeout(id);
+      timers.clear();
+    },
+  };
+}
+
 /** Markers pop in turn and the score counts up; the confetti is CSS. */
-export function playFinale(host: HTMLElement): void {
+export function playFinale(host: HTMLElement, schedule: FinishSchedule): void {
   host.querySelector('.quiz-pips')?.classList.add('is-popping');
   const target = host.querySelector<HTMLElement>('[data-quiz-count]');
   if (!target) return;
   // Timers, not animation frames: frames pause in background tabs, and the
   // count must always land on the real score.
   const final = Number(target.dataset.quizCount);
-  for (let n = 1; n <= final; n++) window.setTimeout(() => { target.textContent = String(n); }, 600 + (700 * n) / Math.max(1, final));
+  for (let n = 1; n <= final; n++) schedule.after(600 + (700 * n) / Math.max(1, final), () => { target.textContent = String(n); });
 }
 
 export function prefersReducedMotion(): boolean {
@@ -152,7 +178,9 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
   const results = new Map<string, boolean>();
   let showCard = false;
   let celebrate = false;
-  let finishTimer = 0;
+  const finish = finishSchedule();
+  /** Set when the last item is done; the finale plays once, the next time the results card opens. */
+  let finaleOwed = false;
 
   const pickFor = (id: string): P => picks.get(id) ?? spec.emptyPick();
 
@@ -192,11 +220,12 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
       ${showCard ? card(play) : ''}
     </div>`;
     placeCard(host);
-    if (play) playFinale(host);
+    if (play) playFinale(host, finish);
     celebrate = false;
   }
 
   function go(next: number): void {
+    finish.cancel();
     // Moving to a question means reviewing it, so the results card steps aside.
     showCard = false;
     index = Math.max(0, Math.min(spec.items.length - 1, next));
@@ -204,10 +233,11 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
   }
 
   function clear(): void {
-    window.clearTimeout(finishTimer);
+    finish.cancel();
     index = 0;
     picks.clear();
     results.clear();
+    finaleOwed = false;
     showCard = false;
     celebrate = false;
   }
@@ -225,7 +255,8 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
       render();
       if (tally(ids, results).complete) {
         // Let the last reveal land before the finish plays over it.
-        finishTimer = window.setTimeout(() => { showCard = true; celebrate = true; render(); }, prefersReducedMotion() ? 0 : 900);
+        finaleOwed = true;
+        finish.after(prefersReducedMotion() ? 0 : 900, () => { showCard = true; celebrate = finaleOwed; finaleOwed = false; render(); });
       }
       return;
     }
@@ -233,8 +264,16 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
     if (goTo) { go(Number(goTo.dataset.quizGo)); return; }
     if (target.closest('[data-quiz-prev]')) { go(index - 1); return; }
     if (target.closest('[data-quiz-next]')) { go(index + 1); return; }
-    if (target.closest('[data-quiz-card]')) { showCard = true; render(); return; }
-    if (target.closest('[data-quiz-review]')) { showCard = false; render(); return; }
+    if (target.closest('[data-quiz-card]')) {
+      // Opened before the finale played (early, or after moving away): play it now, once.
+      celebrate = finaleOwed;
+      finaleOwed = false;
+      finish.cancel();
+      showCard = true;
+      render();
+      return;
+    }
+    if (target.closest('[data-quiz-review]')) { finish.cancel(); showCard = false; render(); return; }
     if (target.closest('[data-quiz-restart]')) { clear(); render(); return; }
     spec.onOtherClick?.(target);
   });
