@@ -1,8 +1,8 @@
 import { buildMemoryLadder, type MemoryTier } from '../../data/memoryLadder';
-import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
+import { calculateSimulation, restoreVsRecompute } from '../../model/calculate';
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../../types';
 
-export type PictureLayer = 'stepCost' | 'modelBlock' | 'throughput' | 'kvBlock' | 'distanceLadder';
+export type PictureLayer = 'stepCost' | 'throughput' | 'distanceLadder';
 
 export interface StepCostPicture {
   id: 'prefill' | 'decode';
@@ -15,14 +15,10 @@ export interface StepCostPicture {
 }
 
 export interface PictureModel {
-  hardwareName: string;
-  capacityBytes: number;
   modelBytes: number;
   kvBytes: number;
-  freeBytes: number;
+  /** Weights plus GPU-resident KV beyond the serving budget (0 when everything fits). */
   overflowBytes: number;
-  modelFraction: number;
-  kvFraction: number;
   steps: StepCostPicture[];
   perUserTokensPerSecond: number;
   totalTokensPerSecond: number;
@@ -32,10 +28,9 @@ export interface PictureModel {
   bandwidthNeeded: number;
   restoreMs: number;
   recomputeMs: number;
-  bottleneckTag: 'Work' | 'Traffic' | 'Placement' | 'Execution';
+  /** What limits a later pass, in the story's words. */
+  bottleneckTag: 'Math' | 'Reading memory' | 'Distance' | 'Host link';
   bottleneckSentence: string;
-  modelLabel: string;
-  kvLabel: string;
 }
 
 export function buildPictureModel(
@@ -56,10 +51,10 @@ export function buildPictureModel(
   const overflowBytes = Math.max(0, residentBytes - capacityBytes);
   const restore = restoreVsRecompute(settings, hardware, model, settings.kvPlacement);
   const bottleneckTag = decode.bottleneck === 'placement'
-    ? 'Placement'
+    ? 'Distance'
     : decode.bottleneck === 'compute'
-      ? 'Execution'
-      : 'Traffic';
+      ? 'Math'
+      : decode.bottleneck === 'host' ? 'Host link' : 'Reading memory';
   const bottleneckSentence = decode.bottleneck === 'placement'
     ? `${settings.kvPlacement === 'object' ? 'Network storage' : 'The selected KV tier'} cannot feed each later pass fast enough; move active state closer.`
     : decode.bottleneck === 'compute'
@@ -69,14 +64,9 @@ export function buildPictureModel(
         : 'Reading weights and KV takes longer than doing the math; reduce or share those bytes.';
 
   return {
-    hardwareName: hardware.name,
-    capacityBytes,
     modelBytes: decode.weightBytes,
     kvBytes: decode.kvFootprintBytes,
-    freeBytes: Math.max(0, capacityBytes - residentBytes),
     overflowBytes,
-    modelFraction: Math.min(1, decode.weightBytes / capacityBytes),
-    kvFraction: Math.min(1, kvBytesInHbm / capacityBytes),
     steps: [
       {
         id: 'prefill', label: 'First pass: the whole prompt', readMs: prefill.memoryMs, mathMs: prefill.computeMs,
@@ -97,12 +87,6 @@ export function buildPictureModel(
     recomputeMs: restore.recomputeMs,
     bottleneckTag,
     bottleneckSentence,
-    modelLabel: `${formatBytes(decode.weightBytes)} model`,
-    kvLabel: `${formatBytes(decode.kvFootprintBytes)} KV`,
   };
 }
 
-export function pictureSummary(picture: PictureModel): string {
-  const decode = picture.steps.find((step) => step.id === 'decode')!;
-  return `${picture.concurrentUsers} users · ${formatDuration(decode.totalMs)} per token · ${formatNumber(picture.totalTokensPerSecond)} total tokens/s`;
-}

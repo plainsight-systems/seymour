@@ -70,7 +70,7 @@ export function applyMove(settings: SimulationSettings, move: MoveId, scenario: 
 }
 
 /** The goal's time in milliseconds (lower is better), and whether weights plus KV overflow GPU memory. */
-export function measure(goal: Goal, settings: SimulationSettings): { ms: number; spills: boolean } {
+function measure(goal: Goal, settings: SimulationSettings): { ms: number; spills: boolean } {
   const result = calculateSimulation(settings, getHardware(settings.hardwareId), modelFor(settings));
   return { ms: goal === 'token' ? result.msPerToken : result.totalMs, spills: result.hbmUsedFraction > 1 };
 }

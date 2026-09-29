@@ -10,11 +10,11 @@ describe('renderPictureMarkup', () => {
   const picture = buildPictureModel(result, { ...DEFAULT_SETTINGS }, hardware, DEFAULT_MODEL);
 
   it('renders each progressive layer in isolation', () => {
-    const layers: PictureLayer[] = ['stepCost', 'modelBlock', 'throughput', 'kvBlock', 'distanceLadder'];
+    const layers: PictureLayer[] = ['stepCost', 'throughput', 'distanceLadder'];
     for (const layer of layers) {
       const markup = renderPictureMarkup(picture, new Set([layer]));
-      if (layer === 'modelBlock' || layer === 'kvBlock') expect(markup).toContain(`memory-${layer === 'modelBlock' ? 'model' : 'kv'}`);
-      else expect(markup).toContain(`data-picture-layer="${layer}"`);
+      expect(markup).toContain(`data-picture-layer="${layer}"`);
+      for (const other of layers.filter((candidate) => candidate !== layer)) expect(markup).not.toContain(`data-picture-layer="${other}"`);
     }
   });
 

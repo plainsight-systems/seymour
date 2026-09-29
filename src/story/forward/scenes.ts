@@ -43,8 +43,6 @@ function ratio(a: number, b: number): string {
 
 export interface ForwardScenesView {
   render(hardwareId: string): void;
-  /** The workload chosen in Act 2, for later acts to adopt. */
-  settings(): SimulationSettings;
 }
 
 export function mountForwardScenes(
@@ -170,6 +168,5 @@ export function mountForwardScenes(
       hardwareId = nextHardwareId;
       render();
     },
-    settings: () => ({ ...workload, hardwareId }),
   };
 }

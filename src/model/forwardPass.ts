@@ -28,8 +28,6 @@ export interface ForwardStage {
   limit: 'math' | 'memory' | 'host';
   /** The operations folded into this stage (empty for CPU stages and embed). */
   operations: AlgorithmStep[];
-  inputShape: string;
-  outputShape: string;
 }
 
 /** A stage's time floor: the slower of its math and its memory traffic. */
@@ -62,7 +60,7 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
   const effectiveBandwidth = hardware.hbmBandwidthTBs * 1e12 * hardware.memoryEfficiency;
   const hostBandwidth = hardware.hostLinkGBs * 1e9;
 
-  function gpuStage(id: StageId, operations: AlgorithmStep[], repeats: number, inputShape: string, outputShape: string): ForwardStage {
+  function gpuStage(id: StageId, operations: AlgorithmStep[], repeats: number): ForwardStage {
     const flops = sum(operations, (step) => step.flops) * repeats;
     const weightBytes = sum(operations, (step) => step.parameterBytes) * repeats;
     const kvBytes = sum(operations, (step) => step.spillableKvBytes ?? 0) * repeats;
@@ -70,16 +68,15 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
     const activationBytes = Math.max(0, boundary - kvBytes);
     const computeMs = flops / effectiveFlops * 1000;
     const memoryMs = (weightBytes + kvBytes + activationBytes) / effectiveBandwidth * 1000;
-    return { id, runsOn: 'gpu', repeats, flops, weightBytes, kvBytes, activationBytes, hostLinkBytes: 0, computeMs, memoryMs, limit: computeMs >= memoryMs ? 'math' : 'memory', operations, inputShape, outputShape };
+    return { id, runsOn: 'gpu', repeats, flops, weightBytes, kvBytes, activationBytes, hostLinkBytes: 0, computeMs, memoryMs, limit: computeMs >= memoryMs ? 'math' : 'memory', operations };
   }
 
-  function cpuStage(id: StageId, hostLinkBytes: number, inputShape: string, outputShape: string): ForwardStage {
-    return { id, runsOn: 'cpu', repeats: 1, flops: 0, weightBytes: 0, kvBytes: 0, activationBytes: 0, hostLinkBytes, computeMs: 0, memoryMs: hostLinkBytes / hostBandwidth * 1000, limit: 'host', operations: [], inputShape, outputShape };
+  function cpuStage(id: StageId, hostLinkBytes: number): ForwardStage {
+    return { id, runsOn: 'cpu', repeats: 1, flops: 0, weightBytes: 0, kvBytes: 0, activationBytes: 0, hostLinkBytes, computeMs: 0, memoryMs: hostLinkBytes / hostBandwidth * 1000, limit: 'host', operations: [] };
   }
 
   const attentionOps = ['rms-attn', 'qkv', 'rope', 'kv-cache', 'qk', 'softmax', 'pv', 'o-proj'].map(byId);
   const mlpOps = ['rms-mlp', 'swiglu'].map(byId);
-  const hidden = `[${settings.batch}, ${(tokensThisPass / settings.batch).toLocaleString()}, ${model.hiddenSize}]`;
 
   // Embedding: a gather that reads one table row per token, not the whole table.
   const embedBytes = tokensThisPass * model.hiddenSize * weightBytesPerParam + tokensThisPass * model.hiddenSize * activationBytesPerValue;
@@ -88,17 +85,16 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
     weightBytes: tokensThisPass * model.hiddenSize * weightBytesPerParam, kvBytes: 0,
     activationBytes: tokensThisPass * model.hiddenSize * activationBytesPerValue, hostLinkBytes: 0,
     computeMs: 0, memoryMs: embedBytes / effectiveBandwidth * 1000, limit: 'memory', operations: [],
-    inputShape: `[${settings.batch}, ${(tokensThisPass / settings.batch).toLocaleString()}] token IDs`, outputShape: hidden,
   };
 
   return [
-    cpuStage('tokenize', tokensThisPass * TOKEN_ID_BYTES, 'text', `[${settings.batch}, ${(tokensThisPass / settings.batch).toLocaleString()}] token IDs`),
+    cpuStage('tokenize', tokensThisPass * TOKEN_ID_BYTES),
     embed,
-    gpuStage('attention', attentionOps, layers, hidden, hidden),
-    gpuStage('mlp', mlpOps, layers, hidden, hidden),
-    gpuStage('unembed', [byId('logits')], 1, `[${settings.batch}, 1, ${model.hiddenSize}]`, `[${settings.batch}, ${model.vocabSize.toLocaleString()}] logits`),
-    gpuStage('sample', [byId('sample')], 1, `[${settings.batch}, ${model.vocabSize.toLocaleString()}] logits`, `[${settings.batch}] token IDs`),
-    cpuStage('detokenize', settings.batch * TOKEN_ID_BYTES, `[${settings.batch}] token IDs`, 'text, streamed'),
+    gpuStage('attention', attentionOps, layers),
+    gpuStage('mlp', mlpOps, layers),
+    gpuStage('unembed', [byId('logits')], 1),
+    gpuStage('sample', [byId('sample')], 1),
+    cpuStage('detokenize', settings.batch * TOKEN_ID_BYTES),
   ];
 }
 

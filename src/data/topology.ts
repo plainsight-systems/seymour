@@ -35,31 +35,31 @@ export interface ChipTopology {
   sources: TopologySource[];
 }
 
-export const HOPPER_WHITEPAPER: TopologySource = {
+const HOPPER_WHITEPAPER: TopologySource = {
   label: 'NVIDIA H100 Tensor Core GPU Architecture whitepaper',
   url: 'https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c',
 };
-export const ROCM_MI300: TopologySource = {
+const ROCM_MI300: TopologySource = {
   label: 'AMD ROCm: MI300 series microarchitecture',
   url: 'https://rocm.docs.amd.com/en/latest/reference/gpu-arch/mi300.html',
 };
-export const ROCM_SPECS: TopologySource = {
+const ROCM_SPECS: TopologySource = {
   label: 'AMD ROCm: GPU architecture specifications',
   url: 'https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html',
 };
-export const H200_SPECS: TopologySource = {
+const H200_SPECS: TopologySource = {
   label: 'NVIDIA H200 product specifications',
   url: 'https://www.nvidia.com/en-us/data-center/h200/',
 };
-export const MI325X_DATASHEET: TopologySource = {
+const MI325X_DATASHEET: TopologySource = {
   label: 'AMD Instinct MI325X data sheet',
   url: 'https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/product-briefs/instinct-mi325x-datasheet.pdf',
 };
-export const MI355X_BROCHURE: TopologySource = {
+const MI355X_BROCHURE: TopologySource = {
   label: 'AMD Instinct MI355X GPU brochure',
   url: 'https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/product-briefs/amd-instinct-mi355x-gpu-brochure.pdf',
 };
-export const CDNA3_ANALYSIS: TopologySource = {
+const CDNA3_ANALYSIS: TopologySource = {
   label: 'Chips and Cheese: AMD’s CDNA 3 compute architecture',
   url: 'https://chipsandcheese.com/p/amds-cdna-3-compute-architecture',
 };
