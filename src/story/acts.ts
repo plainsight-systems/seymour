@@ -26,6 +26,8 @@ export interface ActsView {
   sceneHost(sceneId: string): HTMLElement;
   /** Opens a scene (and scrolls to its act when asked). Returns false for unknown ids. */
   open(target: string, scroll: boolean): boolean;
+  /** Opens a scene, scrolls to its act, and records it in the address bar (no reload). Throws for unknown targets. */
+  navigate(target: string): void;
 }
 
 export interface ActsOptions {
@@ -138,6 +140,10 @@ export function mountActs(root: HTMLElement, acts: ActSpec[], options: ActsOptio
       if (sceneId && act.scenes.some((scene) => scene.id === sceneId)) select(act, sceneId, false);
       if (scroll) pin(act.id);
       return true;
+    },
+    navigate(target: string): void {
+      if (!view.open(target, true)) throw new Error(`Unknown scene "${target}"`);
+      history.replaceState(null, '', `#${target}`);
     },
   };
 

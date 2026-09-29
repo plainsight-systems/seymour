@@ -6,7 +6,7 @@ import type { KvPlacement, SimulationSettings } from '../types';
 import type { KnobId } from './challenges/engine';
 import { buildCutawayInputs } from './cutaway/inputs';
 import { tileSteps, diePlate, packagePlate, serverPlate, unitPlate, type Plate, type PlateId } from './cutaway/plates';
-import { mountCutaway, type CutawayView } from './cutaway/render';
+import { CUTAWAY_LEGEND, mountCutaway, type CutawayView } from './cutaway/render';
 import { buildPictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 
@@ -71,7 +71,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
           <div class="playground-tile" data-tile-steps hidden></div>
           <div data-playground-cutaway></div>
           <p class="panel-caption" data-tile-text hidden></p>
-          <ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>
+          ${CUTAWAY_LEGEND}
         </section>
         <div data-playground-picture></div>
       </div>

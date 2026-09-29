@@ -1,4 +1,5 @@
 import type { StageId } from '../../model/forwardPass';
+import type { GpuSceneId } from '../gpu';
 import type { ModelProfile } from '../../types';
 
 // What each forward-pass stage is, in plain words, for Act 2. Numbers are
@@ -6,7 +7,7 @@ import type { ModelProfile } from '../../types';
 
 export interface HardwareLink {
   /** Act 1 scene and part to open, e.g. package + hbm. */
-  scene: 'server' | 'package' | 'die' | 'unit';
+  scene: GpuSceneId;
   part: string;
   label: string;
 }

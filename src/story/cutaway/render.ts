@@ -140,6 +140,9 @@ function callout(layer: SVGGElement, label: SceneLabel): SVGGElement {
   return g;
 }
 
+/** The key for label marks: what each label's figure rests on. Shown beside every plate. */
+export const CUTAWAY_LEGEND = `<ul class="cw-legend" aria-label="What each label rests on"><li><i class="cw-basis-published"></i>published figure</li><li><i class="cw-basis-representative"></i>representative figure</li><li><i class="cw-basis-schematic"></i>schematic placement</li></ul>`;
+
 export interface CutawayView {
   update(plate: Plate): void;
   /** Selects a part (or clears with null), exactly as a click would. */
