@@ -54,7 +54,95 @@ function spread(i: number, salt: number): number {
   return ((i + 1) * 0.6180339887 + salt * 0.7548776662) % 1;
 }
 
-function reducedMotion(): boolean {
+export type MarkerState = 'open' | 'right' | 'wrong';
+
+export interface BarOptions {
+  items: QuizItem[];
+  index: number;
+  states: MarkerState[];
+  /** What one item is called in labels, e.g. "Question" or "Challenge". */
+  itemNoun: string;
+  /** Past tense for a finished item, e.g. "answered" or "cleared". */
+  doneWord: string;
+  /** Word for a good result in the score, e.g. "right" or "cleared". */
+  rightWord: string;
+  right: number;
+  answered: number;
+  total: number;
+  /** Show the "See results" button (every item done, card closed). */
+  offerResults: boolean;
+  canReset: boolean;
+}
+
+/** The bar: previous / next, one marker per item, the running score, and Reset. Uses data-quiz-* actions. */
+export function quizBar(options: BarOptions): string {
+  const pips = options.items.map((item, i) => {
+    const state = options.states[i]!;
+    const mark = state === 'open' ? String(i + 1) : state === 'right' ? '✓' : '✗';
+    const label = `${options.itemNoun} ${i + 1}: ${item.title}${state === 'open' ? `, not ${options.doneWord}` : state === 'right' ? `, ${options.rightWord}` : ', wrong'}`;
+    return `<li><button type="button" class="quiz-pip" data-quiz-go="${i}" data-state="${state}" aria-current="${i === options.index ? 'step' : 'false'}" aria-label="${escapeHtml(label)}" style="--i:${i}">${mark}</button></li>`;
+  }).join('');
+  const left = options.total - options.answered;
+  return `<div class="quiz-top">
+      <nav class="quiz-nav" aria-label="${escapeHtml(options.itemNoun)}s">
+        <button type="button" class="quiz-step" data-quiz-prev ${options.index === 0 ? 'disabled' : ''} aria-label="Previous">‹</button>
+        <ol class="quiz-pips">${pips}</ol>
+        <button type="button" class="quiz-step" data-quiz-next ${options.index === options.items.length - 1 ? 'disabled' : ''} aria-label="Next">›</button>
+      </nav>
+      <p class="quiz-tally" aria-live="polite"><b>${options.right}</b> of ${options.answered} ${options.rightWord}<span>${left ? ` · ${left} to go` : ` · all ${options.doneWord}`}</span></p>
+      <span class="quiz-top-actions">
+        ${options.offerResults ? '<button type="button" class="quiz-small" data-quiz-card>See results</button>' : ''}
+        <button type="button" class="quiz-small" data-quiz-restart ${options.canReset ? '' : 'disabled'}>Reset</button>
+      </span>
+    </div>`;
+}
+
+export interface CardOptions {
+  play: boolean;
+  right: number;
+  total: number;
+  noun: string;
+  verdict: string;
+  next: { href: string; label: string };
+  titleId: string;
+}
+
+/** The results card (with the confetti burst when `play`). Uses data-quiz-review and data-quiz-restart. */
+export function quizCard(options: CardOptions): string {
+  const confetti = options.play
+    ? `<div class="quiz-confetti" aria-hidden="true">${Array.from({ length: 64 }, (_, i) => {
+        const angle = spread(i, 1) * Math.PI * 2;
+        const distance = 120 + spread(i, 2) * 260;
+        return `<i style="--x:${Math.round(Math.cos(angle) * distance)}px;--y:${Math.round(Math.sin(angle) * distance * 0.7 - 60)}px;--r:${Math.round(spread(i, 3) * 720 - 360)}deg;--d:${(0.35 + spread(i, 4) * 0.25).toFixed(2)}s;--c:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--w:${6 + Math.round(spread(i, 5) * 6)}px"></i>`;
+      }).join('')}</div>`
+    : '';
+  return `<div class="build-done quiz-done${options.play ? ' is-celebrating' : ''}">${confetti}<div class="build-done-card" role="dialog" aria-labelledby="${options.titleId}">
+      <p class="build-done-kicker">Challenge complete</p>
+      <h3 id="${options.titleId}"><span data-quiz-count="${options.right}">${options.play ? 0 : options.right}</span> of ${options.total} ${escapeHtml(options.noun)}</h3>
+      <p class="build-done-score">${escapeHtml(options.verdict)}</p>
+      <div class="build-done-actions"><a class="build-next" href="${options.next.href}">${escapeHtml(options.next.label)}</a><button type="button" class="build-look" data-quiz-review>Review answers</button><button type="button" class="build-reset" data-quiz-restart>Play again</button></div>
+    </div></div>`;
+}
+
+/** After a render: keep the results card below the bar, which stays usable. */
+export function placeCard(host: HTMLElement): void {
+  const top = host.querySelector<HTMLElement>('.quiz-top');
+  const scene = host.querySelector<HTMLElement>('.quiz-scene');
+  if (top && scene) scene.style.setProperty('--quiz-top', `${top.offsetTop + top.offsetHeight}px`);
+}
+
+/** Markers pop in turn and the score counts up; the confetti is CSS. */
+export function playFinale(host: HTMLElement): void {
+  host.querySelector('.quiz-pips')?.classList.add('is-popping');
+  const target = host.querySelector<HTMLElement>('[data-quiz-count]');
+  if (!target) return;
+  // Timers, not animation frames: frames pause in background tabs, and the
+  // count must always land on the real score.
+  const final = Number(target.dataset.quizCount);
+  for (let n = 1; n <= final; n++) window.setTimeout(() => { target.textContent = String(n); }, 600 + (700 * n) / Math.max(1, final));
+}
+
+export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
@@ -72,42 +160,17 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
 
   function bar(): string {
     const score = tally(ids, results);
-    const pips = spec.items.map((item, i) => {
-      const result = results.get(item.id);
-      const state = result === undefined ? 'open' : result ? 'right' : 'wrong';
-      const mark = result === undefined ? String(i + 1) : result ? '✓' : '✗';
-      const label = `Question ${i + 1}: ${item.title}${result === undefined ? ', not answered' : result ? ', right' : ', wrong'}`;
-      return `<li><button type="button" class="quiz-pip" data-quiz-go="${i}" data-state="${state}" aria-current="${i === index ? 'step' : 'false'}" aria-label="${escapeHtml(label)}" style="--i:${i}">${mark}</button></li>`;
-    }).join('');
-    return `<div class="quiz-top">
-      <nav class="quiz-nav" aria-label="Questions">
-        <button type="button" class="quiz-step" data-quiz-prev ${index === 0 ? 'disabled' : ''} aria-label="Previous question">‹</button>
-        <ol class="quiz-pips">${pips}</ol>
-        <button type="button" class="quiz-step" data-quiz-next ${index === spec.items.length - 1 ? 'disabled' : ''} aria-label="Next question">›</button>
-      </nav>
-      <p class="quiz-tally" aria-live="polite"><b>${score.right}</b> of ${score.answered} right<span>${score.total - score.answered ? ` · ${score.total - score.answered} to go` : ' · all answered'}</span></p>
-      <span class="quiz-top-actions">
-        ${score.complete && !showCard ? '<button type="button" class="quiz-small" data-quiz-card>See results</button>' : ''}
-        <button type="button" class="quiz-small" data-quiz-restart ${score.answered === 0 && picks.size === 0 ? 'disabled' : ''}>Reset</button>
-      </span>
-    </div>`;
+    return quizBar({
+      items: spec.items, index, itemNoun: 'Question', doneWord: 'answered', rightWord: 'right',
+      states: spec.items.map((item) => { const result = results.get(item.id); return result === undefined ? 'open' : result ? 'right' : 'wrong'; }),
+      right: score.right, answered: score.answered, total: score.total,
+      offerResults: score.complete && !showCard, canReset: score.answered > 0 || picks.size > 0,
+    });
   }
 
   function card(play: boolean): string {
     const score = tally(ids, results);
-    const confetti = play
-      ? `<div class="quiz-confetti" aria-hidden="true">${Array.from({ length: 64 }, (_, i) => {
-          const angle = spread(i, 1) * Math.PI * 2;
-          const distance = 120 + spread(i, 2) * 260;
-          return `<i style="--x:${Math.round(Math.cos(angle) * distance)}px;--y:${Math.round(Math.sin(angle) * distance * 0.7 - 60)}px;--r:${Math.round(spread(i, 3) * 720 - 360)}deg;--d:${(0.35 + spread(i, 4) * 0.25).toFixed(2)}s;--c:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--w:${6 + Math.round(spread(i, 5) * 6)}px"></i>`;
-        }).join('')}</div>`
-      : '';
-    return `<div class="build-done quiz-done${play ? ' is-celebrating' : ''}">${confetti}<div class="build-done-card" role="dialog" aria-labelledby="${host.id || 'quiz'}-done-title">
-      <p class="build-done-kicker">Challenge complete</p>
-      <h3 id="${host.id || 'quiz'}-done-title"><span data-quiz-count="${score.right}">${play ? 0 : score.right}</span> of ${score.total} ${escapeHtml(spec.finale.noun)}</h3>
-      <p class="build-done-score">${escapeHtml(spec.finale.verdict(score.right, score.total))}</p>
-      <div class="build-done-actions"><a class="build-next" href="${spec.finale.next.href}">${escapeHtml(spec.finale.next.label)}</a><button type="button" class="build-look" data-quiz-review>Review answers</button><button type="button" class="build-reset" data-quiz-restart>Play again</button></div>
-    </div></div>`;
+    return quizCard({ play, right: score.right, total: score.total, noun: spec.finale.noun, verdict: spec.finale.verdict(score.right, score.total), next: spec.finale.next, titleId: `${host.id || 'quiz'}-done-title` });
   }
 
   function render(): void {
@@ -115,7 +178,7 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
     const pick = pickFor(item.id);
     const checked = results.has(item.id);
     const nextOpen = spec.items.findIndex((other, i) => i !== index && !results.has(other.id));
-    const play = showCard && celebrate && !reducedMotion();
+    const play = showCard && celebrate && !prefersReducedMotion();
     host.innerHTML = `<div class="quiz-scene">
       ${bar()}
       <div class="quiz-question">
@@ -130,22 +193,9 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
       <div class="quiz-answer" aria-live="polite">${checked ? spec.reveal(index, pick) : `<p class="quiz-waiting">${escapeHtml(spec.waiting)}</p>`}</div>
       ${showCard ? card(play) : ''}
     </div>`;
-    // The results card sits below the bar, which stays usable.
-    const top = host.querySelector<HTMLElement>('.quiz-top');
-    if (top) host.querySelector<HTMLElement>('.quiz-scene')!.style.setProperty('--quiz-top', `${top.offsetTop + top.offsetHeight}px`);
-    if (play) runCelebration();
+    placeCard(host);
+    if (play) playFinale(host);
     celebrate = false;
-  }
-
-  /** Markers pop in turn and the score counts up; the confetti is CSS. Plays once per completion. */
-  function runCelebration(): void {
-    host.querySelector('.quiz-pips')?.classList.add('is-popping');
-    const target = host.querySelector<HTMLElement>('[data-quiz-count]');
-    if (!target) return;
-    // Timers, not animation frames: frames pause in background tabs, and the
-    // count must always land on the real score.
-    const final = Number(target.dataset.quizCount);
-    for (let n = 1; n <= final; n++) window.setTimeout(() => { target.textContent = String(n); }, 600 + (700 * n) / Math.max(1, final));
   }
 
   function go(next: number): void {
@@ -177,7 +227,7 @@ export function mountQuiz<P>(host: HTMLElement, spec: QuizSpec<P>): QuizView {
       render();
       if (tally(ids, results).complete) {
         // Let the last reveal land before the finish plays over it.
-        finishTimer = window.setTimeout(() => { showCard = true; celebrate = true; render(); }, reducedMotion() ? 0 : 900);
+        finishTimer = window.setTimeout(() => { showCard = true; celebrate = true; render(); }, prefersReducedMotion() ? 0 : 900);
       }
       return;
     }
