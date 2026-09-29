@@ -212,9 +212,10 @@
 .gpu-scene { display: grid; gap: 0.75rem; padding: 1rem clamp(1rem, 4vw, 4rem) 2rem; }
 .gpu-scene-lead { max-width: 70ch; margin: 0; font-size: 1.05rem; line-height: 1.5; }
 .act-rail { position: fixed; top: 50%; right: 0.75rem; z-index: 60; display: grid; gap: 0.4rem; transform: translateY(-50%); }
-.act-rail a { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; min-height: 32px; color: var(--ink); text-decoration: none; }
+.act-rail a { position: relative; display: flex; align-items: center; justify-content: flex-end; min-height: 32px; color: var(--ink); text-decoration: none; }
 .act-rail span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--paper); font-size: 0.75rem; font-weight: 800; }
-.act-rail b { padding: 0.2rem 0.45rem; color: var(--paper); background: var(--ink); font-size: 0.7rem; opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
+/* The hover label sits outside the link's box, so its hidden area never swallows clicks on the page beneath. */
+.act-rail b { position: absolute; right: calc(100% + 0.5rem); padding: 0.2rem 0.45rem; white-space: nowrap; color: var(--paper); background: var(--ink); font-size: 0.7rem; opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
 .act-rail a:hover b, .act-rail a:focus-visible b { opacity: 1; }
 .act-rail a[aria-current] span { color: var(--paper); border-color: var(--red); background: var(--red); }
 /* Reserve a gutter for the rail so it never covers a drawing. */
