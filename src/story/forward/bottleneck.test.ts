@@ -20,7 +20,8 @@ describe('find-the-bottleneck challenge', () => {
     // Robust on every chip: decode at low batch reads weights; long-context decode reads KV; batched prompts do math.
     for (const hardware of HARDWARE_PROFILES) {
       expect(solve(byId('chat-reply'), hardware.id)).toMatchObject({ stage: 'mlp', limit: 'memory' });
-      expect(solve(byId('busy-short'), hardware.id)).toMatchObject({ stage: 'mlp', limit: 'memory' });
+      // 16 × 8,192 = 131K tokens of KV (about 17 GB) outweighs the MLP's 11 GB of weights.
+      expect(solve(byId('team-chats'), hardware.id)).toMatchObject({ stage: 'attention', limit: 'memory' });
       expect(solve(byId('busy-long'), hardware.id)).toMatchObject({ stage: 'attention', limit: 'memory' });
       expect(solve(byId('short-prompts'), hardware.id)).toMatchObject({ stage: 'mlp', limit: 'math' });
     }
