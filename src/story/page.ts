@@ -813,7 +813,7 @@ const pickChallenge = mountPickChallenge(acts.sceneHost('pick'), (target) => {
 pickChallenge.render(storyHardwareId);
 
 // Act 4: the challenges, then the playground.
-challengeBoard = mountChallengeBoard(acts.sceneHost('challenges'), (target) => {
+challengeBoard = mountChallengeBoard(acts.sceneHost('challenges'), storyHardwareId, (target) => {
   acts.open(target, true);
   history.replaceState(null, '', `#${target}`);
 }, () => syncAct4Chips());
@@ -835,19 +835,20 @@ root.addEventListener('click', (event) => {
     renderPanel(panel);
   }
   playground?.setHardware(storyHardwareId);
+  challengeBoard?.setHardware(storyHardwareId);
   syncAct4Chips();
 });
 
 /**
- * Act 4's chip buttons never claim a chip the numbers are not using: while the
- * challenges are open they show the challenge's fixed chip, disabled, with a
- * note; on the playground they show the story-wide chip.
+ * Act 4's chip buttons never claim a chip the numbers are not using. The
+ * challenges follow the story-wide chip, except "Pick the chip", where the
+ * chip is the question: there the buttons show its pick, disabled, with a note.
  */
 function syncAct4Chips(): void {
   // Before the board mounts (while the acts are still being built) there is nothing to lock.
   if (!challengeBoard) return;
   const tools = acts.sceneHost('challenges').closest('.act')!.querySelector<HTMLElement>('.act-tools')!;
-  const locked = act4Scene === 'challenges' ? challengeBoard.currentChip() : null;
+  const locked = act4Scene === 'challenges' && challengeBoard.chipIsAKnob() ? challengeBoard.currentChip() : null;
   for (const chip of tools.querySelectorAll<HTMLButtonElement>('[data-chip]')) {
     chip.setAttribute('aria-pressed', String(chip.dataset.chip === (locked ?? storyHardwareId)));
     chip.disabled = locked !== null;
@@ -860,6 +861,6 @@ function syncAct4Chips(): void {
     tools.appendChild(note);
   }
   note.hidden = locked === null;
-  note.textContent = locked ? `${getHardware(locked).name}: ${challengeBoard.chipIsAKnob() ? 'picked in this challenge' : 'fixed by this challenge'}` : '';
+  note.textContent = locked ? `${getHardware(locked).name}: picked in this challenge` : '';
 }
 syncAct4Chips();

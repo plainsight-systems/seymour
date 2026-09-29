@@ -3,7 +3,7 @@ import { calculateSimulation, formatDuration, formatNumber, responseTiming } fro
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
 import { placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
-import { CHALLENGES } from './data';
+import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
 
 // Act 4 challenges: each fixes a workload and some targets; the reader moves
@@ -11,6 +11,8 @@ import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, 
 // navigation, and the finale share the quiz bar and card from Acts 2 and 3.
 
 export interface ChallengeBoardView {
+  /** Rebuilds every challenge for the chip picked above; progress starts over, since targets change. */
+  setHardware(hardwareId: string): void;
   /** The chip the challenge on screen runs on. */
   currentChip(): string;
   /** Whether that chip is chosen inside the challenge (a knob) rather than fixed by it. */
@@ -139,9 +141,11 @@ function applyKnob(settings: SimulationSettings, knob: KnobId, raw: string): Sim
   return next;
 }
 
-export function mountChallengeBoard(host: HTMLElement, openScene: (target: string) => void, onChipChange: () => void): ChallengeBoardView {
+export function mountChallengeBoard(host: HTMLElement, hardwareId: string, openScene: (target: string) => void, onChipChange: () => void): ChallengeBoardView {
   let index = 0;
-  const attempts = new Map<string, SimulationSettings>(CHALLENGES.map((challenge) => [challenge.id, { ...challenge.naive }]));
+  /** Built for the chip picked above: workloads and targets come from its numbers. */
+  let challenges = challengesFor(hardwareId);
+  const attempts = new Map<string, SimulationSettings>(challenges.map((challenge) => [challenge.id, { ...challenge.naive }]));
   /** Challenges cleared at least once. A cleared challenge stays cleared. */
   const cleared = new Set<string>();
   /** The challenge whose "cleared" moment should animate on the next render. */
@@ -150,7 +154,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
   let celebrate = false;
   let finishTimer = 0;
 
-  const current = (): Challenge => CHALLENGES[index]!;
+  const current = (): Challenge => challenges[index]!;
 
   /** The key numbers the targets do not already show, so nothing is said twice. */
   function numbers(challenge: Challenge, settings: SimulationSettings): string {
@@ -170,13 +174,13 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
   }
 
   function barHtml(): string {
-    const done = cleared.size === CHALLENGES.length;
+    const done = cleared.size === challenges.length;
     return quizBar({
-      items: CHALLENGES, index, itemNoun: 'Challenge', doneWord: 'cleared', rightWord: 'cleared',
-      states: CHALLENGES.map((item) => (cleared.has(item.id) ? 'right' : 'open')),
-      right: cleared.size, answered: cleared.size, total: CHALLENGES.length,
+      items: challenges, index, itemNoun: 'Challenge', doneWord: 'cleared', rightWord: 'cleared',
+      states: challenges.map((item) => (cleared.has(item.id) ? 'right' : 'open')),
+      right: cleared.size, answered: cleared.size, total: challenges.length,
       offerResults: done && !showCard,
-      canReset: cleared.size > 0 || CHALLENGES.some((item) => JSON.stringify(attempts.get(item.id)) !== JSON.stringify(item.naive)),
+      canReset: cleared.size > 0 || challenges.some((item) => JSON.stringify(attempts.get(item.id)) !== JSON.stringify(item.naive)),
     });
   }
 
@@ -184,8 +188,8 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     const challenge = current();
     const settings = attempts.get(challenge.id)!;
     const evaluation = evaluateChallenge(challenge, settings);
-    const done = cleared.size === CHALLENGES.length;
-    const nextOpen = CHALLENGES.findIndex((other, i) => i !== index && !cleared.has(other.id));
+    const done = cleared.size === challenges.length;
+    const nextOpen = challenges.findIndex((other, i) => i !== index && !cleared.has(other.id));
     const meters = evaluation.results.map((result) => {
       const hint = METRIC_HINT[result.constraint.metric];
       const pct = Math.round(progress(result) * 100);
@@ -215,7 +219,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     host.innerHTML = `<div class="quiz-scene ch-scene">
       <div data-ch-bar>${barHtml()}</div>
       <div class="quiz-question">
-        <p class="stage-kicker">Challenge ${index + 1} of ${CHALLENGES.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, fixed by this challenge`}</p>
+        <p class="stage-kicker">Challenge ${index + 1} of ${challenges.length} · ${challenge.adjustable.includes('hardwareId') ? 'runs on the chip you pick below' : `runs on ${escapeHtml(hardware.name)}, the chip picked above`}</p>
         <h3>${escapeHtml(challenge.title)}</h3>
         <p class="stage-lead">${escapeHtml(challenge.brief)}</p>
         <p class="quiz-workload">${workloadFacts(challenge, attempts.get(challenge.id)!)}</p>
@@ -223,7 +227,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
         <button type="button" class="quiz-small ch-start-over" data-ch-start-over>Start this challenge over</button>
       </div>
       <div class="quiz-answer ch-answer" aria-live="polite" data-ch-answer>${answerHtml()}</div>
-      ${showCard ? quizCard({ play, right: cleared.size, total: CHALLENGES.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, titleId: 'ch-done-title' }) : ''}
+      ${showCard ? quizCard({ play, right: cleared.size, total: challenges.length, noun: 'challenges cleared', verdict: 'Every constraint met with the model’s own numbers. The playground has every knob at once, on any chip.', next: { href: '#act-4/playground', label: 'Open the playground →' }, titleId: 'ch-done-title' }) : ''}
     </div>`;
     placeCard(host);
     if (play) playFinale(host);
@@ -246,7 +250,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     if (!cleared.has(challenge.id) && evaluateChallenge(challenge, settings).passed) {
       cleared.add(challenge.id);
       justCleared = challenge.id;
-      if (cleared.size === CHALLENGES.length) {
+      if (cleared.size === challenges.length) {
         finishTimer = window.setTimeout(() => { showCard = true; celebrate = true; render(); }, prefersReducedMotion() ? 0 : 1200);
       }
     }
@@ -256,7 +260,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
 
   function go(next: number): void {
     showCard = false;
-    index = Math.max(0, Math.min(CHALLENGES.length - 1, next));
+    index = Math.max(0, Math.min(challenges.length - 1, next));
     render();
     // Each challenge has its own chip (fixed, or picked in it), so the header re-syncs on every move.
     onChipChange();
@@ -289,7 +293,7 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
     if (target.closest('[data-ch-start-over]')) { attempts.set(current().id, { ...current().naive }); render(); return; }
     if (target.closest('[data-quiz-restart]')) {
       window.clearTimeout(finishTimer);
-      for (const challenge of CHALLENGES) attempts.set(challenge.id, { ...challenge.naive });
+      for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
       cleared.clear();
       showCard = false;
       go(0);
@@ -301,6 +305,17 @@ export function mountChallengeBoard(host: HTMLElement, openScene: (target: strin
 
   render();
   return {
+    setHardware(next: string): void {
+      if (next === hardwareId) return;
+      hardwareId = next;
+      window.clearTimeout(finishTimer);
+      challenges = challengesFor(hardwareId);
+      attempts.clear();
+      for (const challenge of challenges) attempts.set(challenge.id, { ...challenge.naive });
+      cleared.clear();
+      showCard = false;
+      render();
+    },
     currentChip: () => attempts.get(current().id)!.hardwareId,
     chipIsAKnob: () => current().adjustable.includes('hardwareId'),
   };
