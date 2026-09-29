@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HARDWARE_PROFILES } from '../../data/profiles';
-import { SCENARIOS, WHY, judge, solve, stageTimeMs, tally } from './bottleneck';
+import { SCENARIOS, WHY, judge, solve, stageTimeMs } from './bottleneck';
 
 const byId = (id: string) => SCENARIOS.find((scenario) => scenario.id === id)!;
 
@@ -55,13 +55,5 @@ describe('find-the-bottleneck challenge', () => {
     expect(judge(answer, { stage: 'mlp', limit: 'memory' })).toEqual({ stageRight: true, limitRight: true });
     expect(judge(answer, { stage: 'attention', limit: 'memory' })).toEqual({ stageRight: false, limitRight: true });
     expect(judge(answer, { stage: 'mlp', limit: 'math' })).toEqual({ stageRight: true, limitRight: false });
-  });
-
-  it('keeps a running score and knows when every scenario is answered', () => {
-    expect(tally(new Map())).toEqual({ answered: 0, right: 0, total: SCENARIOS.length, complete: false });
-    const some = new Map([[SCENARIOS[0]!.id, true], [SCENARIOS[2]!.id, false], ['not-a-scenario', true]]);
-    expect(tally(some)).toEqual({ answered: 2, right: 1, total: SCENARIOS.length, complete: false });
-    const all = new Map(SCENARIOS.map((scenario, i) => [scenario.id, i % 2 === 0]));
-    expect(tally(all)).toMatchObject({ answered: SCENARIOS.length, right: Math.ceil(SCENARIOS.length / 2), complete: true });
   });
 });

@@ -61,20 +61,6 @@ export function judge(answer: BottleneckAnswer, pick: { stage: StageId; limit: L
   return { stageRight: pick.stage === answer.stage, limitRight: pick.limit === answer.limit };
 }
 
-export interface Tally {
-  answered: number;
-  right: number;
-  total: number;
-  complete: boolean;
-}
-
-/** The running score: results maps scenario id → both parts right. Unknown ids are ignored. */
-export function tally(results: ReadonlyMap<string, boolean>): Tally {
-  const answered = SCENARIOS.filter((scenario) => results.has(scenario.id));
-  const right = answered.filter((scenario) => results.get(scenario.id)).length;
-  return { answered: answered.length, right, total: SCENARIOS.length, complete: answered.length === SCENARIOS.length };
-}
-
 /** Why a stage ends up slowest under a given limit. Absent pairs get no invented reason. */
 export const WHY: Partial<Record<StageId, Partial<Record<Limit, string>>>> = {
   attention: {
