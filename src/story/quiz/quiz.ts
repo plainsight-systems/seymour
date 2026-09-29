@@ -1,4 +1,5 @@
 import { tally } from './tally';
+import { escapeHtml } from '../html';
 
 // A quiz shell shared by the act challenges: a bar with previous / next,
 // one marker per item, the running score, and Reset; a question column and
@@ -45,9 +46,6 @@ export interface QuizView {
 
 const CONFETTI_COLORS = ['var(--green)', 'var(--mustard)', 'var(--red)', 'var(--leaf, #6f8f2f)', 'var(--ink)'];
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 /** Deterministic spread in [0, 1): the golden-ratio sequence, so the burst looks scattered without randomness. */
 function spread(i: number, salt: number): number {

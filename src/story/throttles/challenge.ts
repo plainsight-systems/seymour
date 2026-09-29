@@ -1,6 +1,7 @@
 import { formatDuration } from '../../model/calculate';
 import { mountQuiz } from '../quiz/quiz';
 import { GOAL_LABEL, MOVES, PICK_SCENARIOS, WHY, rankMoves, type MoveId } from './pick';
+import { escapeHtml } from '../html';
 
 // Act 3 challenge: for each stuck workload, pick the one throttle that helps
 // most, then see what every throttle would have done. Answers live in
@@ -21,9 +22,6 @@ const MOVE_SCENE: Record<MoveId, { scene: string; title: string }> = {
 
 const label = (move: MoveId) => MOVES.find((candidate) => candidate.id === move)!.label;
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 function effect(speedup: number): string {
   if (Math.abs(speedup - 1) < 0.005) return 'no change';

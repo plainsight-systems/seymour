@@ -5,6 +5,7 @@ import type { KvPlacement, SimulationSettings } from '../../types';
 import { placeCard, playFinale, prefersReducedMotion, quizBar, quizCard } from '../quiz/quiz';
 import { challengesFor } from './data';
 import { KNOB_VALUES, evaluateChallenge, type Challenge, type ConstraintMetric, type ConstraintResult, type KnobId } from './engine';
+import { escapeHtml } from '../html';
 
 // Act 4 challenges: each fixes a workload and some targets; the reader moves
 // only the knobs the challenge allows until every target is met. Progress,
@@ -52,9 +53,6 @@ const KNOB_LABEL: Record<KnobId, string> = {
   idleKvPlacement: 'Idle sessions wait in', speculativeTokens: 'Guess tokens ahead', mathBits: 'Math precision', modelId: 'Model', hardwareId: 'Accelerator',
 };
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 function valueText(metric: ConstraintMetric, value: number | boolean): string {
   if (typeof value === 'boolean') return value ? 'yes' : 'no';

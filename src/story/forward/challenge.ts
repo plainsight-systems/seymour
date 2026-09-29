@@ -3,6 +3,7 @@ import type { StageId } from '../../model/forwardPass';
 import { mountQuiz } from '../quiz/quiz';
 import { SCENARIOS, WHY, judge, solve, stageTimeMs, type Limit } from './bottleneck';
 import { STAGE_ORDER, STAGE_TAB_LABEL } from './scenes';
+import { escapeHtml } from '../html';
 
 // Act 2 challenge: for each scenario, pick the slowest stage and its limit,
 // then see where the pass's time went. Answers and scoring live in
@@ -16,9 +17,6 @@ const LIMIT_LABEL: Record<Limit, string> = { math: 'Math', memory: 'Reading memo
 
 interface Pick { stage: StageId | null; limit: Limit | null }
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 export function mountBottleneckChallenge(host: HTMLElement, openStage: (stage: StageId) => void): BottleneckChallengeView {
   let hardwareId = '';

@@ -19,6 +19,7 @@ import { STORY_PANELS, type MoveEffect, type StoryMove, type StoryPanelSpec } fr
 import { buildPictureModel, type PictureModel } from './picture/model';
 import { renderPicture } from './picture/render';
 import { mountPlayground, type PlaygroundView } from './playground';
+import { escapeHtml } from './html';
 
 const root = document.querySelector<HTMLElement>('#route-root');
 if (!root) throw new Error('Missing #route-root');
@@ -339,9 +340,6 @@ for (const scene of GPU_SCENES) {
 
 const gpuSelected = new Map<string, string | null>();
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 /** The part card: plain name, the terms people use, what it is, does, and why it matters. */
 function renderPartCard(sceneId: string, plate: Plate): void {

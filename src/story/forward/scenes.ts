@@ -4,6 +4,7 @@ import { buildForwardPass, embeddingTableBytes, type ForwardStage, type StageId 
 import { modelFor } from '../../model/strategy';
 import type { SimulationSettings } from '../../types';
 import { STAGE_COPY, type HardwareLink, type StageFacts } from './stages';
+import { escapeHtml } from '../html';
 
 // Act 2: one forward pass, stage by stage. Renders the seven stage scenes
 // and owns the act's workload controls (users, context). A request runs the
@@ -29,9 +30,6 @@ export const FORWARD_TOOLS = `<span class="forward-tools">
   <label class="forward-select"><span>Context</span><select data-forward="sequenceLength">${CONTEXTS.map((n) => `<option value="${n}" ${n === 4096 ? 'selected' : ''}>${n.toLocaleString()} tokens</option>`).join('')}</select></label>
 </span>`;
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
 
 function bytesMoved(stage: ForwardStage): number {
   return stage.weightBytes + stage.kvBytes + stage.activationBytes;
