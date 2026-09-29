@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HARDWARE_PROFILES } from '../../data/profiles';
-import { SCENARIOS, WHY, judge, solve, stageTimeMs } from './bottleneck';
+import { SCENARIOS, WHY, judge, solve } from './bottleneck';
+import { stageTimeMs } from '../../model/forwardPass';
 
 const byId = (id: string) => SCENARIOS.find((scenario) => scenario.id === id)!;
 

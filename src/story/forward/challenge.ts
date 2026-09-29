@@ -1,10 +1,11 @@
 import { formatDuration } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
 import { mountQuiz } from '../quiz/quiz';
-import { SCENARIOS, WHY, judge, solve, stageTimeMs, type Limit } from './bottleneck';
+import { SCENARIOS, WHY, judge, solve, type Limit } from './bottleneck';
 import { STAGE_ORDER, STAGE_TAB_LABEL } from './scenes';
 import { LIMIT_LABEL } from './stages';
 import { escapeHtml } from '../html';
+import { stageTimeMs } from '../../model/forwardPass';
 
 // Act 2 challenge: for each scenario, pick the slowest stage and its limit,
 // then see where the pass's time went. Answers and scoring live in

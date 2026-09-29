@@ -1,6 +1,7 @@
 import type { AlgorithmStep, HardwareProfile, ModelProfile, SimulationSettings } from '../types';
 import { buildAlgorithmSteps } from './algorithm';
 import { matrixPeakTflops } from './calculate';
+import { newPromptTokens } from './prompt';
 
 // One forward pass, grouped the way it maps onto the machine: two CPU hops
 // around five GPU stages. Attention and MLP repeat once per layer; norms and
@@ -31,6 +32,11 @@ export interface ForwardStage {
   outputShape: string;
 }
 
+/** A stage's time floor: the slower of its math and its memory traffic. */
+export function stageTimeMs(stage: ForwardStage): number {
+  return Math.max(stage.computeMs, stage.memoryMs);
+}
+
 const TOKEN_ID_BYTES = 4;
 
 function sum(steps: AlgorithmStep[], pick: (step: AlgorithmStep) => number): number {
@@ -44,7 +50,8 @@ export function buildForwardPass(settings: SimulationSettings, model: ModelProfi
   const steps = buildAlgorithmSteps(settings, model);
   const byId = (id: string) => steps.find((step) => step.id === id)!;
   const layers = model.layers;
-  const tokensThisPass = settings.batch * (settings.phase === 'prefill' ? Math.max(1, settings.sequenceLength - (settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0)) : 1);
+  // A first pass still runs the newest token, even on a full prefix hit.
+  const tokensThisPass = settings.batch * (settings.phase === 'prefill' ? Math.max(1, newPromptTokens(settings)) : 1);
   const weightBytesPerParam = model.weightBits / 8;
   const activationBytesPerValue = model.kvBits / 8;
   const effectiveFlops = matrixPeakTflops(hardware, settings, model) * 1e12 * hardware.computeEfficiency;

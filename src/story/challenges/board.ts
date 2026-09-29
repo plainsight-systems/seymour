@@ -1,4 +1,4 @@
-import { MODEL_PROFILES, getHardware } from '../../data/profiles';
+import { getHardware } from '../../data/profiles';
 import { calculateSimulation, formatDuration, formatNumber } from '../../model/calculate';
 import { modelFor } from '../../model/strategy';
 import type { KvPlacement, SimulationSettings } from '../../types';
@@ -80,7 +80,7 @@ function progress(result: ConstraintResult): number {
 /** The fixed facts of the challenge's workload, so every throttle's effect can be reasoned about. */
 function workloadFacts(challenge: Challenge, settings: SimulationSettings): string {
   const facts = [
-    escapeHtml(MODEL_PROFILES.find((model) => model.id === settings.modelId)!.name.split(' · ')[0]!),
+    escapeHtml(modelFor(settings).shortName),
     `${settings.sequenceLength.toLocaleString()}-token context`,
     settings.prefixCachePercent ? `${settings.prefixCachePercent}% of each prompt shared` : 'nothing shared between prompts',
     `${Math.round(settings.draftAcceptanceRate * 100)}% of guesses land`,

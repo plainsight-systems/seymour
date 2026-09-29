@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
 import { formatBytes, formatDuration, formatFlops } from '../../model/calculate';
-import { buildForwardPass, embeddingTableBytes, type ForwardStage, type StageId } from '../../model/forwardPass';
+import { buildForwardPass, embeddingTableBytes, stageTimeMs, type ForwardStage, type StageId } from '../../model/forwardPass';
 import { modelFor } from '../../model/strategy';
 import type { SimulationSettings } from '../../types';
 import { LIMIT_LABEL, STAGE_COPY, type HardwareLink, type StageFacts } from './stages';
@@ -40,9 +40,6 @@ function ratio(a: number, b: number): string {
   return `${r >= 10 ? Math.round(r).toLocaleString() : r.toFixed(1)}×`;
 }
 
-function stageTime(stage: ForwardStage): number {
-  return Math.max(stage.computeMs, stage.memoryMs);
-}
 
 export interface ForwardScenesView {
   render(hardwareId: string): void;
@@ -77,8 +74,8 @@ export function mountForwardScenes(
       unembedShareOfModel: embeddingTableBytes(model) / (model.parametersB * 1e9 * (model.weightBits / 8)),
     };
     const totals = {
-      prefill: jobs.prefill.reduce((sum, stage) => sum + stageTime(stage), 0),
-      decode: jobs.decode.reduce((sum, stage) => sum + stageTime(stage), 0),
+      prefill: jobs.prefill.reduce((sum, stage) => sum + stageTimeMs(stage), 0),
+      decode: jobs.decode.reduce((sum, stage) => sum + stageTimeMs(stage), 0),
     };
     const context = workload.sequenceLength.toLocaleString();
     const who = workload.batch === 1 ? 'one user' : `${workload.batch} users`;
@@ -115,8 +112,8 @@ export function mountForwardScenes(
       };
       const share = (job: 'prefill' | 'decode') => {
         const stage = both[job];
-        const percent = Math.round((stageTime(stage) / totals[job]) * 100);
-        return `<div class="stage-share-bar">${jobs[job].map((other) => `<i class="${other.id === id ? 'is-current' : ''}" style="flex-grow:${Math.max(stageTime(other) / totals[job], 0.004)}" title="${escapeHtml(STAGE_TAB_LABEL[other.id])}: ${formatDuration(stageTime(other))}"></i>`).join('')}</div><small>${percent || '<1'}% · ${formatDuration(stageTime(stage))} of ${formatDuration(totals[job])}</small>`;
+        const percent = Math.round((stageTimeMs(stage) / totals[job]) * 100);
+        return `<div class="stage-share-bar">${jobs[job].map((other) => `<i class="${other.id === id ? 'is-current' : ''}" style="flex-grow:${Math.max(stageTimeMs(other) / totals[job], 0.004)}" title="${escapeHtml(STAGE_TAB_LABEL[other.id])}: ${formatDuration(stageTimeMs(other))}"></i>`).join('')}</div><small>${percent || '<1'}% · ${formatDuration(stageTimeMs(stage))} of ${formatDuration(totals[job])}</small>`;
       };
       const verdict = cpu
         ? 'Every pass: a few bytes over PCIe.'
@@ -137,7 +134,7 @@ export function mountForwardScenes(
           <div class="stage-hw"><span>Does the work · see it in Act 1</span><div>${copy.doesTheWork.map((link, i) => `<button type="button" data-open-link="${i}">${escapeHtml(link.label)} ↑</button>`).join('')}</div></div>
         </div>
         <aside class="stage-numbers" aria-label="Stage numbers for the first pass and a later pass">
-          <p class="stage-context">${escapeHtml(model.name.split(' · ')[0]!)} on ${escapeHtml(hardware.name)}, ${escapeHtml(who)}, a ${context}-token prompt. This stage runs once in the first pass, then again in every pass after:</p>
+          <p class="stage-context">${escapeHtml(model.shortName)} on ${escapeHtml(hardware.name)}, ${escapeHtml(who)}, a ${context}-token prompt. This stage runs once in the first pass, then again in every pass after:</p>
           <table class="stage-jobs">
             <thead><tr><td></td>
               <th scope="col">First pass: the whole prompt<small>all ${context} tokens at once${perUser}</small></th>

@@ -35,7 +35,10 @@ export interface HardwareProfile {
 
 export interface ModelProfile {
   id: string;
+  /** The model's name with its precision, e.g. "Llama 3.1 8B · W16/KV16". */
   name: string;
+  /** The model's name alone, for places that state precision separately. */
+  shortName: string;
   parametersB: number;
   layers: number;
   hiddenSize: number;

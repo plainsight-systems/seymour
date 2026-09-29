@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../../data/profiles';
-import { buildForwardPass, type ForwardStage, type StageId } from '../../model/forwardPass';
+import { buildForwardPass, stageTimeMs, type ForwardStage, type StageId } from '../../model/forwardPass';
 import { modelFor } from '../../model/strategy';
 import type { SimulationSettings } from '../../types';
 
@@ -37,9 +37,6 @@ export interface BottleneckAnswer {
   totalMs: number;
 }
 
-export function stageTimeMs(stage: ForwardStage): number {
-  return Math.max(stage.computeMs, stage.memoryMs);
-}
 
 export function scenarioSettings(scenario: BottleneckScenario, hardwareId: string): SimulationSettings {
   return { ...DEFAULT_SETTINGS, hardwareId, phase: scenario.phase, batch: scenario.batch, sequenceLength: scenario.sequenceLength, reusePromptPrefixes: false, prefixCachePercent: 0 };

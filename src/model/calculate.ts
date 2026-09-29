@@ -1,6 +1,7 @@
 import type { HardwareProfile, ModelProfile, SimulationResult, SimulationSettings } from '../types';
 import { getMemoryTier } from '../data/memoryLadder';
 import { meanAttendedKeys } from './attention';
+import { cachedPromptTokens } from './prompt';
 import { activeParametersPerToken, expertsTouchedFraction, weightReadBytes } from './moe';
 import type { KvPlacement } from '../types';
 
@@ -14,9 +15,7 @@ export function calculateSimulation(
 ): SimulationResult {
   const batch = Math.max(1, Math.round(settings.batch));
   const sequence = Math.max(1, Math.round(settings.sequenceLength));
-  const cachedTokens = settings.phase === 'prefill' && settings.reusePromptPrefixes
-    ? Math.min(sequence, Math.round(sequence * settings.prefixCachePercent / 100))
-    : 0;
+  const cachedTokens = settings.phase === 'prefill' ? cachedPromptTokens({ ...settings, sequenceLength: sequence }) : 0;
   const queryTokens = settings.phase === 'prefill' ? sequence - cachedTokens : 1;
   const prefillChunkTokens = settings.phase === 'prefill' && settings.splitLongPrompts
     ? Math.max(1, Math.min(queryTokens || 1, Math.floor(settings.promptTokensPerStep / batch)))

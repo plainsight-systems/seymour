@@ -1,13 +1,15 @@
 import type { AlgorithmStep, ModelProfile, SimulationSettings } from '../types';
 import { meanAttendedKeys } from './attention';
+import { cachedPromptTokens, newPromptTokens } from './prompt';
 
 export function buildAlgorithmSteps(
   settings: SimulationSettings,
   model: ModelProfile,
 ): AlgorithmStep[] {
   const b = settings.batch;
-  const cachedTokens = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
-  const uncachedTokens = Math.max(1, settings.sequenceLength - cachedTokens);
+  const cachedTokens = cachedPromptTokens(settings);
+  // A first pass still runs the newest token, even on a full prefix hit.
+  const uncachedTokens = Math.max(1, newPromptTokens(settings));
   const chunkTokens = settings.splitLongPrompts
     ? Math.max(1, Math.min(uncachedTokens, Math.floor(settings.promptTokensPerStep / settings.batch)))
     : uncachedTokens;

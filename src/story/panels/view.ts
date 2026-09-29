@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS, HARDWARE_PROFILES, getHardware } from '../../data/pro
 import { getTopology } from '../../data/topology';
 import { calculateSimulation, formatBytes, formatDuration, formatNumber, restoreVsRecompute } from '../../model/calculate';
 import type { StageId } from '../../model/forwardPass';
+import { cachedPromptTokens, newPromptTokens } from '../../model/prompt';
 import { modelFor, precisionLabel } from '../../model/strategy';
 import { BATCHES, SEQUENCES, batchFromSlider, batchToSlider, sequenceFromSlider, sequenceToSlider } from '../../state';
 import type { KvPlacement, SimulationSettings } from '../../types';
@@ -90,8 +91,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
     const prefill = picture.steps[0]!;
     const decode = picture.steps[1]!;
     if (panel.id === 'two-jobs') {
-      const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
-      const promptPerToken = prefill.totalMs / Math.max(1, settings.sequenceLength - reused);
+      const promptPerToken = prefill.totalMs / Math.max(1, newPromptTokens(settings));
       return `Pass 1 spends ${formatDuration(promptPerToken)} per prompt token; each later pass spends ${formatNumber(decode.totalMs / Math.max(promptPerToken, Number.EPSILON))}× that on its one new token. The matrix units are busy in pass 1 and mostly idle after.`;
     }
     if (panel.id === 'read-model') {
@@ -176,10 +176,10 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
 
   function jobCaption(inputs: CutawayInputs, job: 'prefill' | 'decode', settings: SimulationSettings): string {
     const a = inputs[job];
-    const reused = settings.reusePromptPrefixes ? Math.round(settings.sequenceLength * settings.prefixCachePercent / 100) : 0;
+    const reused = cachedPromptTokens(settings);
     const title = job === 'prefill'
       ? reused > 0
-        ? `First pass · ${(settings.sequenceLength - reused).toLocaleString()} new tokens (${reused.toLocaleString()} reused)`
+        ? `First pass · ${newPromptTokens(settings).toLocaleString()} new tokens (${reused.toLocaleString()} reused)`
         : `First pass · ${settings.sequenceLength.toLocaleString()} prompt tokens`
       : 'Every pass after · 1 new token';
     const limit = a.computeMs >= a.memoryMs ? 'limited by math' : 'limited by reading memory';
@@ -304,7 +304,7 @@ export function mountPanels(hostFor: (panelId: string) => HTMLElement, hardwareI
       else state.views.set(key, mountCutaway(section.querySelector<HTMLElement>(`[data-cutaway="${key}"]`)!, plate, `${panel.title}: ${zoomLabel(panel.plate, settings.hardwareId)}`, { labels: panel.plate === 'die-pair' ? 'chips' : 'auto' }));
     }
     section.querySelector<HTMLElement>('[data-zoom]')!.textContent = zoomLabel(panel.plate, settings.hardwareId);
-    section.querySelector<HTMLElement>('[data-workload]')!.textContent = `Workload: ${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'} × ${settings.sequenceLength.toLocaleString()} tokens of context · ${modelFor(settings).name.split(' · ')[0]}`;
+    section.querySelector<HTMLElement>('[data-workload]')!.textContent = `Workload: ${settings.batch.toLocaleString()} ${settings.batch === 1 ? 'user' : 'users'} × ${settings.sequenceLength.toLocaleString()} tokens of context · ${modelFor(settings).shortName}`;
     for (const job of ['prefill', 'decode'] as const) {
       const node = section.querySelector<HTMLElement>(`[data-job-caption="${job}"]`);
       if (node) node.innerHTML = jobCaption(inputs, job, settings);

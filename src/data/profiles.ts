@@ -128,6 +128,7 @@ export const MODEL_PROFILES: ModelProfile[] = [
   {
     id: 'llama-3.1-8b',
     name: 'Llama 3.1 8B · FP16',
+    shortName: 'Llama 3.1 8B',
     parametersB: 8.03,
     layers: 32,
     hiddenSize: 4096,
@@ -146,6 +147,7 @@ export const MODEL_PROFILES: ModelProfile[] = [
     // published configuration (tested): experts, attention, router, embeddings.
     id: 'qwen3-30b-a3b',
     name: 'Qwen3 30B-A3B MoE · FP16',
+    shortName: 'Qwen3 30B-A3B MoE',
     parametersB: 30.53,
     layers: 48,
     hiddenSize: 2048,

@@ -5,10 +5,9 @@ export function applySoftwareStrategy(
   base: ModelProfile,
   settings: Pick<SimulationSettings, 'weightBits' | 'kvBits'>,
 ): ModelProfile {
-  const baseName = base.name.split(' · ')[0] ?? base.name;
   return {
     ...base,
-    name: `${baseName} · W${settings.weightBits}/KV${settings.kvBits}`,
+    name: `${base.shortName} · W${settings.weightBits}/KV${settings.kvBits}`,
     weightBits: settings.weightBits,
     kvBits: settings.kvBits,
   };

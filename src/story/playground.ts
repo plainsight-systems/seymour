@@ -41,7 +41,7 @@ export function mountPlayground(root: HTMLElement): PlaygroundView {
           <label><span>Answer length <output data-output="outputLength"></output></span><input aria-label="Answer length" data-control="outputLength" type="range" min="0" max="${ANSWER_LENGTHS.length - 1}" step="1"></label>
         </details>
         <details class="playground-group"><summary>Model and guessing ahead</summary>
-          <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.name.split(' · ')[0]}</option>`).join('')}</select></label>
+          <label><span>Model</span><select aria-label="Model" data-control="modelId">${MODEL_PROFILES.map((model) => `<option value="${model.id}">${model.shortName}</option>`).join('')}</select></label>
           <label><span>Guess tokens ahead</span><select aria-label="Guess tokens ahead" data-control="speculativeTokens"><option value="0">Off</option><option value="2">2 tokens ahead</option><option value="4">4 tokens ahead</option></select></label>
         </details>
         <details class="playground-group"><summary>Precision and reuse</summary>
