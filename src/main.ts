@@ -1,5 +1,6 @@
 import '@fontsource-variable/anybody';
 import '@fontsource-variable/public-sans';
+import './tokens.css';
 import './router.css';
 import { isRouteChange, resolveRoute } from './router';
 

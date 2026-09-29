@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import lookupCss from '../lookup/lookup.css?raw';
+import routerCss from '../router.css?raw';
+import tokensCss from '../tokens.css?raw';
 import cutawayCss from './cutaway/cutaway.css?raw';
 import storyCss from './story.css?raw';
 
@@ -6,10 +9,11 @@ import storyCss from './story.css?raw';
 // it (e.g. a phone-width media query), so the page looks broken only on
 // other screens. Braces must balance and never close more than they open.
 describe('stylesheets', () => {
-  for (const [name, source] of [['story.css', storyCss], ['cutaway.css', cutawayCss]] as const) {
+  for (const [name, source] of [['story.css', storyCss], ['cutaway.css', cutawayCss], ['tokens.css', tokensCss], ['router.css', routerCss], ['lookup.css', lookupCss]] as const) {
     it(`${name} has balanced braces`, () => {
       const css = source.replace(/\/\*[\s\S]*?\*\//g, '');
-      expect(css.length).toBeGreaterThan(1000);
+      // Vitest blanks CSS unless configured to serve it; an empty file here means nothing was checked.
+      expect(css.trim().length).toBeGreaterThan(100);
       let depth = 0;
       let lowest = 0;
       for (const char of css) {

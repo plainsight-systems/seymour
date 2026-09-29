@@ -46,7 +46,7 @@ export interface QuizView {
   reset(): void;
 }
 
-const CONFETTI_COLORS = ['var(--green)', 'var(--mustard)', 'var(--red)', 'var(--leaf, #6f8f2f)', 'var(--ink)'];
+const CONFETTI_COLORS = ['var(--green)', 'var(--mustard)', 'var(--red)', 'var(--leaf)', 'var(--ink)'];
 
 
 /** Deterministic spread in [0, 1): the golden-ratio sequence, so the burst looks scattered without randomness. */

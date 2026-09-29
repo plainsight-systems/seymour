@@ -1,0 +1,16 @@
+/*
+ * The page palette, shared by every route (story, lookup, and the header).
+ * The cutaway drawings use their own print palette, declared once in
+ * story/cutaway/cutaway.css.
+ */
+:root {
+  --paper: oklch(0.94 0.025 88);
+  --paper-deep: oklch(0.89 0.035 83);
+  --ink: oklch(0.22 0.035 148);
+  --ink-soft: oklch(0.39 0.025 142);
+  --green: oklch(0.31 0.075 151);
+  --leaf: oklch(0.57 0.13 122);
+  --mustard: oklch(0.78 0.12 82);
+  --red: oklch(0.53 0.18 30);
+  --line: oklch(0.72 0.03 92);
+}

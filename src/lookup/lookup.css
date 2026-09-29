@@ -1,4 +1,4 @@
-.lookup-page { --paper: oklch(0.94 0.025 88); --ink: oklch(0.22 0.035 148); --ink-soft: oklch(0.39 0.025 142); --green: oklch(0.31 0.075 151); --mustard: oklch(0.78 0.12 82); --red: oklch(0.53 0.18 30); --line: oklch(0.72 0.03 92); color: var(--ink); background: var(--paper); }
+.lookup-page { color: var(--ink); background: var(--paper); }
 .lookup-hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 3rem; align-items: end; padding: clamp(3rem, 8vw, 8rem) clamp(1rem, 5vw, 5rem); color: var(--paper); background: var(--green); }
 .lookup-hero > div > p { margin: 0 0 1rem; color: var(--mustard); font-size: 0.68rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
 .lookup-hero h1 { margin: 0; font-family: 'Anybody Variable', sans-serif; font-size: clamp(3.2rem, 7vw, 7rem); letter-spacing: -0.05em; line-height: 0.88; }
