@@ -15,12 +15,16 @@ async function boot(): Promise<void> {
     <a class="route-brand" href="#/" aria-label="Seymour story"><span aria-hidden="true"><i></i><i></i><i></i></span><strong>Seymour</strong></a>
     <nav aria-label="Seymour sections">
       <a href="#/" aria-current="${resolved.route === 'story' ? 'page' : 'false'}">Story</a>
+      <a href="#/game" aria-current="${resolved.route === 'game' ? 'page' : 'false'}">The Game</a>
       <a href="#/lookup" aria-current="${resolved.route === 'lookup' ? 'page' : 'false'}">Concept lookup</a>
       <a href="https://github.com/plainsight-systems/seymour">GitHub</a>
     </nav>
   </header><main id="route-root" tabindex="-1"></main>`;
 
-  if (resolved.route === 'lookup') {
+  if (resolved.route === 'game') {
+    document.title = 'Seymour — The Game';
+    await import('./game/page');
+  } else if (resolved.route === 'lookup') {
     document.title = 'Concept lookup — Seymour';
     await import('./lookup/page');
   } else {

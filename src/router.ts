@@ -1,4 +1,4 @@
-export type RouteId = 'story' | 'lookup';
+export type RouteId = 'story' | 'lookup' | 'game';
 
 export interface ResolvedRoute {
   route: RouteId;
@@ -13,6 +13,7 @@ export interface ResolvedRoute {
 const RENAMED_SCENES: Record<string, string> = { 'two-jobs': 'first-vs-later' };
 export function resolveRoute(hash: string): ResolvedRoute {
   if (hash === '#/lookup') return { route: 'lookup' };
+  if (hash === '#/game') return { route: 'game' };
   if (hash.length > 1 && !hash.startsWith('#/')) {
     const anchor = decodeAnchor(hash.slice(1));
     return anchor === null ? { route: 'story' } : { route: 'story', anchor: currentAnchor(anchor) };

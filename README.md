@@ -14,12 +14,13 @@ It's built for software engineers, hardware and software together, and it keeps 
 
 ## The experience
 
-The static site has two routes in one GitHub Pages build:
+The static site has three routes in one GitHub Pages build:
 
 | Route | Purpose |
 | --- | --- |
 | `#/` | The story, in four acts |
 | `#/lookup` | Portable optimization concepts mapped to vLLM, SGLang, TensorRT-LLM, and llama.cpp terminology, plus the AMD Instinct stack (ROCm, AITER, ATOM) and KV-tiering projects (LMCache, Mooncake) |
+| `#/game` | **Seymour — The Game**, a five-shift, NES-inspired lunch rush where real workload constraints decide whether each serving configuration passes |
 
 The story is four acts stacked down the page, each a screen tall, each a row of scene tabs. One accelerator is chosen for the whole story (NVIDIA H100 SXM, H200 SXM, or AMD MI300X, MI325X, MI355X) and every number follows it. Every scene has an address (`#act-2/attention`), so any scene can be linked.
 
@@ -42,6 +43,12 @@ Six challenges with fixed workloads and targets: a busy chatbot, a long document
 ### How the challenges stay honest
 
 Every answer comes from the model, never typed in. Each challenge states what every passing answer must do, and a test searches every combination of choices on every chip to prove the lesson never claims more than the challenge demands (Acts 2 and 3 also require a clear winner, so no answer is a coin flip).
+
+### Seymour — The Game
+
+Plants arrive with workload tickets instead of lunch orders. Configure model precision, math precision, prefix reuse, KV precision, and memory placement to satisfy each plant before its patience runs out. The same deterministic model used by the story evaluates every order; missed capacity targets, slower memory tiers, and blown fuses are consequences of the modeled system rather than trivia answers.
+
+Five authored shifts introduce one idea at a time, then unlock an endless lunch rush. The game is desktop-first, fully pausable, playable with pointer or keyboard, and saves campaign progress locally. Its approved product and interaction brief lives at [`docs/design/seymour-game.md`](docs/design/seymour-game.md).
 
 ## Run locally
 
@@ -104,6 +111,7 @@ src/data/             cited hardware, model, memory-tier, topology, and part-glo
 src/model/            deterministic analytical model (whole step, per operation, forward pass) and tests
 src/story/            the four acts: page wiring, cutaway plates, scene modules, challenges
 src/lookup/           cited framework-term lookup
+src/game/             game rules, authored shifts, canvas scene, sound, persistence, and tests
 docs/design/          approved product and implementation plan
 public/assets/        original project artwork
 ```

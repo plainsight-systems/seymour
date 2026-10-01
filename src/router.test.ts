@@ -6,6 +6,7 @@ describe('resolveRoute', () => {
     expect(resolveRoute('')).toEqual({ route: 'story' });
     expect(resolveRoute('#/')).toEqual({ route: 'story' });
     expect(resolveRoute('#/lookup')).toEqual({ route: 'lookup' });
+    expect(resolveRoute('#/game')).toEqual({ route: 'game' });
   });
 
   it('opens the story for retired routes, such as the removed Under the hood page', () => {
@@ -32,5 +33,6 @@ describe('resolveRoute', () => {
     expect(isRouteChange('#act-2/first-vs-later', '#act-3/distance')).toBe(false);
     expect(isRouteChange('#act-4/playground', '#/lookup')).toBe(true);
     expect(isRouteChange('#/lookup', '#/')).toBe(true);
+    expect(isRouteChange('#/game', '#/lookup')).toBe(true);
   });
 });
