@@ -7,7 +7,7 @@ import { advanceGame, beginShift, createGameState, feedSelected, nextShift, paus
 import { evaluateOrder } from './evaluate';
 import { loadGameSave, recordScore, recordShift, saveGame, setSoundPreference } from './persistence';
 import { requiresStructuralRender } from './render-policy';
-import { customerAtPoint, renderScene, sceneDescription } from './scene';
+import { advanceOperator, commandOperator, createOperatorPose, customerAtPoint, renderScene, sceneDescription } from './scene';
 import type { ActiveCustomer, GameConfiguration, GameControlId, GameSave, GameState, OrderConstraint, OrderMetric } from './types';
 
 const routeRoot = document.querySelector<HTMLElement>('#route-root');
@@ -28,15 +28,15 @@ root.innerHTML = `<div class="game-page">
       <canvas class="game-stage" width="720" height="270" role="img" aria-label="Seymour serving counter" data-game-canvas></canvas>
       <div class="game-scanlines" aria-hidden="true"></div>
       <ol class="game-customer-queue" aria-label="Plants waiting at the counter" data-customer-queue></ol>
+      <form class="game-controls" data-controls aria-label="Implementation control board"></form>
       <section class="game-screen" data-game-screen></section>
       <div class="game-event" data-event-type="shift"><span data-event-title>Shift ready</span><p data-event-detail>Select a plant and read its ticket.</p></div>
     </div>
     <section class="game-console" aria-label="Serving console">
       <article class="game-ticket" data-ticket></article>
-      <form class="game-controls" data-controls></form>
       <aside class="game-readout" data-readout></aside>
     </section>
-    <footer class="game-key-strip"><span><kbd>1–9</kbd> select</span><span><kbd>↑↓</kbd> control</span><span><kbd>←→</kbd> adjust</span><span><kbd>B</kbd> batch tray</span><span><kbd>Space</kbd> feed</span><span><kbd>Esc</kbd> pause</span></footer>
+    <footer class="game-key-strip"><span><kbd>1–9</kbd> select</span><span><kbd>↑↓</kbd> choose knob</span><span><kbd>←→</kbd> turn</span><span><kbd>B</kbd> batch tray</span><span><kbd>Space</kbd> feed</span><span><kbd>Esc</kbd> pause</span></footer>
   </section>
   <p class="sr-only" aria-live="polite" data-live-status></p>
   <p class="sr-only" aria-live="assertive" data-live-alert></p>
@@ -52,6 +52,7 @@ let lastFrame = performance.now();
 let lastDomRender = 0;
 let eventStartedAt = lastFrame;
 let renderedEventId = state.event.id;
+let operatorPose = createOperatorPose();
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function scoreText(score: number): string {
@@ -131,26 +132,62 @@ const controlMeta: Record<GameControlId, { label: string; note: string }> = {
   idleKvPlacement: { label: 'Idle KV', note: 'Restored when the session returns' },
 };
 
+type ControlValue = GameConfiguration[GameControlId];
 const activePlacements: Array<[KvPlacement, string]> = [['hbm', 'GPU memory'], ['peer', 'GPU peer'], ['host', 'System memory'], ['ssd', 'Local SSD'], ['object', 'Object storage']];
 const idlePlacements: Array<[KvPlacement, string]> = [['host', 'System memory'], ['ssd', 'Local SSD'], ['object', 'Object storage']];
 
-function selectControl(control: GameControlId, value: string | number, options: Array<[string | number, string]>): string {
+function optionsFor(control: GameControlId): Array<[ControlValue, string]> {
+  if (control === 'weightBits') return [[16, '16-bit'], [8, '8-bit'], [4, '4-bit']];
+  if (control === 'mathBits') return [[16, '16-bit'], [8, '8-bit']];
+  if (control === 'kvBits') return [[16, '16-bit'], [8, '8-bit']];
+  if (control === 'reusePromptPrefixes') return [[false, 'Off'], [true, 'Reuse']];
+  if (control === 'kvPlacement') return activePlacements;
+  return idlePlacements;
+}
+
+function optionIndex(control: GameControlId, value: ControlValue): number {
+  return Math.max(0, optionsFor(control).findIndex(([option]) => option === value));
+}
+
+function knobMarkup(control: GameControlId, value: ControlValue, index: number): string {
   const meta = controlMeta[control];
-  return `<label><span>${meta.label}<small>${meta.note}</small></span><select class="game-control" aria-label="${meta.label}" data-control="${control}">${options.map(([option, label]) => `<option value="${option}"${String(option) === String(value) ? ' selected' : ''}>${label}</option>`).join('')}</select></label>`;
+  const options = optionsFor(control);
+  const step = optionIndex(control, value);
+  const label = options[step]![1];
+  const angle = options.length === 2 ? -48 + step * 96 : -62 + step * (124 / Math.max(1, options.length - 1));
+  return `<button class="game-control" type="button" data-control="${control}" data-station="${index}" aria-label="${meta.label}: ${label}. Turn knob">
+    <span class="game-control-name">${meta.label}</span><i class="game-knob" aria-hidden="true" style="--knob-angle:${angle}deg"><u></u></i><b data-control-value>${label}</b><small>${meta.note}</small>
+  </button>`;
 }
 
 function controlsMarkup(customer: ActiveCustomer): string {
-  const controls = state.shift.controls.map((control) => {
-    if (control === 'weightBits') return selectControl(control, customer.config.weightBits, [[16, '16-bit'], [8, '8-bit'], [4, '4-bit']]);
-    if (control === 'mathBits') return selectControl(control, customer.config.mathBits, [[16, '16-bit math'], [8, '8-bit math']]);
-    if (control === 'kvBits') return selectControl(control, customer.config.kvBits, [[16, '16-bit'], [8, '8-bit']]);
-    if (control === 'kvPlacement') return selectControl(control, customer.config.kvPlacement, activePlacements);
-    if (control === 'idleKvPlacement') return selectControl(control, customer.config.idleKvPlacement, idlePlacements);
-    const meta = controlMeta[control];
-    return `<label class="game-switch"><span>${meta.label}<small>${meta.note}</small></span><input class="game-control" type="checkbox" data-control="${control}"${customer.config.reusePromptPrefixes ? ' checked' : ''}><i aria-hidden="true"></i></label>`;
-  }).join('');
+  const controls = state.shift.controls.map((control, index) => knobMarkup(control, customer.config[control], index)).join('');
   const batch = state.shift.batchTray ? `<button class="game-batch-button" type="button" data-action="batch" aria-pressed="${customer.onBatchTray}">${customer.onBatchTray ? 'Remove from batch tray' : 'Put on batch tray'}<small>${customer.order.batchFamily ? 'B · matching tickets only' : 'This order cannot batch'}</small></button>` : '';
-  return `<fieldset><legend>Serving configuration</legend>${controls}</fieldset><div class="game-console-actions">${batch}<button class="game-feed-button" type="button" data-action="feed"${state.feedCooldownMs > 0 ? ' disabled' : ''}><span>Feed order</span><small>Space · run the model</small></button></div>`;
+  return `<fieldset><legend>Implementation board</legend><div class="game-rig-bank">${controls}</div></fieldset><div class="game-console-actions">${batch}<button class="game-feed-button" type="button" data-action="feed"${state.feedCooldownMs > 0 ? ' disabled' : ''}><span>Feed</span><small>Space · serve order</small></button></div>`;
+}
+
+function syncControlButton(control: GameControlId, value: ControlValue): void {
+  const button = root.querySelector<HTMLButtonElement>(`.game-control[data-control="${control}"]`);
+  if (!button) return;
+  const options = optionsFor(control);
+  const step = optionIndex(control, value);
+  const label = options[step]![1];
+  const angle = options.length === 2 ? -48 + step * 96 : -62 + step * (124 / Math.max(1, options.length - 1));
+  button.querySelector<HTMLElement>('[data-control-value]')!.textContent = label;
+  button.querySelector<HTMLElement>('.game-knob')!.style.setProperty('--knob-angle', `${angle}deg`);
+  button.setAttribute('aria-label', `${controlMeta[control].label}: ${label}. Turn knob`);
+}
+
+function turnControl(control: GameControlId, direction = 1): void {
+  if (!state.selectedId || !state.shift.controls.includes(control)) return;
+  const customer = selectedCustomer();
+  if (!customer) return;
+  const options = optionsFor(control);
+  const current = optionIndex(control, customer.config[control]);
+  const nextValue = options[(current + direction + options.length) % options.length]![0];
+  operatorPose = commandOperator(operatorPose, control, performance.now(), reducedMotion.matches);
+  setState(setCustomerControl(state, state.selectedId, control, nextValue as never), true);
+  syncControlButton(control, nextValue);
 }
 
 function readoutMarkup(customer: ActiveCustomer): string {
@@ -165,7 +202,7 @@ function readoutMarkup(customer: ActiveCustomer): string {
 
 function emptyConsole(): void {
   root.querySelector<HTMLElement>('[data-ticket]')!.innerHTML = '<div class="game-empty-ticket"><span>No ticket selected</span><h2>Choose a hungry plant.</h2><p>Click a plant in the scene or press its number key.</p></div>';
-  root.querySelector<HTMLElement>('[data-controls]')!.innerHTML = '<fieldset disabled><legend>Serving configuration</legend><p>The controls wake up when a ticket reaches the counter.</p></fieldset>';
+  root.querySelector<HTMLElement>('[data-controls]')!.innerHTML = '<fieldset disabled><legend>Implementation board</legend><p>The control lamps wake up when a ticket reaches the bar.</p></fieldset>';
   root.querySelector<HTMLElement>('[data-readout]')!.innerHTML = '<header><span>Model preview</span><strong>Waiting for an order</strong></header>';
 }
 
@@ -174,7 +211,7 @@ function screenMarkup(): string {
   if (state.screen === 'title') {
     const complete = CAMPAIGN_SHIFTS.filter((shift) => save.completedShiftIds.includes(shift.id)).length;
     const campaignLabel = complete === CAMPAIGN_SHIFTS.length ? 'Replay campaign' : complete ? `Continue · Shift ${complete + 1}` : 'Start campaign';
-    return `<div class="game-title-card"><p>Seymour presents</p><h1>Feed<br>the machine</h1><span class="game-title-sub">The inference lunch rush</span><div class="game-title-plant" aria-hidden="true"><i></i><i></i><i></i></div><p class="game-title-copy">Read the workload. Turn the right knobs. Keep three power fuses alive.</p><div class="game-title-actions"><button type="button" data-action="start-campaign">${campaignLabel}</button><button type="button" data-action="start-endless"${save.endlessUnlocked ? '' : ' disabled'}>${save.endlessUnlocked ? 'Endless lunch rush' : 'Endless · clear Shift 5'}</button></div><small>Keyboard + pointer · pause any time · no account</small></div>`;
+    return `<div class="game-title-card"><p>Seymour presents</p><h1>Feed<br>the machine</h1><span class="game-title-sub">The inference lunch rush</span><div class="game-title-plant" aria-hidden="true"><i></i><i></i><i></i></div><p class="game-title-copy">Read each workload. Send Seymour to the right knobs behind the bar. Feed every plant before the fuses blow.</p><div class="game-title-actions"><button type="button" data-action="start-campaign">${campaignLabel}</button><button type="button" data-action="start-endless"${save.endlessUnlocked ? '' : ' disabled'}>${save.endlessUnlocked ? 'Endless lunch rush' : 'Endless · clear Shift 5'}</button></div><small>Keyboard + pointer · pause any time · no account</small></div>`;
   }
   if (state.screen === 'briefing') return `<div class="game-overlay-card"><span>Shift ${state.shift.number.toString().padStart(2, '0')}</span><h2>${state.shift.title}</h2><strong>${state.shift.subtitle}</strong><p>${state.shift.briefing}</p><div class="game-unlocks"><b>Counter today</b>${state.shift.controls.map((control) => `<i>${controlMeta[control].label}</i>`).join('')}${state.shift.batchTray ? '<i>Batch tray</i>' : ''}</div><button type="button" data-action="begin">Open the counter</button></div>`;
   if (state.screen === 'paused') return `<div class="game-overlay-card"><span>Clock stopped</span><h2>Shift paused</h2><p>Every plant’s patience and the kitchen clock are frozen.</p><button type="button" data-action="resume">Resume shift</button><button class="game-secondary-action" type="button" data-action="restart">Restart shift</button></div>`;
@@ -252,6 +289,8 @@ root.addEventListener('click', (event) => {
   const target = event.target as HTMLElement;
   const customerButton = target.closest<HTMLButtonElement>('[data-customer]');
   if (customerButton) { setState(selectCustomer(state, customerButton.dataset.customer!)); return; }
+  const controlButton = target.closest<HTMLButtonElement>('.game-control[data-control]');
+  if (controlButton) { turnControl(controlButton.dataset.control as GameControlId); return; }
   const actionButton = target.closest<HTMLButtonElement>('[data-action]');
   if (!actionButton) return;
   const action = actionButton.dataset.action;
@@ -270,17 +309,6 @@ root.addEventListener('click', (event) => {
   }
 });
 
-root.addEventListener('change', (event) => {
-  const control = (event.target as HTMLElement).closest<HTMLInputElement | HTMLSelectElement>('[data-control]');
-  if (!control || !state.selectedId) return;
-  const key = control.dataset.control as GameControlId;
-  let value: GameConfiguration[GameControlId];
-  if (control instanceof HTMLInputElement) value = control.checked;
-  else if (key === 'weightBits' || key === 'mathBits' || key === 'kvBits') value = Number(control.value) as GameConfiguration[typeof key];
-  else value = control.value as KvPlacement;
-  setState(setCustomerControl(state, state.selectedId, key, value as never), true);
-});
-
 canvas.addEventListener('pointerdown', (event) => {
   const bounds = canvas.getBoundingClientRect();
   const id = customerAtPoint(state, (event.clientX - bounds.left) / bounds.width * canvas.width, (event.clientY - bounds.top) / bounds.height * canvas.height);
@@ -295,7 +323,7 @@ window.addEventListener('keydown', (event) => {
   }
   if (state.screen !== 'playing') return;
   const target = event.target as HTMLElement;
-  const editing = target.matches('select, input, button, summary');
+  const editing = target.matches('input, button, summary');
   if (/^[1-9]$/.test(event.key)) {
     const customer = state.active[Number(event.key) - 1];
     if (customer) setState(selectCustomer(state, customer.order.id));
@@ -303,21 +331,17 @@ window.addEventListener('keydown', (event) => {
   }
   if (!editing && event.code === 'Space') { event.preventDefault(); setState(feedSelected(state)); return; }
   if (!editing && event.key.toLowerCase() === 'b' && state.selectedId) { setState(toggleBatchTray(state, state.selectedId)); return; }
-  const controls = Array.from(root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.game-control'));
+  const controls = Array.from(root.querySelectorAll<HTMLButtonElement>('.game-control'));
   if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) || controls.length === 0) return;
   event.preventDefault();
-  const currentIndex = Math.max(0, controls.indexOf(document.activeElement as HTMLInputElement | HTMLSelectElement));
+  const currentIndex = Math.max(0, controls.indexOf(document.activeElement as HTMLButtonElement));
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
     const direction = event.key === 'ArrowDown' ? 1 : -1;
     controls[(currentIndex + direction + controls.length) % controls.length]!.focus();
     return;
   }
   const control = controls[currentIndex]!;
-  if (control instanceof HTMLSelectElement) {
-    const direction = event.key === 'ArrowRight' ? 1 : -1;
-    control.selectedIndex = (control.selectedIndex + direction + control.options.length) % control.options.length;
-  } else control.checked = event.key === 'ArrowRight' ? true : event.key === 'ArrowLeft' ? false : !control.checked;
-  control.dispatchEvent(new Event('change', { bubbles: true }));
+  turnControl(control.dataset.control as GameControlId, event.key === 'ArrowRight' ? 1 : -1);
 });
 
 document.addEventListener('visibilitychange', () => {
@@ -349,7 +373,8 @@ function frame(now: number): void {
       if (structuralRender) renderDom();
     }
   }
-  renderScene(canvas, { state, now, eventAgeMs: now - eventStartedAt, reducedMotion: reducedMotion.matches });
+  operatorPose = advanceOperator(operatorPose, delta, now, reducedMotion.matches);
+  renderScene(canvas, { state, now, eventAgeMs: now - eventStartedAt, reducedMotion: reducedMotion.matches, operator: operatorPose });
   if (now - lastDomRender > 100) { renderLiveDom(); lastDomRender = now; }
   requestAnimationFrame(frame);
 }

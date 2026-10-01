@@ -46,7 +46,7 @@ Every answer comes from the model, never typed in. Each challenge states what ev
 
 ### Seymour — The Game
 
-Plants arrive with workload tickets instead of lunch orders. Configure model precision, math precision, prefix reuse, KV precision, and memory placement to satisfy each plant before its patience runs out. The same deterministic model used by the story evaluates every order; missed capacity targets, slower memory tiers, and blown fuses are consequences of the modeled system rather than trivia answers.
+Plants arrive with workload tickets instead of lunch orders. Send Seymour along the faux-isometric serving bar to turn physical stations for model precision, math precision, prefix reuse, KV precision, and memory placement before each plant’s patience runs out. The same deterministic model used by the story evaluates every order; missed capacity targets, slower memory tiers, and blown fuses are consequences of the modeled system rather than trivia answers.
 
 Five authored shifts introduce one idea at a time, then unlock an endless lunch rush. The game is desktop-first, fully pausable, playable with pointer or keyboard, and saves campaign progress locally. Its approved product and interaction brief lives at [`docs/design/seymour-game.md`](docs/design/seymour-game.md).
 

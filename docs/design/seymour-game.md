@@ -31,7 +31,7 @@ Read a plant's workload, configure the right serving strategy, and feed it befor
 1. A plant enters one of three depth lanes and approaches the counter.
 2. Its ticket shows requirements such as context size, response-time target, quality tolerance, reusable prefix, and memory demand.
 3. The player selects that individual plant and its ticket drops onto the serving console.
-4. The player adjusts only the implementation knobs available in the current shift.
+4. The player turns only the implementation knobs available in the current shift. The knobs are physical stations behind the serving bar; Seymour walks to the chosen station and turns it.
 5. Pressing **Feed order** evaluates the configuration with Seymour's model.
 6. The machine visibly processes weights and KV state while compute and memory activity race.
 7. A successful plant eats, celebrates, and walks to a table.
@@ -108,7 +108,7 @@ Progress and high scores remain local in the browser. There is no account, netwo
 
 ## Interaction model
 
-- Mouse selects plants and operates the console.
+- Mouse selects plants and operates the physical control board behind the bar.
 - Number keys select waiting plants.
 - Arrow keys move between controls and values.
 - `Space` feeds the selected order.
@@ -122,7 +122,8 @@ Progress and high scores remain local in the browser. There is no account, netwo
 Translate Seymour's screenprint world into intentional NES-era pixel art rather than a generic pixel RPG:
 
 - warm cream, deep green, mustard, vermilion, and near-black palette;
-- side-on serving bar with three faux-depth lanes;
+- a fixed-screen, faux-isometric serving bar with three receding service lanes;
+- an original Seymour operator sprite who visibly walks between control stations and turns each knob;
 - sprite scaling, shadows, foreground occlusion, and parallax for a 2.5D effect;
 - distinct plant silhouettes that communicate temperament and workload while tickets remain the authoritative explanation;
 - the accelerator behind the counter acts as the kitchen;
@@ -133,7 +134,7 @@ The memorable image is a huge plant receiving glowing memory blocks while the ac
 
 ## Layout strategy
 
-The game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket and implementation knobs begin within the same laptop viewport. A compact status marquee sits above it; an order console sits beneath or beside it according to available width. The console is semantic DOM layered around a canvas world, not text painted into the canvas.
+The game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket and implementation knobs remain in the same laptop viewport. A compact status marquee sits above it. The implementation controls are semantic DOM styled as physical rotary stations inside the canvas world; the detailed ticket and modeled result remain in the console below. The period influence is fixed-screen service games and NES-era faux-isometric staging, not copied characters, sprites, or assets.
 
 Information hierarchy:
 
