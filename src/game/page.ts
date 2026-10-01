@@ -17,9 +17,6 @@ if (!routeRoot) throw new Error('Missing #route-root');
 const root: HTMLElement = routeRoot;
 
 root.innerHTML = `<div class="game-page">
-  <section class="game-desktop-required" aria-labelledby="desktop-title">
-    <span>Desktop release</span><h1 id="desktop-title">The lunch rush needs a bigger counter.</h1><p>Seymour — The Game is built for a keyboard, pointer, and a landscape display at least 900 pixels wide.</p><a href="#/">Return to the story</a>
-  </section>
   <section class="game-cabinet" aria-label="Seymour — The Game">
     <header class="game-marquee">
       <div class="game-shift-mark"><span data-shift-number>Shift 01</span><strong data-shift-title>Opening Shift</strong><small data-shift-subtitle>Feed the machine</small></div>
@@ -179,9 +176,9 @@ function knobMarkup(control: GameControlId, config: GameConfiguration, index: nu
 
 function controlsMarkup(customer: ActiveCustomer): string {
   const controls = state.shift.controls.map((control, index) => knobMarkup(control, customer.config, index)).join('');
-  const batch = state.shift.batchTray ? `<button class="game-batch-button" type="button" data-action="batch" aria-pressed="${customer.onBatchTray}">${customer.onBatchTray ? 'Remove from batch tray' : 'Put on batch tray'}<small>${customer.order.batchFamily ? 'B · matching tickets only' : 'This order cannot batch'}</small></button>` : '';
+  const batch = state.shift.batchTray ? `<button class="game-batch-button" type="button" data-action="batch" aria-pressed="${customer.onBatchTray}">${customer.onBatchTray ? 'Remove from batch tray' : 'Put on batch tray'}<small>${customer.order.batchFamily ? 'Tap or B · matching tickets only' : 'This order cannot batch'}</small></button>` : '';
   const busy = state.feedCooldownMs > 0;
-  return `<fieldset><legend>Implementation board</legend><div class="game-rig-bank">${controls}</div></fieldset><div class="game-console-actions">${batch}<button class="game-feed-button" type="button" data-action="feed"${busy ? ' disabled' : ''}><span>${busy ? 'GPU busy' : 'Feed'}</span><small>${busy ? `${(state.feedCooldownMs / 1000).toFixed(1)}s remaining` : 'Space · serve order'}</small></button></div>`;
+  return `<fieldset><legend>Implementation board</legend><div class="game-rig-bank">${controls}</div></fieldset><div class="game-console-actions">${batch}<button class="game-feed-button" type="button" data-action="feed"${busy ? ' disabled' : ''}><span>${busy ? 'GPU busy' : 'Feed'}</span><small>${busy ? `${(state.feedCooldownMs / 1000).toFixed(1)}s remaining` : 'Tap or Space · serve order'}</small></button></div>`;
 }
 
 function syncControlButton(control: GameControlId): void {
@@ -234,7 +231,7 @@ function readoutMarkup(customer: ActiveCustomer): string {
 }
 
 function emptyConsole(): void {
-  root.querySelector<HTMLElement>('[data-ticket]')!.innerHTML = '<div class="game-empty-ticket"><span>No ticket selected</span><h2>Choose a hungry plant.</h2><p>Click a plant in the scene or press its number key.</p></div>';
+  root.querySelector<HTMLElement>('[data-ticket]')!.innerHTML = '<div class="game-empty-ticket"><span>No ticket selected</span><h2>Choose a hungry plant.</h2><p>Choose a plant above, or use its number key.</p></div>';
   root.querySelector<HTMLElement>('[data-controls]')!.innerHTML = '<fieldset disabled><legend>Implementation board</legend><p>The control lamps wake up when a ticket reaches the bar.</p></fieldset>';
   root.querySelector<HTMLElement>('[data-readout]')!.innerHTML = '<header><span>Modeled output</span><small>Waiting for an order</small></header>';
 }
@@ -277,7 +274,7 @@ function screenMarkup(): string {
     const resetActions = !hasProgress ? '' : resetArmed
       ? '<button class="game-danger-action" type="button" data-action="confirm-reset">Erase progress and reset</button><button class="game-secondary-action" type="button" data-action="cancel-reset">Keep progress</button>'
       : '<button class="game-secondary-action" type="button" data-action="reset-campaign">Reset to Shift 1</button>';
-    return `<div class="game-title-card"><p>Seymour presents</p><h1>Feed<br>the machine</h1><span class="game-title-sub">The inference lunch rush</span><div class="game-title-plant" aria-hidden="true"><i></i><i></i><i></i></div><p class="game-title-copy">Read each workload. Send Seymour to the right knobs behind the bar. Feed every plant before the fuses blow.</p><div class="game-title-actions"><button type="button" data-action="start-campaign">${campaignLabel}</button><button type="button" data-action="start-endless"${save.endlessUnlocked ? '' : ' disabled'}>${save.endlessUnlocked ? 'Endless lunch rush' : 'Endless · clear Shift 5'}</button>${resetActions}</div><small>${resetArmed ? 'Resetting erases campaign progress and local scores. Sound preference stays.' : 'Keyboard + pointer · pause any time · progress stays on this device'}</small></div>`;
+    return `<div class="game-title-card"><p>Seymour presents</p><h1>Feed<br>the machine</h1><span class="game-title-sub">The inference lunch rush</span><div class="game-title-plant" aria-hidden="true"><i></i><i></i><i></i></div><p class="game-title-copy">Read each workload. Send Seymour to the right knobs behind the bar. Feed every plant before the fuses blow.</p><div class="game-title-actions"><button type="button" data-action="start-campaign">${campaignLabel}</button><button type="button" data-action="start-endless"${save.endlessUnlocked ? '' : ' disabled'}>${save.endlessUnlocked ? 'Endless lunch rush' : 'Endless · clear Shift 5'}</button>${resetActions}</div><small>${resetArmed ? 'Resetting erases campaign progress and local scores. Sound preference stays.' : 'Touch, pointer, or keyboard · pause any time · progress stays on this device'}</small></div>`;
   }
   if (state.screen === 'briefing') return `<div class="game-overlay-card"><span>Shift ${state.shift.number.toString().padStart(2, '0')}</span><h2>${state.shift.title}</h2><strong>${state.shift.subtitle}</strong><p>${state.shift.briefing}</p><div class="game-unlocks"><b>Counter today</b>${state.shift.controls.map((control) => `<i>${controlMeta[control].label}</i>`).join('')}${state.shift.batchTray ? '<i>Batch tray</i>' : ''}</div><button type="button" data-action="begin">Open the counter</button></div>`;
   if (state.screen === 'paused') return `<div class="game-overlay-card"><span>Clock stopped</span><h2>Shift paused</h2><p>Every plant’s patience and the kitchen clock are frozen.</p><button type="button" data-action="resume">Resume shift</button><button class="game-secondary-action" type="button" data-action="restart">Restart shift</button></div>`;

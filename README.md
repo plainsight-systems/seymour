@@ -48,7 +48,7 @@ Every answer comes from the model, never typed in. Each challenge states what ev
 
 Plants arrive with workload tickets instead of lunch orders. Send Seymour along the faux-isometric serving bar to turn physical stations for model precision, math precision, prefix reuse, KV precision, and memory placement before each plant’s patience runs out. The same deterministic model used by the story evaluates every order; missed capacity targets, slower memory tiers, and blown fuses are consequences of the modeled system rather than trivia answers.
 
-Five authored shifts introduce one idea at a time, then unlock an endless lunch rush. The game is desktop-first, fully pausable, playable with pointer or keyboard, and saves campaign progress locally. Its approved product and interaction brief lives at [`docs/design/seymour-game.md`](docs/design/seymour-game.md).
+Five authored shifts introduce one idea at a time, then unlock an endless lunch rush. The game adapts from a touch-first phone counter to the full desktop cabinet, remains fully pausable, supports pointer or keyboard, and saves campaign progress locally. Its approved product and interaction brief lives at [`docs/design/seymour-game.md`](docs/design/seymour-game.md).
 
 ## Run locally
 

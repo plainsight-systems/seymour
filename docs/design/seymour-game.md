@@ -7,7 +7,7 @@
 
 ## Feature summary
 
-Seymour — The Game is a desktop-first, NES-inspired serving game for software and infrastructure engineers who are new to inference performance. Plants arrive with workload orders; the player configures the serving rig, feeds each plant or compatible tray, and keeps the dining room moving without blowing three power fuses.
+Seymour — The Game is an adaptive, NES-inspired serving game for software and infrastructure engineers who are new to inference performance. Plants arrive with workload orders; the player configures the serving rig, feeds each plant or compatible tray, and keeps the dining room moving without blowing three power fuses.
 
 The game is a new interface over Seymour's deterministic analytical model. It must teach real tradeoffs through pressure and consequences rather than memorized quiz answers or fabricated game rules. A complete five-shift campaign should take roughly 15–20 minutes and unlock an endless mode.
 
@@ -23,7 +23,7 @@ Read a plant's workload, configure the right serving strategy, and feed it befor
 - Three blown power fuses end a shift.
 - The game must be playable cold, without completing the Seymour story first.
 - Five authored teaching shifts unlock an endless lunch rush.
-- Desktop/laptop keyboard and pointer are the first-release targets.
+- Phones use a touch-first stacked counter; tablets use a stage/control split; desktops retain keyboard and pointer shortcuts.
 - The route is static and compatible with the existing GitHub Pages build.
 
 ## Core loop
@@ -136,7 +136,7 @@ The memorable image is a huge plant receiving glowing memory blocks while the ac
 
 ## Layout strategy
 
-The game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket, patience, and implementation knobs remain in the same laptop viewport. A compact in-scene ticket keeps the urgent request visible, and the keyboard strip lives in the status marquee. The implementation controls are semantic DOM styled as physical rotary stations inside the canvas world; the detailed ticket and modeled result remain in the console below. The period influence is fixed-screen service games and NES-era faux-isometric staging, not copied characters, sprites, or assets.
+On desktop, the game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket, patience, and implementation knobs remain in the same laptop viewport. On phones, the same hierarchy reflows into a horizontal waiting queue, the 8:3 kitchen, an urgent ticket, a two-column touch control board, and feedback in normal document flow. Tablets place the kitchen beside a three-column control board. The implementation controls remain semantic DOM styled as physical rotary stations; the detailed ticket and modeled result remain below the active counter. The period influence is fixed-screen service games and NES-era faux-isometric staging, not copied characters, sprites, or assets.
 
 Information hierarchy:
 
@@ -145,7 +145,7 @@ Information hierarchy:
 3. configuration controls and modeled result preview;
 4. score, shift progress, and optional explanations.
 
-Narrow screens receive an intentional desktop-required state rather than a broken compressed game.
+Narrow screens preserve every gameplay control and modeled result. Decorative scanlines and keyboard-only hints yield to larger touch targets, readable type, and horizontal order selection.
 
 ## Key states
 
@@ -162,7 +162,7 @@ Narrow screens receive an intentional desktop-required state rather than a broke
 - Shift survived: the player may advance after losing orders, but a C report explicitly invites a replay for a clean clear.
 - Shift failed: score summary and retry.
 - Campaign complete: endless mode unlocked.
-- Desktop required: explains the first-release input and viewport requirement.
+- Mobile and tablet: the active queue, ticket, knobs, feed action, and result remain usable without horizontal page scrolling.
 
 ## Technical approach
 
@@ -215,7 +215,7 @@ The game is not:
 3. Pause and browser visibility freeze all game time.
 4. Three fuse losses end the shift; successful service never loses a fuse.
 5. Campaign completion unlocks a deterministic endless mode.
-6. The game is fully operable by keyboard and pointer at desktop widths.
+6. The game is fully operable by touch on phones and tablets and by keyboard or pointer on desktop.
 7. Reduced-motion mode removes screen shake and nonessential spatial motion.
 8. The site continues to build as a static GitHub Pages artifact.
 9. Story and lookup routes continue to work unchanged.
