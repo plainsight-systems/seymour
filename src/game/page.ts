@@ -6,6 +6,7 @@ import { CAMPAIGN_SHIFTS, campaignShift } from './content';
 import { advanceGame, beginShift, createGameState, feedSelected, nextShift, pauseGame, restartShift, resumeGame, selectCustomer, setCustomerControl, startEndless, toggleBatchTray } from './engine';
 import { evaluateOrder } from './evaluate';
 import { loadGameSave, recordScore, recordShift, saveGame, setSoundPreference } from './persistence';
+import { requiresStructuralRender } from './render-policy';
 import { customerAtPoint, renderScene, sceneDescription } from './scene';
 import type { ActiveCustomer, GameConfiguration, GameControlId, GameSave, GameState, OrderConstraint, OrderMetric } from './types';
 
@@ -70,7 +71,7 @@ function traySize(customer: ActiveCustomer): number {
   return customer.onBatchTray ? state.active.filter((candidate) => candidate.onBatchTray).length : 1;
 }
 
-function setState(next: GameState): void {
+function setState(next: GameState, preserveControls = false): void {
   const previousScreen = state.screen;
   state = next;
   if (state.event.id !== renderedEventId) {
@@ -89,7 +90,11 @@ function setState(next: GameState): void {
     save = recordScore(save, state.mode === 'endless' ? 'endless' : state.shift.id, state.score);
     saveGame(save);
   }
-  renderDom();
+  if (preserveControls) {
+    const selected = selectedCustomer();
+    if (selected) root.querySelector<HTMLElement>('[data-readout]')!.innerHTML = readoutMarkup(selected);
+    renderLiveDom();
+  } else renderDom();
 }
 
 function formatMetric(metric: OrderMetric, value: number | boolean): string {
@@ -210,6 +215,28 @@ function renderDom(): void {
   else { status.textContent = `${state.event.title}. ${state.event.detail}`; alert.textContent = ''; }
 }
 
+function renderLiveDom(): void {
+  root.querySelector<HTMLElement>('[data-score]')!.textContent = scoreText(state.score);
+  root.querySelector<HTMLElement>('[data-clock]')!.textContent = clockText(state.elapsedMs);
+  root.querySelector<HTMLElement>('[data-combo]')!.textContent = `×${state.combo}`;
+
+  const selected = selectedCustomer();
+  if (selected) {
+    const ticket = root.querySelector<HTMLElement>('[data-ticket]')!;
+    const progress = ticket.querySelector<HTMLProgressElement>('progress');
+    const seconds = ticket.querySelector<HTMLElement>('.ticket-patience b');
+    if (progress) progress.value = selected.patienceMs;
+    if (seconds) seconds.textContent = `${Math.ceil(selected.patienceMs / 1000)}s`;
+  }
+
+  const queueButtons = root.querySelectorAll<HTMLButtonElement>('[data-customer]');
+  for (const button of queueButtons) {
+    const customer = state.active.find((candidate) => candidate.order.id === button.dataset.customer);
+    const meter = button.querySelector<HTMLElement>(':scope > i');
+    if (customer && meter) meter.style.setProperty('--patience', `${Math.round(customer.patienceMs / customer.order.patienceMs * 100)}%`);
+  }
+}
+
 function startCampaign(): void {
   const incomplete = CAMPAIGN_SHIFTS.findIndex((shift) => !save.completedShiftIds.includes(shift.id));
   const index = incomplete < 0 ? 0 : incomplete;
@@ -251,7 +278,7 @@ root.addEventListener('change', (event) => {
   if (control instanceof HTMLInputElement) value = control.checked;
   else if (key === 'weightBits' || key === 'mathBits' || key === 'kvBits') value = Number(control.value) as GameConfiguration[typeof key];
   else value = control.value as KvPlacement;
-  setState(setCustomerControl(state, state.selectedId, key, value as never));
+  setState(setCustomerControl(state, state.selectedId, key, value as never), true);
 });
 
 canvas.addEventListener('pointerdown', (event) => {
@@ -305,6 +332,7 @@ function frame(now: number): void {
     if (next !== state) {
       const eventChanged = next.event.id !== state.event.id;
       const screenChanged = next.screen !== state.screen;
+      const structuralRender = requiresStructuralRender(state, next);
       state = next;
       if (eventChanged) { renderedEventId = state.event.id; eventStartedAt = now; audio.play(state.event.type); }
       if (screenChanged && state.screen === 'shift-complete') {
@@ -318,10 +346,11 @@ function frame(now: number): void {
         save = recordScore(save, state.mode === 'endless' ? 'endless' : state.shift.id, state.score);
         saveGame(save);
       }
+      if (structuralRender) renderDom();
     }
   }
   renderScene(canvas, { state, now, eventAgeMs: now - eventStartedAt, reducedMotion: reducedMotion.matches });
-  if (now - lastDomRender > 200) { renderDom(); lastDomRender = now; }
+  if (now - lastDomRender > 100) { renderLiveDom(); lastDomRender = now; }
   requestAnimationFrame(frame);
 }
 

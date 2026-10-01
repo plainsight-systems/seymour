@@ -64,7 +64,7 @@
 
 .game-customer-queue { position: absolute; top: var(--space-lg); right: var(--space-lg); z-index: 4; display: grid; gap: var(--space-sm); width: min(15rem, 27%); margin: 0; padding: 0; list-style: none; }
 .game-customer-queue button { position: relative; display: grid; grid-template-columns: 1.7rem 1fr auto; gap: var(--space-sm); align-items: center; width: 100%; padding: 0.45rem 0.55rem; overflow: hidden; color: var(--game-paper); border: 2px solid var(--game-ink); border-radius: 0; background: color-mix(in oklch, var(--game-green) 92%, var(--game-ink)); box-shadow: 3px 3px 0 var(--game-ink); cursor: pointer; text-align: left; }
-.game-customer-queue button:hover, .game-customer-queue button[aria-pressed='true'] { color: var(--game-ink); background: var(--game-mustard); transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--game-ink); }
+.game-customer-queue button:hover, .game-customer-queue button[aria-pressed='true'] { color: var(--game-ink); background: var(--game-mustard); box-shadow: 5px 5px 0 var(--game-ink); }
 .game-customer-queue button > b { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; color: var(--game-ink); background: var(--game-paper); font-family: 'Anybody Variable', sans-serif; }
 .game-customer-queue button > span { display: grid; gap: 0.08rem; min-width: 0; font-size: 0.72rem; font-weight: 850; }
 .game-customer-queue button small { overflow: hidden; font-size: 0.58rem; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
@@ -85,7 +85,7 @@
 .game-overlay-card > strong { color: var(--game-green); font-size: 1.05rem; }
 .game-overlay-card > p { max-width: 58ch; margin: 0; line-height: 1.55; }
 .game-overlay-card button, .game-title-actions button { width: fit-content; min-width: 13rem; padding: 0.8rem 1rem; color: var(--game-paper); border: 2px solid var(--game-ink); border-radius: 0; background: var(--game-green); box-shadow: 4px 4px 0 var(--game-ink); cursor: pointer; font-weight: 900; }
-.game-overlay-card button:hover, .game-title-actions button:hover:not(:disabled) { color: var(--game-ink); background: var(--game-mustard); transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--game-ink); }
+.game-overlay-card button:hover, .game-title-actions button:hover:not(:disabled) { color: var(--game-ink); background: var(--game-mustard); box-shadow: 6px 6px 0 var(--game-ink); }
 .game-overlay-card .game-secondary-action { color: var(--game-ink); background: transparent; box-shadow: none; }
 .game-overlay-card[data-danger='true'] { box-shadow: 8px 8px 0 var(--game-red); }
 .game-unlocks { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; }
@@ -149,8 +149,8 @@
 .game-switch input:checked + i::after { transform: translateX(1.25rem); }
 .game-console-actions { display: grid; grid-template-columns: 1fr 1.1fr; gap: var(--space-md); margin-top: auto; }
 .game-console-actions button { display: grid; gap: 0.2rem; place-content: center; min-height: 68px; padding: var(--space-sm); border: 3px solid var(--game-ink); border-radius: 0; box-shadow: 4px 4px 0 var(--game-ink); cursor: pointer; font-weight: 900; text-align: center; }
-.game-console-actions button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--game-ink); }
-.game-console-actions button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--game-ink); }
+.game-console-actions button:hover:not(:disabled) { box-shadow: 6px 6px 0 var(--game-ink); }
+.game-console-actions button:active:not(:disabled) { box-shadow: 2px 2px 0 var(--game-ink); }
 .game-console-actions button small { font-size: 0.55rem; font-weight: 600; }
 .game-feed-button { color: var(--game-paper); background: var(--game-red); }
 .game-feed-button:disabled { opacity: 0.45; cursor: wait; }
