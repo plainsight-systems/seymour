@@ -3,6 +3,7 @@ import type { GameSave } from './types';
 const STORAGE_KEY = 'seymour-game-v1';
 
 export const DEFAULT_GAME_SAVE: GameSave = {
+  scoringVersion: 3,
   completedShiftIds: [],
   highScores: {},
   endlessUnlocked: false,
@@ -20,8 +21,9 @@ export function loadGameSave(storage: StorageLike = window.localStorage): GameSa
     if (!raw) return { ...DEFAULT_GAME_SAVE };
     const parsed = JSON.parse(raw) as Partial<GameSave>;
     return {
+      scoringVersion: 3,
       completedShiftIds: Array.isArray(parsed.completedShiftIds) ? parsed.completedShiftIds.filter((id): id is string => typeof id === 'string') : [],
-      highScores: parsed.highScores && typeof parsed.highScores === 'object' ? parsed.highScores : {},
+      highScores: parsed.scoringVersion === 3 && parsed.highScores && typeof parsed.highScores === 'object' ? parsed.highScores : {},
       endlessUnlocked: parsed.endlessUnlocked === true,
       soundEnabled: parsed.soundEnabled === true,
     };
@@ -56,4 +58,8 @@ export function recordScore(save: GameSave, scoreId: string, score: number): Gam
 
 export function setSoundPreference(save: GameSave, soundEnabled: boolean): GameSave {
   return { ...save, soundEnabled };
+}
+
+export function resetCampaignProgress(save: GameSave): GameSave {
+  return { ...DEFAULT_GAME_SAVE, soundEnabled: save.soundEnabled };
 }

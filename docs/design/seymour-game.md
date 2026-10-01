@@ -1,13 +1,13 @@
 # Design: Seymour — The Game
 
-**Status:** Confirmed, ready to build  
+**Status:** Implemented, refinement checkpoint
 **Owner:** Andy Hunter  
 **Product + implementation:** Codex  
 **Date:** 2026-10-01
 
 ## Feature summary
 
-Seymour — The Game is a desktop-first, NES-inspired serving game for software and infrastructure engineers who are new to inference performance. Plants arrive with workload orders; the player configures each order, feeds the plant, and keeps the dining room moving without blowing three power fuses.
+Seymour — The Game is a desktop-first, NES-inspired serving game for software and infrastructure engineers who are new to inference performance. Plants arrive with workload orders; the player configures the serving rig, feeds each plant or compatible tray, and keeps the dining room moving without blowing three power fuses.
 
 The game is a new interface over Seymour's deterministic analytical model. It must teach real tradeoffs through pressure and consequences rather than memorized quiz answers or fabricated game rules. A complete five-shift campaign should take roughly 15–20 minutes and unlock an endless mode.
 
@@ -18,8 +18,8 @@ Read a plant's workload, configure the right serving strategy, and feed it befor
 ## Product decisions
 
 - Live pressure, with generous early patience and an explicit pause control.
-- Every plant is configured individually.
-- A later batch tray groups compatible configured tickets for a throughput bonus without turning the beginner experience into a global scheduler.
+- The serving rig keeps its configuration between plants, so players must read each new ticket instead of starting from a solved blank slate.
+- A later batch tray groups compatible tickets under one shared configuration. Each ticket remains individually valid; the real advantage is serving several orders during one modeled GPU-occupancy window.
 - Three blown power fuses end a shift.
 - The game must be playable cold, without completing the Seymour story first.
 - Five authored teaching shifts unlock an endless lunch rush.
@@ -30,27 +30,27 @@ Read a plant's workload, configure the right serving strategy, and feed it befor
 
 1. A plant enters one of three depth lanes and approaches the counter.
 2. Its ticket shows requirements such as context size, response-time target, quality tolerance, reusable prefix, and memory demand.
-3. The player selects that individual plant and its ticket drops onto the serving console.
+3. The player selects that plant and its ticket drops onto the serving console. The rig retains the previous order's configuration.
 4. The player turns only the implementation knobs available in the current shift. The knobs are physical stations behind the serving bar; Seymour walks to the chosen station and turns it.
 5. Pressing **Feed order** evaluates the configuration with Seymour's model.
-6. The machine visibly processes weights and KV state while compute and memory activity race.
+6. The machine visibly processes weights and KV state while compute and memory activity race. The counter remains busy for a gameplay-scaled duration derived from the modeled pass time.
 7. A successful plant eats, celebrates, and walks to a table.
 8. An incorrect setup produces a specific failure: too slow, out of memory, unnecessary recomputation, or state placed too far away.
 9. Expired customers and severe failures blow a fuse. Three blown fuses end the shift.
 
 The clock pauses explicitly, when the browser loses focus, and while essential tutorial explanations are open.
 
-## Individual orders and batching
+## Orders, rig state, and batching
 
-Every plant owns its ticket and proposed configuration. Beginning in Shift 2, compatible tickets can be placed on a **batch tray** before feeding. Grouping them shares a model read and earns a throughput multiplier. Incompatible orders refuse to batch and explain why.
+Every plant owns its workload and requirements; the counter owns the persistent serving-rig configuration. Beginning in Shift 2, compatible tickets can be placed on a **batch tray** before feeding. The player configures that tray once, all tray members share the configuration, and the group shares a model read and GPU-service window. A ticket never fails merely because it was served alone; instead, individual service consumes one window per ticket and makes the rush harder to clear efficiently. Incompatible orders refuse to batch and explain why.
 
-This is intentionally simpler than presenting one global serving configuration while still teaching why compatible token steps are scheduled together.
+Authored shifts vary context, concurrency, latency, policy, and quality floors. Every non-batch arrival requires a meaningful configuration change. Familiar-looking decoy orders in all applicable shifts deliberately make the previous optimization wrong, teaching the player to read the requirement instead of memorizing a knob position. Endless mode emits batch-capable work only in overlapping groups of three, even though each order can still be served alone.
 
 ## Campaign
 
 ### Shift 1 — Opening Shift: Feed the machine
 
-One plant at a time. Learn tickets, patience, the serving console, and the difference between prompt work and generated-token work.
+One plant at a time. Learn tickets, patience, the serving console, and the difference between generated-token work and prompt work. The memory-bound token order arrives first so changing matrix precision cannot masquerade as useful work.
 
 ### Shift 2 — Lunch Rush: Share the read
 
@@ -62,11 +62,11 @@ Long-context plants arrive. Unlock KV precision and confront accelerator-memory 
 
 ### Shift 4 — The Regulars: Don't repeat yourself
 
-Plants begin ordering shared prompts. Unlock prefix reuse and distinguish reused prompt work from KV that still must be stored and read.
+Plants begin ordering shared prompts. Unlock prefix reuse, then encounter a private unique prompt where reuse is explicitly wrong.
 
 ### Shift 5 — Closing Time: Put it somewhere
 
-Active and idle sessions compete for space. Unlock placement and learn why active KV cannot live in object storage, while parking idle sessions can make sense when restoring is cheaper than recomputing.
+Active and idle sessions compete for space. Unlock placement and learn why active KV cannot live in object storage, why idle KV can be parked in system memory, and when active state should remain on a GPU peer.
 
 Completing Shift 5 unlocks **Endless Lunch Rush**, which combines every archetype and gradually increases arrival pressure.
 
@@ -94,7 +94,7 @@ Player controls are implementation choices, not workload mutations:
 
 ## Feedback and scoring
 
-Every failed feed names the actual boundary and the recovery:
+The modeled preview shows actual numeric values without pre-grading the player's answer. Boolean and policy checks remain undisclosed until feed time because “yes · target yes” is itself a verdict. On a first failed feed, feedback names the actual limiting boundary. A repeated miss adds the concrete recovery so the game teaches diagnosis before prescription:
 
 - “The model read missed the patience target. Move fewer weight bytes.”
 - “KV pushed 18 GB past accelerator memory. Store each cached token in fewer bits.”
@@ -102,7 +102,7 @@ Every failed feed names the actual boundary and the recovery:
 - “This prompt was already available. Reuse it instead of recomputing it.”
 - “These orders cannot share a batch because their active step differs.”
 
-Score combines correct service, remaining patience, resource efficiency, successful batching, consecutive satisfied plants, and unused fuses. A shift report shows actual modeled numbers and one concise teaching takeaway.
+Score combines correct service, remaining patience, shared GPU windows, consecutive satisfied plants, and unused fuses. Failed feeds deduct points and cap the available grade. Targets are calibrated so accurate batching is required for an A in the lunch rush. A shift report shows only metrics requested by that shift's order phases, plus one concise teaching takeaway. Campaign completion shows the total score and overall grade.
 
 Progress and high scores remain local in the browser. There is no account, network leaderboard, or backend.
 
@@ -123,7 +123,9 @@ Translate Seymour's screenprint world into intentional NES-era pixel art rather 
 
 - warm cream, deep green, mustard, vermilion, and near-black palette;
 - a fixed-screen, faux-isometric serving bar with three receding service lanes;
-- an original Seymour operator sprite who visibly walks between control stations and turns each knob;
+- an original Seymour operator sprite with a green technician cap and white apron who visibly walks between control stations and turns each knob;
+- a 6 × 4 Seymour sprite sheet covering idle, ticket reading, walking, knob turning, tray service, celebration, and fuse reaction poses;
+- a 6 × 3 plant sheet with one column per species and patient, impatient, and satisfied reaction rows;
 - sprite scaling, shadows, foreground occlusion, and parallax for a 2.5D effect;
 - distinct plant silhouettes that communicate temperament and workload while tickets remain the authoritative explanation;
 - the accelerator behind the counter acts as the kitchen;
@@ -134,7 +136,7 @@ The memorable image is a huge plant receiving glowing memory blocks while the ac
 
 ## Layout strategy
 
-The game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket and implementation knobs remain in the same laptop viewport. A compact status marquee sits above it. The implementation controls are semantic DOM styled as physical rotary stations inside the canvas world; the detailed ticket and modeled result remain in the console below. The period influence is fixed-screen service games and NES-era faux-isometric staging, not copied characters, sprites, or assets.
+The game occupies a framed, wide arcade stage beneath the persistent Seymour navigation. The game world is the dominant surface, using an 8:3 playfield so the active ticket, patience, and implementation knobs remain in the same laptop viewport. A compact in-scene ticket keeps the urgent request visible, and the keyboard strip lives in the status marquee. The implementation controls are semantic DOM styled as physical rotary stations inside the canvas world; the detailed ticket and modeled result remain in the console below. The period influence is fixed-screen service games and NES-era faux-isometric staging, not copied characters, sprites, or assets.
 
 Information hierarchy:
 
@@ -156,7 +158,8 @@ Narrow screens receive an intentional desktop-required state rather than a broke
 - Success: plant celebrates and moves to a table; score breakdown is brief.
 - Recoverable failure: clear cause, correction, and time penalty.
 - Fuse failure: cause, remaining fuses, reduced-motion-safe flash.
-- Shift complete: actual results, teaching takeaway, next shift.
+- Shift cleared: every order served, actual results, teaching takeaway, next shift.
+- Shift survived: the player may advance after losing orders, but a C report explicitly invites a replay for a clean clear.
 - Shift failed: score summary and retry.
 - Campaign complete: endless mode unlocked.
 - Desktop required: explains the first-release input and viewport requirement.
@@ -166,11 +169,19 @@ Narrow screens receive an intentional desktop-required state rather than a broke
 - New `#/game` route and **The Game** navigation item.
 - Static TypeScript/Vite implementation.
 - Canvas-rendered game world with an accessible DOM HUD and control console.
+- Transparent, palette-limited sprite atlases rendered with nearest-neighbor scaling; procedural silhouettes remain as a load-safe fallback.
 - Fixed-timestep deterministic game-state engine.
 - Seeded order generation for reproducible endless runs.
 - Existing Seymour calculations remain the source of truth.
+- A live session that changes placement pays a one-time full-KV transfer cost before its first usable next token; steady-state token time remains visible separately.
+- Tangle is deliberately a one-token routing decision: reading live KV from its owning peer wins only because there is no longer response over which to amortize a move into local HBM.
+- GPU service windows use monotonic logarithmic time compression so long jobs remain playable without collapsing distinct modeled costs into one hard cap.
+- Scoring weights correct service and batching more heavily than remaining patience. A clean 1.08× target earns S; an unhurried no-miss clear can still earn A.
 - Authored orders are tested to ensure every shift is solvable.
+- Effective matrix precision is never presented independently of model representation: 16-bit weights force and visibly lock 16-bit math.
+- Endless generation is exhaustively sampled across 800 deterministic rounds; every order must be individually servable and every generated batch family must arrive as an overlapping trio.
 - Pure tests cover timing, pause behavior, scoring, batching, fuses, and progression.
+- Repeated steps on one physical knob extend a single turn animation instead of replaying a walk cycle for every detent.
 - `localStorage` stores progress, accessibility settings, and local high scores.
 - Pixel sound effects are synthesized in-browser after explicit audio enablement.
 - No external game framework is required.

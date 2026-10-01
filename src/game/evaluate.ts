@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, getHardware } from '../data/profiles';
+import { getMemoryTier, tierBandwidth } from '../data/memoryLadder';
 import { calculateSimulation, responseTiming, restoreVsRecompute } from '../model/calculate';
 import { modelFor } from '../model/strategy';
 import type { SimulationSettings } from '../types';
@@ -19,29 +20,44 @@ export function settingsForOrder(order: Pick<GameOrder, 'workload'>, config: Gam
     ...DEFAULT_SETTINGS,
     ...order.workload,
     ...config,
+    mathBits: config.weightBits === 16 ? 16 : config.mathBits,
     batch: Math.max(1, baseBatch * groupSize),
   };
 }
 
-export function measureOrder(order: Pick<GameOrder, 'workload'>, config: GameConfiguration, groupSize = 1): { settings: SimulationSettings; metrics: OrderMetrics } {
+export function measureOrder(order: Pick<GameOrder, 'workload' | 'phase' | 'sourceKvPlacement'>, config: GameConfiguration, groupSize = 1): { settings: SimulationSettings; metrics: OrderMetrics } {
   const settings = settingsForOrder(order, config, groupSize);
   const hardware = getHardware(settings.hardwareId);
   const model = modelFor(settings);
+  const prefill = calculateSimulation({ ...settings, phase: 'prefill' }, hardware, model);
   const decode = calculateSimulation({ ...settings, phase: 'decode' }, hardware, model);
   const timing = responseTiming(settings, hardware, model);
   const restore = restoreVsRecompute(settings, hardware, model, settings.idleKvPlacement);
+  const sourceTier = order.sourceKvPlacement ? getMemoryTier(hardware, order.sourceKvPlacement) : null;
+  const destinationTier = order.sourceKvPlacement ? getMemoryTier(hardware, settings.kvPlacement) : null;
+  const migrationMs = sourceTier && destinationTier && sourceTier.id !== destinationTier.id
+    ? decode.kvFootprintBytes / Math.min(tierBandwidth(sourceTier), tierBandwidth(destinationTier)) * 1_000
+      + (sourceTier.firstByteLatencyMs ?? 0)
+      + (destinationTier.firstByteLatencyMs ?? 0)
+    : 0;
   return {
     settings,
     metrics: {
       firstTokenMs: timing.firstTokenMs,
       msPerToken: timing.msPerToken,
+      migrationMs,
+      readyNextTokenMs: migrationMs + timing.msPerToken,
+      restoreMs: restore.restoreMs,
+      recomputeMs: restore.recomputeMs,
       totalTokensPerSec: decode.tokenRate,
       fitsInGpuMemory: settings.kvPlacement === 'hbm' && decode.hbmUsedFraction <= 1 && decode.hostTrafficBytes === 0,
       activeKvNear: ['hbm', 'peer', 'peers'].includes(settings.kvPlacement),
       restoreBeatsRecompute: restore.cheaper === 'restore',
+      prefixReuseEnabled: settings.reusePromptPrefixes,
       weightQuality: settings.weightBits,
+      kvQuality: settings.kvBits,
       groupSize,
-      bottleneck: decode.bottleneck,
+      bottleneck: order.phase === 'first-token' ? prefill.bottleneck : order.phase === 'idle-return' || migrationMs > 0 ? 'placement' : decode.bottleneck,
       hbmUsedFraction: decode.hbmUsedFraction,
       spilledBytes: decode.spilledKvBytes + decode.spilledWeightBytes,
     },

@@ -1,9 +1,19 @@
 import type { ActiveCustomer, GameControlId, GameState, PlantKind } from './types';
+import { drawSpriteFrame, type GameSpriteAtlas } from './sprites';
 
 const WIDTH = 720;
 const HEIGHT = 270;
 const COLORS = {
   paper: '#eee2c3', paperDeep: '#d8c59b', ink: '#173f31', inkDark: '#102c25', green: '#1e6043', leaf: '#5f943d', mustard: '#e6b631', red: '#c9452c', cream: '#f8efda', shadow: '#766749',
+};
+
+const PLANT_SPRITE_COLUMN: Record<PlantKind, number> = {
+  sprout: 0,
+  cactus: 1,
+  fern: 2,
+  orchid: 3,
+  maw: 4,
+  vine: 5,
 };
 
 function rect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, fill: string): void {
@@ -28,6 +38,9 @@ export interface OperatorPose {
   turningUntil: number;
   control: GameControlId | null;
   walking: boolean;
+  reaction: 'serve' | 'fuse' | null;
+  reactionStartedAt: number;
+  reactionUntil: number;
 }
 
 const OPERATOR_STATIONS: Record<GameControlId, readonly [number, number]> = {
@@ -40,11 +53,24 @@ const OPERATOR_STATIONS: Record<GameControlId, readonly [number, number]> = {
 };
 
 export function createOperatorPose(): OperatorPose {
-  return { x: 558, y: 159, targetX: 558, targetY: 159, commandedAt: 0, turningUntil: 0, control: null, walking: false };
+  return {
+    x: 558, y: 159, targetX: 558, targetY: 159, commandedAt: 0, turningUntil: 0,
+    control: null, walking: false, reaction: null, reactionStartedAt: 0, reactionUntil: 0,
+  };
+}
+
+export function reactOperator(pose: OperatorPose, reaction: 'serve' | 'fuse', now: number): OperatorPose {
+  return {
+    ...pose,
+    reaction,
+    reactionStartedAt: now,
+    reactionUntil: now + (reaction === 'serve' ? 900 : 700),
+  };
 }
 
 export function commandOperator(pose: OperatorPose, control: GameControlId, now: number, reducedMotion: boolean): OperatorPose {
   const [targetX, targetY] = OPERATOR_STATIONS[control];
+  const alreadyAtStation = Math.hypot(targetX - pose.x, targetY - pose.y) < 1;
   return {
     ...pose,
     x: reducedMotion ? targetX : pose.x,
@@ -52,7 +78,9 @@ export function commandOperator(pose: OperatorPose, control: GameControlId, now:
     targetX,
     targetY,
     commandedAt: now,
-    turningUntil: now + 850,
+    // Repeated steps on a multi-position knob are one continuous turn, not a
+    // fresh walk/turn cycle for every detent.
+    turningUntil: now + (alreadyAtStation ? 320 : 500),
     control,
     walking: !reducedMotion && (Math.abs(targetX - pose.x) > 1 || Math.abs(targetY - pose.y) > 1),
   };
@@ -64,7 +92,7 @@ export function advanceOperator(pose: OperatorPose, deltaMs: number, now: number
   const dy = pose.targetY - pose.y;
   const distance = Math.hypot(dx, dy);
   if (distance < 0.75) return { ...pose, x: pose.targetX, y: pose.targetY, walking: false };
-  const step = Math.min(distance, deltaMs * 0.34);
+  const step = Math.min(distance, deltaMs * 0.72);
   return { ...pose, x: pose.x + dx / distance * step, y: pose.y + dy / distance * step, walking: now < pose.turningUntil };
 }
 
@@ -97,7 +125,6 @@ function drawBackdrop(ctx: CanvasRenderingContext2D): void {
   rect(ctx, 87, 34, 12, 4, COLORS.mustard); rect(ctx, 272, 34, 12, 4, COLORS.mustard);
   rect(ctx, 468, 14, 238, 147, COLORS.inkDark);
   rect(ctx, 474, 20, 226, 135, COLORS.green);
-  pixelText(ctx, 'SEYMOUR IMPLEMENTATION BOARD', 485, 25, 7, COLORS.mustard);
   for (let x = 486; x < 688; x += 18) rect(ctx, x, 42, 10, 3, x % 36 ? COLORS.red : COLORS.mustard);
   // Perspective floor.
   rect(ctx, 0, 181, WIDTH, 89, COLORS.paperDeep);
@@ -203,13 +230,15 @@ function customerPosition(customer: ActiveCustomer, index: number, elapsedMs: nu
   const age = Math.max(0, elapsedMs - customer.arrivedAtMs);
   const entrance = Math.min(1, age / 650);
   const urgency = 1 - Math.max(0, customer.patienceMs / customer.order.patienceMs);
-  const queueOffset = index * 38;
-  const x = 310 + entrance * 40 + urgency * 120 + queueOffset;
+  const queueOffset = -Math.floor(index / 3) * 28;
+  const serviceX = [412, 424, 436][lane]!;
+  const enteredX = 310 + entrance * 40;
+  const x = enteredX + urgency * (serviceX - enteredX) + queueOffset;
   const y = [103, 132, 154][lane]!;
   return { x, y, scale };
 }
 
-function drawCustomer(ctx: CanvasRenderingContext2D, customer: ActiveCustomer, index: number, selected: boolean, elapsedMs: number): void {
+function drawCustomer(ctx: CanvasRenderingContext2D, customer: ActiveCustomer, index: number, selected: boolean, elapsedMs: number, sprites?: GameSpriteAtlas): void {
   const { x, y, scale } = customerPosition(customer, index, elapsedMs);
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
@@ -218,35 +247,57 @@ function drawCustomer(ctx: CanvasRenderingContext2D, customer: ActiveCustomer, i
     ctx.fillStyle = COLORS.mustard;
     ctx.beginPath(); ctx.moveTo(-5, -53); ctx.lineTo(5, -53); ctx.lineTo(0, -45); ctx.fill();
   }
-  drawPlantBody(ctx, customer.order.plantKind);
+  const patience = Math.max(0, customer.patienceMs / customer.order.patienceMs);
+  const spriteMood = patience < 0.3 ? 1 : 0;
+  if (!sprites || !drawSpriteFrame(ctx, sprites.plants, PLANT_SPRITE_COLUMN[customer.order.plantKind], spriteMood, -52, -70, 104, 104)) {
+    drawPlantBody(ctx, customer.order.plantKind);
+  }
   if (customer.onBatchTray) {
     rect(ctx, -12, 22, 24, 5, COLORS.mustard);
     rect(ctx, -8, 23, 16, 2, COLORS.inkDark);
   }
-  const patience = Math.max(0, customer.patienceMs / customer.order.patienceMs);
   rect(ctx, -15, -44, 30, 4, COLORS.inkDark);
   rect(ctx, -14, -43, 28 * patience, 2, patience < 0.3 ? COLORS.red : COLORS.mustard);
   ctx.restore();
 }
 
-function drawOperator(ctx: CanvasRenderingContext2D, pose: OperatorPose, now: number, reducedMotion: boolean): void {
+function operatorSpriteFrame(pose: OperatorPose, now: number, reducedMotion: boolean): readonly [number, number] {
+  const atStation = Math.abs(pose.targetX - pose.x) < 1 && Math.abs(pose.targetY - pose.y) < 1;
+  if (pose.reaction === 'fuse' && now < pose.reactionUntil) return [5, 3];
+  if (pose.reaction === 'serve' && now < pose.reactionUntil) {
+    const reactionAge = now - pose.reactionStartedAt;
+    if (reactionAge > 470) return [4, 3];
+    return [reducedMotion ? 3 : Math.min(3, Math.floor(reactionAge / 118)), 3];
+  }
+  if (pose.walking) return [reducedMotion ? 2 : Math.floor(now / 90) % 6, 1];
+  if (atStation && pose.control !== null && now < pose.turningUntil) return [reducedMotion ? 3 : Math.floor(now / 110) % 6, 2];
+  return [reducedMotion ? 0 : Math.floor(now / 850) % 4, 0];
+}
+
+function drawOperator(ctx: CanvasRenderingContext2D, pose: OperatorPose, now: number, reducedMotion: boolean, sprites?: GameSpriteAtlas): void {
   const atStation = Math.abs(pose.targetX - pose.x) < 1 && Math.abs(pose.targetY - pose.y) < 1;
   const turning = atStation && pose.control !== null && now < pose.turningUntil;
   const stride = pose.walking && !reducedMotion ? (Math.floor(now / 90) % 2 ? 2 : -2) : 0;
   ctx.save();
   ctx.translate(Math.round(pose.x), Math.round(pose.y));
+  const [spriteColumn, spriteRow] = operatorSpriteFrame(pose, now, reducedMotion);
+  if (sprites && drawSpriteFrame(ctx, sprites.operator, spriteColumn, spriteRow, -48, -73, 96, 96)) {
+    ctx.restore();
+    return;
+  }
   // Shadow and legs disappear behind the bar front, matching the classic
   // bartender staging without copying its character design.
   rect(ctx, -11, 17, 23, 4, 'rgba(16,44,37,.28)');
   rect(ctx, -7, 8, 5, 12 + stride, COLORS.inkDark);
   rect(ctx, 3, 8, 5, 12 - stride, COLORS.inkDark);
-  // Apron, shirt, face, and red service cap.
+  // White apron and green technician cap mirror the registered sprite sheet.
   rect(ctx, -10, -15, 20, 25, COLORS.mustard);
-  polygon(ctx, [[-8, -12], [8, -12], [6, 9], [-6, 9]], COLORS.green);
+  polygon(ctx, [[-8, -12], [8, -12], [6, 9], [-6, 9]], COLORS.cream);
+  rect(ctx, -3, 0, 6, 5, COLORS.paperDeep);
   rect(ctx, -7, -29, 14, 14, COLORS.paperDeep);
-  rect(ctx, -9, -31, 18, 5, COLORS.red);
-  rect(ctx, 3, -25, 3, 3, COLORS.inkDark);
-  rect(ctx, -3, -20, 8, 2, COLORS.inkDark);
+  rect(ctx, -9, -31, 18, 5, COLORS.green);
+  rect(ctx, -6, -25, 12, 2, COLORS.inkDark);
+  rect(ctx, -1, -19, 3, 1, COLORS.inkDark);
   if (turning) {
     const turnFrame = reducedMotion ? 0 : (Math.floor(now / 110) % 2 ? 3 : -2);
     rect(ctx, -15, -12, 7, 5, COLORS.mustard);
@@ -263,8 +314,8 @@ function drawOperator(ctx: CanvasRenderingContext2D, pose: OperatorPose, now: nu
   ctx.restore();
 }
 
-function drawTables(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const count = Math.min(6, state.seatedOrderIds.length);
+function drawTables(ctx: CanvasRenderingContext2D, state: GameState, holdNewestAtCounter: boolean, sprites?: GameSpriteAtlas): void {
+  const count = Math.min(6, Math.max(0, state.seatedOrderIds.length - (holdNewestAtCounter ? 1 : 0)));
   for (let index = 0; index < count; index += 1) {
     const column = index % 3;
     const row = Math.floor(index / 3);
@@ -272,18 +323,41 @@ function drawTables(ctx: CanvasRenderingContext2D, state: GameState): void {
     const y = 70 + row * 34;
     rect(ctx, x - 15, y + 10, 30, 5, COLORS.shadow);
     rect(ctx, x - 1, y + 14, 3, 12, COLORS.ink);
-    ctx.save(); ctx.translate(x, y); ctx.scale(0.48, 0.48); drawPlantBody(ctx, ['sprout', 'fern', 'orchid', 'vine', 'cactus', 'maw'][index] as PlantKind); ctx.restore();
+    const kind = ['sprout', 'fern', 'orchid', 'vine', 'cactus', 'maw'][index] as PlantKind;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(0.48, 0.48);
+    if (!sprites || !drawSpriteFrame(ctx, sprites.plants, PLANT_SPRITE_COLUMN[kind], 2, -32, -44, 64, 64)) drawPlantBody(ctx, kind);
+    ctx.restore();
   }
 }
 
-function drawEventEffect(ctx: CanvasRenderingContext2D, state: GameState, eventAgeMs: number, reducedMotion: boolean): void {
-  if (eventAgeMs > 700) return;
-  const progress = eventAgeMs / 700;
-  if (state.event.type === 'success') {
-    const x = 220 + progress * 92;
-    for (let i = 0; i < 3; i += 1) rect(ctx, x - i * 10, 139 - i * 3, 8, 5, i === 1 ? COLORS.red : COLORS.mustard);
+function drawServedPlant(ctx: CanvasRenderingContext2D, state: GameState, operator: OperatorPose, now: number, reducedMotion: boolean, sprites?: GameSpriteAtlas): void {
+  if (operator.reaction !== 'serve' || now >= operator.reactionUntil) return;
+  const servedId = state.seatedOrderIds.at(-1);
+  const order = state.shift.orders.find((candidate) => candidate.id === servedId);
+  if (!order) return;
+  const age = now - operator.reactionStartedAt;
+  const lift = reducedMotion ? 0 : Math.round(Math.sin(Math.min(1, age / 450) * Math.PI) * 4);
+  ctx.save();
+  ctx.translate(423, 150 - lift);
+  if (!sprites || !drawSpriteFrame(ctx, sprites.plants, PLANT_SPRITE_COLUMN[order.plantKind], 2, -66, -92, 132, 132)) drawPlantBody(ctx, order.plantKind);
+  ctx.restore();
+}
+
+function drawEventEffect(ctx: CanvasRenderingContext2D, state: GameState, operator: OperatorPose, now: number, eventAgeMs: number, reducedMotion: boolean): void {
+  if (operator.reaction === 'serve' && now < operator.reactionUntil) {
+    const progress = Math.min(1, (now - operator.reactionStartedAt) / 720);
+    for (let index = 0; index < 5; index += 1) {
+      const blockProgress = Math.max(0, Math.min(1, progress * 1.45 - index * 0.12));
+      const x = 246 + (405 - 246) * blockProgress;
+      const y = 137 - Math.sin(blockProgress * Math.PI) * 34 - index * 2;
+      rect(ctx, x - 1, y - 1, 12, 9, COLORS.cream);
+      rect(ctx, x + 1, y + 1, 8, 5, index % 2 ? COLORS.red : COLORS.mustard);
+    }
   }
-  if (state.event.type === 'fuse') {
+  if (eventAgeMs <= 700 && state.event.type === 'fuse') {
+    const progress = eventAgeMs / 700;
     ctx.fillStyle = reducedMotion ? 'rgba(201,69,44,.18)' : `rgba(201,69,44,${0.28 * (1 - progress)})`;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     for (let i = 0; i < 8; i += 1) rect(ctx, 90 + i * 39, 42 + (i % 3) * 19, 3, 8, COLORS.mustard);
@@ -296,6 +370,7 @@ export interface SceneFrame {
   eventAgeMs: number;
   reducedMotion: boolean;
   operator: OperatorPose;
+  sprites?: GameSpriteAtlas;
 }
 
 export function renderScene(canvas: HTMLCanvasElement, frame: SceneFrame): void {
@@ -310,13 +385,27 @@ export function renderScene(canvas: HTMLCanvasElement, frame: SceneFrame): void 
   }
   drawBackdrop(ctx);
   drawServer(ctx);
-  drawTables(ctx, frame.state);
+  const holdingServedPlant = frame.operator.reaction === 'serve' && frame.now < frame.operator.reactionUntil;
+  drawTables(ctx, frame.state, holdingServedPlant, frame.sprites);
   drawKitchen(ctx, frame.state, frame.now);
   drawServiceLanes(ctx);
-  frame.state.active.forEach((customer, index) => drawCustomer(ctx, customer, index, customer.order.id === frame.state.selectedId, frame.state.elapsedMs));
-  drawOperator(ctx, frame.operator, frame.now, frame.reducedMotion);
+  // Customer lanes and Seymour's work area are different depth planes. Hard
+  // clipping prevents either cast from walking through the implementation board.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(258, 38, 206, 169);
+  ctx.clip();
+  frame.state.active.forEach((customer, index) => drawCustomer(ctx, customer, index, customer.order.id === frame.state.selectedId, frame.state.elapsedMs, frame.sprites));
+  drawServedPlant(ctx, frame.state, frame.operator, frame.now, frame.reducedMotion, frame.sprites);
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(454, 72, 213, 137);
+  ctx.clip();
+  drawOperator(ctx, frame.operator, frame.now, frame.reducedMotion, frame.sprites);
+  ctx.restore();
   drawCounter(ctx);
-  drawEventEffect(ctx, frame.state, frame.eventAgeMs, frame.reducedMotion);
+  drawEventEffect(ctx, frame.state, frame.operator, frame.now, frame.eventAgeMs, frame.reducedMotion);
   ctx.restore();
 }
 
